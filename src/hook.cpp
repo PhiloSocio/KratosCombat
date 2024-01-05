@@ -95,12 +95,12 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 		if (projBase == Leviathan::LeviProjBaseL || projBase == Leviathan::LeviProjBaseH || projBase == Leviathan::LeviProjBaseA) 
 		{
 			//identify levi
-		//	spdlog::debug("Levi proj flags: {:032b}", runtimeData.flags);	// "10000100001101010000000101010000" kFading, kUnk7, kChainShatter, 
-		//	if (runtimeData.flags & (1 << 15)) {
-		//		runtimeData.flags &= ~(1 << 15);		//remove the RE::Projectile::Flags::kDestroyAfterHit flag
-		//	//	a_this->inGameFormFlags &= (1 << 10);	//RE::TESForm::RecordFlags::kPersistent;
-		//		spdlog::debug("Levi proj kDestroyAfterHit flag removed");
-		//	}
+			spdlog::debug("Levi proj flags: {:032b}", runtimeData.flags);	// "10000100001101010000000101010000" kFading, kUnk7, kChainShatter, 
+			if (runtimeData.flags & (1 << 15)) {
+				runtimeData.flags &= ~(1 << 15);		//remove the RE::Projectile::Flags::kDestroyAfterHit flag
+			//	a_this->inGameFormFlags &= (1 << 10);	//RE::TESForm::RecordFlags::kPersistent;
+				spdlog::debug("Levi proj kDestroyAfterHit flag removed");
+			}
 			if (Leviathan::isAxeStucked) Leviathan::isAxeStucked = false;
 			(projBase == Leviathan::LeviProjBaseL) ? Leviathan::LeviathanAxeProjectileL : Leviathan::LeviathanAxeProjectileH = a_this;
 			(projBase == Leviathan::LeviProjBaseL) ? Leviathan::LeviathanAxeProjectileH : Leviathan::LeviathanAxeProjectileL = nullptr;
@@ -208,7 +208,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 			//	}
 
 				// new method
-				RE::NiPoint3 crossDir = direction.UnitCross({-0.5f, 0.f, -1.f});
+				RE::NiPoint3 crossDir = direction.UnitCross({0.f, 0.f, -1.f});
 				vel = (direction * Leviathan::arrivalSpeed) + (crossDir * offset);
 					spdlog::debug("arriving speed: {}", vel.Length());
 				leviAngle.x = asin(direction.z);
@@ -299,7 +299,6 @@ void ProjectileHook::GetCollisionMissile(RE::Projectile* a_this, RE::hkpAllCdPoi
 		
 		return;//	GetCollisionBeam(a_this, a_AllCdPointCollector);
 	}
-
 	_GetCollisionMissile(a_this, a_AllCdPointCollector);
 }
 void ProjectileHook::GetCollisionArrow(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
@@ -307,17 +306,25 @@ void ProjectileHook::GetCollisionArrow(RE::Projectile* a_this, RE::hkpAllCdPoint
 	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) {
 		spdlog::debug("levi hit type changed from arrow to beam type");
 
-		return;//	GetCollisionBeam(a_this, a_AllCdPointCollector);;
-	}
-
+		return;//	GetCollisionBeam(a_this, a_AllCdPointCollector);
+	};
 	_GetCollisionArrow(a_this, a_AllCdPointCollector);
+}
+void ProjectileHook::GetCollisionProjectile(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
+{
+	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) {
+		spdlog::debug("levi hit type changed from proj to beam type");
+
+		return;//	GetCollisionBeam(a_this, a_AllCdPointCollector);
+	};
+	_GetCollisionProjectile(a_this, a_AllCdPointCollector);
 }
 
 bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
 	auto projBase = a_this->GetProjectileBase();
 	if (projBase && projBase == Leviathan::LeviProjBaseA || projBase == Leviathan::LeviProjBaseL || projBase == Leviathan::LeviProjBaseH) {
-		if (Leviathan::isAxeCalled) {//return false;
+		if (Leviathan::isAxeCalled) {
 
 			for (auto& point : a_AllCdPointCollector->hits) {
 				auto collidableA = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
@@ -329,8 +336,15 @@ bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPoin
 					auto victim = collidableA->As<RE::Actor>();
 					if (victim) {
 						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
-						victim->AsActorValueOwner()->ModActorValue(RE::ActorValue::kHealth, -damage);
+						victim->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
 						spdlog::info("levi caused {} damage to {} while arriving!!", damage, victim->GetName());
+						return true;
+					}
+					auto victimVO = collidableA->As<RE::ActorValueOwner>();
+					if (victimVO) {
+						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
+						victimVO->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
+						spdlog::info("levi caused {} damage to victimVO while arriving!!", damage);
 						return true;
 					}
 					spdlog::debug("levi hitted somewhere while arriving");
@@ -342,8 +356,15 @@ bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPoin
 					auto victim = collidableB->As<RE::Actor>();
 					if (victim) {
 						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
-						victim->AsActorValueOwner()->ModActorValue(RE::ActorValue::kHealth, -damage);
+						victim->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
 						spdlog::info("levi caused {} damage to {} while arriving!!", damage, victim->GetName());
+						return true;
+					}
+					auto victimVO = collidableB->As<RE::ActorValueOwner>();
+					if (victimVO) {
+						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
+						victimVO->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
+						spdlog::info("levi caused {} damage to victimVO while arriving!!", damage);
 						return true;
 					}
 					spdlog::debug("levi hitted somewhere while arriving");

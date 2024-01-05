@@ -145,9 +145,25 @@ void Leviathan::Arrive()
 					} else {spdlog::debug("Levi is kStillLoading (formFlag)");}
 				} else {spdlog::debug("Levi is kDisabled (formFlag)");}
 			} else {spdlog::debug("Levi is not inited (formFlag)");}
-		} else {spdlog::debug("Stucked Levi is nullptr!");}
+		} else {spdlog::debug("Stucked Levi is nullptr!"); return;}
 	} else {spdlog::warn("WEIRD SpellLeviProjA is nullptr!");}
 	spdlog::info("Levi is calling...");
+	return;
+
+	int sec = 0;
+	while (sec < 2) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		sec++;
+		spdlog::debug("waiting levi since {} seconds.", sec);
+	}
+
+	if (EffCatchLevi && SpellCatchLevi && !AnArchos->AsMagicTarget()->HasMagicEffect(EffCatchLevi)) {
+		AnArchos->AddSpell(SpellCatchLevi);
+	} else spdlog::debug("Levi proj spell not added");
+	if (GetThrowState() == ThrowState::kArriving) SetThrowState(ThrowState::kArrived);
+	isAxeCalled = false;
+	if (WeaponIdentify::LeviathanAxe)
+		RE::ActorEquipManager::GetSingleton()->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe, nullptr, 1U, nullptr, false, false, false, true);
 	return;
 
 	auto targetPoint = WeaponIdentify::RHandBone;
@@ -155,15 +171,9 @@ void Leviathan::Arrive()
 
 //	NiPoint3& leviPos = ThrowedLevi1->world.translate;
 	NiPoint3& leviPos = stuckedLevi->data.location;
+	auto& runtimeData = stuckedLevi->GetProjectileRuntimeData();
 
 	float distance = handPos.GetDistance(leviPos);
-	while (distance > Config::CatchingTreshold) {
-		spdlog::debug("distance of stucked levi is: {}", distance);
-	}
-
-	if (WeaponIdentify::LeviathanAxe)
-		RE::ActorEquipManager::GetSingleton()->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe, nullptr, 1U, nullptr, false, false, false, true);
-	return;
 
 	float deltaTime = 1 / 60.f;
 	float speed = distance / Config::ArrivalTime;
@@ -303,10 +313,20 @@ void Leviathan::Charge(const int a_DurationSec, const float a_Magnitude)
 void Draupnir::Throw()
 {
 	auto AnArchos = PlayerCharacter::GetSingleton();
+	auto& runtimeData = AnArchos->GetActorRuntimeData();
 	if (WeaponIdentify::DraupnirSpear && SpellDraupnirProjL && AnArchos->GetEquippedObject(false) == WeaponIdentify::DraupnirSpear)
 	{
 		auto draupnirDamage = static_cast<float>(WeaponIdentify::DraupnirSpear->attackDamage);
 		auto mag = draupnirDamage;
+		if (runtimeData.currentProcess && runtimeData.currentProcess->high) {
+			auto atkData = runtimeData.currentProcess->high->attackData.get();
+			if (atkData) {
+				atkData->data.flags.any(RE::AttackData::AttackFlag::kPowerAttack);
+				mag *= 1.2;
+			}
+		}
+		auto effDraupnir = SpellDraupnirProjL->effects[0]->avEffectSetting;
+	//	effDraupnir.assocItem
 		AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(SpellDraupnirProjL, false, nullptr, 1.f, false, mag, AnArchos);
 	} else 	spdlog::info("Draupnir Spear is not equipped for throwing");
 }

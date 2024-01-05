@@ -47,6 +47,7 @@ public:
     static inline RE::TESObjectREFR* ThrowedLevi    = nullptr;
     static inline RE::NiAVObject* ThrowedLevi1      = nullptr;
     static inline RE::NiAVObject* ThrowedLevi2      = nullptr;
+    static inline RE::NiNode* ThrowedLeviNode       = nullptr;
 
     static inline RE::BGSProjectile* LeviProjBaseL  = nullptr;  //  ligth attack throw
     static inline RE::BGSProjectile* LeviProjBaseH  = nullptr;  //  heavy attack throw
