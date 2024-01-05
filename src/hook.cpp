@@ -5,69 +5,7 @@
 
 static std::mutex ThrowCallMutex;
 
-/*
-void ProjectileHook::AddImpact(RE::Projectile* a_this, RE::TESObjectREFR* a_ref, RE::hkpCollidable* a_collidable, std::int32_t a_arg6, std::uint32_t a_arg7)
-{
-	_AddImpact(a_this, a_ref, a_collidable, a_arg6, a_arg7);
-	spdlog::info("impact ref is {}", a_ref->GetFormID());
-	if (a_collidable) spdlog::info("impact collidable exists");
-	else spdlog::info("impact collidable doesn't exist");
-	spdlog::info("impact arg6 is {}", a_arg6);
-	spdlog::info("impact arg7 is {}", a_arg7);
-
-	auto projBase = a_this->GetProjectileBase();
-	if (projBase == Config::LeviProjL || projBase == Config::LeviProjH || projBase == Config::DraupnirProjL) {
-		AddCallingImpact(a_ref, a_collidable, a_arg6, a_arg7);
-	} else {return;}
-}
-void ProjectileHook::AddCallingImpact(RE::TESObjectREFR* a_ref, RE::hkpCollidable* a_collidable, std::int32_t a_arg6, std::uint32_t a_arg7)
-{
-	a_ref = Leviathan::a_ref;
-	a_collidable = Leviathan::a_collidable;
-	a_arg6 = Leviathan::a_arg6;
-	a_arg7 = Leviathan::a_arg7;
-}
-*/
-void SetRotationMatrix(RE::NiMatrix3& a_matrix, float sacb, float cacb, float sb)
-{
-	float cb = std::sqrtf(1 - sb * sb);
-	float ca = cacb / cb;
-	float sa = sacb / cb;
-	a_matrix.entry[0][0] = ca;
-	a_matrix.entry[1][0] = sa;
-	a_matrix.entry[2][0] = 0.0;
-	a_matrix.entry[0][1] = -sacb;
-	a_matrix.entry[1][1] = cacb;
-	a_matrix.entry[2][1] = sb;
-	a_matrix.entry[0][2] = sa * sb;
-	a_matrix.entry[1][2] = -ca * sb;
-	a_matrix.entry[2][2] = cb;
-}
-void SetRotationMatrixWithExtra(NiMatrix3& a_matrix, float sacb, float cacb, float sb, float extraRotationX, float extraRotationY, float extraRotationZ)
-{
-    // Dönme açısının sinüs ve kosinüs değerleri
-    float cb = std::sqrtf(1 - sb * sb);
-    float ca = cacb / cb;
-    float sa = sacb / cb;
-    // Ekstra döndürme değerlerinin sinüs ve kosinüs değerleri
-    float ceX = std::cos(extraRotationX);
-    float seX = std::sin(extraRotationX);
-    float ceY = std::cos(extraRotationY);
-    float seY = std::sin(extraRotationY);
-    float ceZ = std::cos(extraRotationZ);
-    float seZ = std::sin(extraRotationZ);
-    // Döndürme matrisini oluştur
-	a_matrix.entry[0][0] = ca + ceX;
-	a_matrix.entry[1][0] = sa + seX;
-	a_matrix.entry[2][0] = 0.0;
-	a_matrix.entry[0][1] = -sacb;
-	a_matrix.entry[1][1] = cacb;
-	a_matrix.entry[2][1] = sb;
-	a_matrix.entry[0][2] = sa * sb;
-	a_matrix.entry[1][2] = -ca * sb;
-	a_matrix.entry[2][2] = cb;
-}
-/*
+/* //from ersh tdm
 void ProjectileHook::ProjectileAimSupport(RE::Projectile* a_this)
 	{
 		auto projectileNode = a_this->Get3D2();
@@ -116,14 +54,6 @@ void ProjectileHook::ProjectileAimSupport(RE::Projectile* a_this)
 		}
 	}
 */
-/*
-	void ProjectileHook::GetLinearVelocityProjectile(RE::Projectile* a_this, RE::NiPoint3& a_outVelocity)
-	{
-		_GetLinearVelocityProjectile(a_this, a_outVelocity);
-
-		ProjectileAimSupport(a_this);
-	}
-*/
 void ProjectileHook::GetLinearVelocityMissile(RE::Projectile* a_this, RE::NiPoint3& a_outVelocity)
 {
 	_GetLinearVelocityMissile(a_this, a_outVelocity);
@@ -135,16 +65,6 @@ void ProjectileHook::GetLinearVelocityMissile(RE::Projectile* a_this, RE::NiPoin
 void ProjectileHook::GetLinearVelocityArrow(RE::Projectile* a_this, RE::NiPoint3& a_outVelocity)
 {
 	_GetLinearVelocityArrow(a_this, a_outVelocity);
-/*
-	auto editorID = a_this->GetBaseObject()->GetFormEditorID();			//nothing
-	auto FormID = a_this->GetFormID();									//4278195992 - ff001718 - unique for per projectile
-	auto RawFormID = a_this->GetRawFormID();							//0
-	auto BaseEditorID = a_this->GetProjectileBase()->GetFormEditorID();	//nothing
-	auto BaseRawFormID = a_this->GetProjectileBase()->GetRawFormID();	//4261419029 - fe001815
-	auto BaseFormID = a_this->GetProjectileBase()->GetFormID();			//4262553621 - fe116815
-	spdlog::debug("fi_{} bfi_{} brfi_{}", FormID, BaseFormID, BaseRawFormID);
-	spdlog::debug("hex: fi_{:08x} bfi_{:08x} brfi_{:08x}", FormID, BaseFormID, BaseRawFormID);
-*/
 	if (ThrowCallMutex.try_lock()) {
 		LeviAndDraupnir(a_this);
 		ThrowCallMutex.unlock();
@@ -161,13 +81,13 @@ void ProjectileHook::GetLinearVelocityCone(RE::Projectile* a_this, RE::NiPoint3&
 void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 {
 	auto projectileNode = a_this->Get3D2();
-	// player only, 0x100000 == player
+
 	auto AnArchos = RE::PlayerCharacter::GetSingleton();
 	auto& runtimeData = a_this->GetProjectileRuntimeData();
 	auto& shooter = runtimeData.shooter;
 	auto& desiredTarget = runtimeData.desiredTarget;
 
-	if (projectileNode && shooter.native_handle() == 0x100000) 
+	if (projectileNode && shooter.native_handle() == 0x100000)	// player only, 0x100000 == player
 	{
 		auto projBase = a_this->GetProjectileBase();
 		float livingTime = runtimeData.livingTime;
