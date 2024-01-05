@@ -265,7 +265,20 @@ namespace MathUtil
             static std::uniform_real_distribution<float> distribution(lower, upper);
                 return distribution(generator);
         }
-
+        [[nodiscard]] static void SetRotationMatrix(RE::NiMatrix3& a_matrix, float sacb, float cacb, float sb) {
+        	float cb = std::sqrtf(1 - sb * sb);
+        	float ca = cacb / cb;
+        	float sa = sacb / cb;
+        	a_matrix.entry[0][0] = ca;
+        	a_matrix.entry[1][0] = sa;
+        	a_matrix.entry[2][0] = 0.0;
+        	a_matrix.entry[0][1] = -sacb;
+        	a_matrix.entry[1][1] = cacb;
+        	a_matrix.entry[2][1] = sb;
+        	a_matrix.entry[0][2] = sa * sb;
+        	a_matrix.entry[1][2] = -ca * sb;
+        	a_matrix.entry[2][2] = cb;
+        }
         [[nodiscard]] static void RotateMatrixAroundAxis(NiMatrix3& a_matrix, float angleRad, const char* axis) {
             float cosA = std::cos(angleRad);
             float sinA = std::sin(angleRad);
