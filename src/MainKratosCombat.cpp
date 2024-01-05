@@ -1,6 +1,6 @@
 #include "util.h"
 #include "MainKratosCombat.h"
-#include "API/TrueDirectionalMovementAPI.h"
+//#include "API/TrueDirectionalMovementAPI.h"
 
 using namespace Util;
 static std::jthread axeChargeThread;
@@ -31,7 +31,6 @@ void WeaponIdentify::WeaponIdentifier(TESObjectWEAP* a_RHandWeapon)
 	}
     spdlog::info("{} is {}", a_RHandWeapon->GetName(), RelicName);
 }
-
 void WeaponIdentify::WeaponCheck()
 {
     isLeviathanAxe = false;
