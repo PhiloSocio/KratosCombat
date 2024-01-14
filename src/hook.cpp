@@ -54,6 +54,14 @@ void ProjectileHook::ProjectileAimSupport(RE::Projectile* a_this)
 		}
 	}
 */
+void ProjectileHook::GetLinearVelocityProj(RE::Projectile* a_this, RE::NiPoint3& a_outVelocity)
+{
+	_GetLinearVelocityProj(a_this, a_outVelocity);
+	if (ThrowCallMutex.try_lock()) {
+		LeviAndDraupnir(a_this);
+		ThrowCallMutex.unlock();
+	};
+}
 void ProjectileHook::GetLinearVelocityMissile(RE::Projectile* a_this, RE::NiPoint3& a_outVelocity)
 {
 	_GetLinearVelocityMissile(a_this, a_outVelocity);
@@ -82,50 +90,59 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 {
 	auto projectileNode = a_this->Get3D2();
 
-	auto AnArchos = RE::PlayerCharacter::GetSingleton();
 	auto& runtimeData = a_this->GetProjectileRuntimeData();
 	auto& shooter = runtimeData.shooter;
-	auto& desiredTarget = runtimeData.desiredTarget;
 
 	if (projectileNode && shooter.native_handle() == 0x100000)	// player only, 0x100000 == player
 	{
 		auto projBase = a_this->GetProjectileBase();
 		float livingTime = runtimeData.livingTime;
+		auto AnArchos = RE::PlayerCharacter::GetSingleton();
 
-		if (projBase == Leviathan::LeviProjBaseL || projBase == Leviathan::LeviProjBaseH || projBase == Leviathan::LeviProjBaseA) 
+		if (WeaponIdentify::IsRelic(projBase, true)) 
 		{
+		//	auto animatedBone = projectileNode->GetObjectByName("Slash");
+		//	auto leviModel = (WeaponIdentify::LeviathanAxe->AsReference1() ? WeaponIdentify::LeviathanAxe->AsReference1()->Get3D() : nullptr);
+		//	if (animatedBone && leviModel) {
+		//		auto animatedNode = animatedBone->AsNode();
+		//		auto leviNode = leviModel->AsNode();
+		//		if (animatedNode && leviNode) {
+		//			animatedNode->AttachChild(leviNode, false);
+		//			spdlog::debug("levi model changed!");
+		//		} else spdlog::debug("animated node or levinode null");
+		//	} else spdlog::debug("animated bone or leviModel null");
 			//identify levi
-			spdlog::debug("Levi proj flags: {:032b}", runtimeData.flags);	// "10000100001101010000000101010000" kFading, kUnk7, kChainShatter, 
-			if (runtimeData.flags & (1 << 15)) {
-				runtimeData.flags &= ~(1 << 15);		//remove the RE::Projectile::Flags::kDestroyAfterHit flag
-			//	a_this->inGameFormFlags &= (1 << 10);	//RE::TESForm::RecordFlags::kPersistent;
-				spdlog::debug("Levi proj kDestroyAfterHit flag removed");
-			}
+		//	spdlog::debug("Levi proj flags: {:032b}", runtimeData.flags);	// "10000100001101010000000101010000" kFading, kUnk7, kChainShatter, 
+		//	if (runtimeData.flags & (1 << 15)) {
+		//		runtimeData.flags &= ~(1 << 15);		//remove the RE::Projectile::Flags::kDestroyAfterHit flag
+		//	//	a_this->inGameFormFlags &= (1 << 10);	//RE::TESForm::RecordFlags::kPersistent;
+		//		spdlog::debug("Levi proj kDestroyAfterHit flag removed");
+		//	}
 			if (Leviathan::isAxeStucked) Leviathan::isAxeStucked = false;
-			(projBase == Leviathan::LeviProjBaseL) ? Leviathan::LeviathanAxeProjectileL : Leviathan::LeviathanAxeProjectileH = a_this;
-			(projBase == Leviathan::LeviProjBaseL) ? Leviathan::LeviathanAxeProjectileH : Leviathan::LeviathanAxeProjectileL = nullptr;
+			(projBase == Leviathan::LeviProjBaseL ? Leviathan::LeviathanAxeProjectileL : Leviathan::LeviathanAxeProjectileH) = a_this;
+			(projBase == Leviathan::LeviProjBaseL ? Leviathan::LeviathanAxeProjectileH : Leviathan::LeviathanAxeProjectileL) = nullptr;
 		//	a_this->GetProjectileBase()->SetModel(WeaponIdentify::LeviathanAxe->GetModel());
-			Leviathan::ThrowedLevi =  a_this->AsReference1();
-			runtimeData.weaponDamage = WeaponIdentify::LeviathanAxe->attackDamage;
+		//	runtimeData.weaponDamage = WeaponIdentify::LeviathanAxe->attackDamage;
 			if (Leviathan::throwState == Leviathan::ThrowState::kThrown) Leviathan::SetThrowState(Leviathan::ThrowState::kCanArrive);
+
+			//rotation
+		//	float yAxis = (Leviathan::LeviProjBaseL ? 0.35f : PI2);		//0.35f = 20 degrees for lateral throw, PI/2 = 90 degrees for vertical throw
 
 			//speed
 			auto& vel = runtimeData.linearVelocity;
 
-			//rotation
-			float xAxis = Leviathan::LeviProjBaseL ? 0.35f : PI2;		//0.35f = 20 degrees for lateral throw, PI/2 = 90 degrees for vertical throw
 			auto linearDir = vel;
 			linearDir.Unitize();
-			float rot = Config::ThrowRotationSpeed * livingTime;
 
 			//location
 			auto targetPoint = WeaponIdentify::RHandBone;
-			if (!targetPoint) {spdlog::warn("can't found your hand node for axe call!"); return;}
+			if (!targetPoint) {spdlog::debug("can't found your hand node for axe call!!"); return;}
 			auto& handPos	= targetPoint->world.translate;
 			auto& leviPos	= a_this->data.location;
 			auto& leviAngle	= a_this->data.angle;
 
 			if (!Leviathan::isAxeCalled) {
+				if (a_this != Leviathan::LastLeviProjectile)	Leviathan::LastLeviProjectile = a_this;
 				vel = linearDir * Config::ThrowSpeed;
 
 				//accelerate between unpleasant hit angles
@@ -147,8 +164,10 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 //			/*upward vector of levi*/	projectileNode->local.rotate.entry[1][2],	// -cosa * sinb
 //										projectileNode->local.rotate.entry[2][2]};	//	cosb
 
-				leviAngle.x = asin(linearDir.z);// + xAxis;
-				leviAngle.z = atan2(linearDir.x, linearDir.y);// - rot;
+			//	float rot = Config::ThrowRotationSpeed * livingTime;
+				leviAngle.x = asin(linearDir.z);
+			//	leviAngle.y = yAxis;
+			//	leviAngle.z = rot;
 
 //				RE::NiMatrix3 copyMatrix = projectileNode->local.rotate;									//	copy of original rotation matrix
 //				SetRotationMatrix(copyMatrix, -linearDir.x, linearDir.y, linearDir.z);						//	set rotation of copied matrix
@@ -161,58 +180,70 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 				Leviathan::throwedTime = livingTime;
 				Leviathan::arrivalSpeed = dist / Config::ArrivalTime;
 
-				if (Leviathan::arrivalSpeed < Config::MinArrivalSpeed) {
-					Leviathan::arrivalSpeed = Config::MinArrivalSpeed;
-				}
-				else if (Leviathan::arrivalSpeed > Config::MaxArrivalSpeed) {
-					Leviathan::arrivalSpeed = Config::MaxArrivalSpeed;
-				}
+				if		(Leviathan::arrivalSpeed < Config::MinArrivalSpeed)	Leviathan::arrivalSpeed = Config::MinArrivalSpeed;
+				else if	(Leviathan::arrivalSpeed > Config::MaxArrivalSpeed)	Leviathan::arrivalSpeed = Config::MaxArrivalSpeed;
 			}
 			else if (Leviathan::isAxeCalled) {
 				if (projBase != Leviathan::LeviProjBaseA) {runtimeData.flags |= (1 << 25); return;}
+				if (Leviathan::LeviathanAxeProjectileA != a_this) Leviathan::LeviathanAxeProjectileA = a_this;
+				if (Leviathan::throwState == Leviathan::ThrowState::kCanArrive) Leviathan::SetThrowState(Leviathan::ThrowState::kArriving);
 			//	a_this->GetProjectileBase()->SetModel(WeaponIdentify::LeviathanAxe->GetModel());
 
 				RE::NiPoint3 direction = (handPos - leviPos);						//	direction of the axe to player's hand
 				direction.Unitize();												//	normalize direction
+
+				float passedArrTime = livingTime - Leviathan::throwedTime;
+				if (passedArrTime < 0.f) passedArrTime = livingTime;
+				float arrivingTime = Config::ArrivalTime - passedArrTime;
+				if (arrivingTime < 0.01f) arrivingTime = 0.01f;
 
 				float distance = handPos.GetDistance(leviPos);
 				if (distance < Config::CatchingTreshold) {
 					if (Leviathan::EffCatchLevi && Leviathan::SpellCatchLevi && !AnArchos->AsMagicTarget()->HasMagicEffect(Leviathan::EffCatchLevi)) {
 						AnArchos->AddSpell(Leviathan::SpellCatchLevi);
 					} else spdlog::debug("Levi proj spell not added");
-					if (Leviathan::GetThrowState() == Leviathan::ThrowState::kCanArrive) Leviathan::SetThrowState(Leviathan::ThrowState::kArrived);
+
+					if (Leviathan::throwState == Leviathan::ThrowState::kArriving) Leviathan::SetThrowState(Leviathan::ThrowState::kArrived);
 					Leviathan::isAxeCalled = false;
-				//	auto handNode = targetPoint->AsNode();
-				//	handNode->AttachChild(a_this->Get3D());
+
 					if (WeaponIdentify::LeviathanAxe)
-						RE::ActorEquipManager::GetSingleton()->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe, nullptr, 1U, nullptr, false, false, false, true);
+						RE::ActorEquipManager::GetSingleton()->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, false, false, false, true);
 					else spdlog::warn("you not have the leviathan axe");
 					runtimeData.flags |= (1 << 25);		//set as destroyed, RE::Projectile::Flags::kDestroyed
 					spdlog::debug("Levi proj catched");
 					return;
 				}
 
-				// old speed calculation method
-				float passedArrTime = livingTime - Leviathan::throwedTime;
-				if (passedArrTime <= 0.f) passedArrTime = livingTime;
-				float arrivingTime = Config::ArrivalTime - passedArrTime;
-				if (arrivingTime < 0.02f) arrivingTime = 0.02f;
-				Leviathan::arrivalSpeed = distance / arrivingTime;
-			//	if (Leviathan::arrivalSpeed < Config::MinArrivalSpeed)		Leviathan::arrivalSpeed = Config::MinArrivalSpeed;
-				if (Leviathan::arrivalSpeed > Config::MaxArrivalSpeed)	Leviathan::arrivalSpeed = Config::MaxArrivalSpeed;
+				// speed calculation
+				float arrSpeed = distance / arrivingTime;
+				if		(arrSpeed < Leviathan::arrivalSpeed)	arrSpeed = Leviathan::arrivalSpeed;
+				else if	(arrSpeed > Config::MaxArrivalSpeed)	arrSpeed = Leviathan::arrivalSpeed;
 
-				float offset = Leviathan::arrivalSpeed * Config::ArrivalRoadCurveMagnitude;
-			//	if (distance < 240.f) {
-			//		Leviathan::arrivalSpeed *= 0.9f;	//	slows down while getting close
-			//		offset *= 0.9f;						//	turns direction to target while getting close
-			//	}
+				float sinAngle	= Config::ArrivalRoadCurveMagnitude;
+				float distMoved	= runtimeData.distanceMoved;
+				float halfWay	= distance - distMoved;
+				float tertiaWay	= 2.f * distance - distMoved;
+				float quartWay	= 3.f * distance - distMoved;
+				float sexWay	= 5.f * distance - distMoved;	//	sexWay = 0 means the axe finished 5/6 of the way
+				if		(sexWay		< 0.f)	{/**/ arrSpeed *= 0.3f; sinAngle = 0.f;}
+				else if	(quartWay	< 0.f)	{/**/ arrSpeed *= 0.7f; sinAngle *= 0.4f;}
+				else if	(tertiaWay	< 0.f)	{/**/ arrSpeed *= 0.8f; sinAngle *= 0.7f;}
+				else if	(halfWay	< 0.f)	{/**/ arrSpeed *= 0.9f; sinAngle *= 0.9f;}				//	turns direction to target while getting close
 
-				// new method
-				RE::NiPoint3 crossDir = direction.UnitCross({0.f, 0.f, -1.f});
-				vel = (direction * Leviathan::arrivalSpeed) + (crossDir * offset);
-					spdlog::debug("arriving speed: {}", vel.Length());
-				leviAngle.x = asin(direction.z);
-				leviAngle.z = atan2(direction.x, direction.y);
+			//	if	(arrSpeed < Config::MinArrivalSpeed)	arrSpeed = Config::MinArrivalSpeed;
+
+				float offset = arrSpeed * sinAngle;
+				if (offset > 3200.f) offset = 3200.f;
+
+				// new direction calculating method
+				RE::NiPoint3 crossDir = direction.UnitCross(downVec);
+				vel = (direction * arrSpeed) + (crossDir * offset);
+			//		spdlog::debug("distance: {}", distance);
+				RE::NiPoint3 curvyDir = vel;
+				curvyDir.Unitize();
+				leviAngle.x = asin(curvyDir.z);
+				leviAngle.z = atan2(curvyDir.x, curvyDir.y);
+			//	MathUtil::Algebra::SetRotationMatrix(projectileNode->local.rotate, -curvyDir.x, curvyDir.y, curvyDir.z);
 
 				// old direction calculating method
 			//	RE::NiPoint3 midPoint = (handPos + leviPos) / 2;
@@ -248,8 +279,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 			//	vel = curvyDir * 1200.f;
 			}
 		}
-		else if (projBase == Draupnir::DraupnirSpearProjBaseL) 
-		{	//WIP
+		else if (projBase == Draupnir::DraupnirSpearProjBaseL) {
 		//	if (runtimeData.flags & (1 << 15)) runtimeData.flags &= ~(1 << 15);		//remove the RE::Projectile::Flags::kDestroyAfterHit flag
 			if (livingTime > 0.3f) return;				//	prevents duplicates
 			auto lastFormID = a_this->GetFormID();
@@ -277,6 +307,21 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 			Draupnir::DraupnirSpearProjectiles[nextIndex] = a_this;
 				spdlog::debug("{}. Draupnir spear throwed, ID: {:08x}", (nextIndex + 1), lastFormID);
 		}
+		else if (projBase == Draupnir::DraupnirsCallProjBaseL) {
+			int i = 0;
+			for (auto firstBone : Draupnir::DraupnirSpearHitBones) {
+				if (firstBone) break;
+				i++;
+			}
+			auto targetPoint = Draupnir::DraupnirSpearHitBones[i];
+			auto& targetPos	= targetPoint->world.translate;
+			auto& leviPos	= a_this->data.location;
+			auto& vel = runtimeData.linearVelocity;
+			auto direction = (targetPos - leviPos);
+			auto speed = vel.Length();
+			direction.Unitize();
+			vel = direction * speed;
+		}
 	//	else 
 	//	{
 	//		return;
@@ -290,123 +335,247 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 }
 void ProjectileHook::GetCollisionFlame(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
+	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) return;
 	_GetCollisionFlame(a_this, a_AllCdPointCollector);
+}
+void ProjectileHook::GetCollisionCone(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
+{
+	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) return;
+	_GetCollisionCone(a_this, a_AllCdPointCollector);
 }
 void ProjectileHook::GetCollisionMissile(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
-	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) {
-		spdlog::debug("levi hit type changed from missile to beam type");
-		
-		return;//	GetCollisionBeam(a_this, a_AllCdPointCollector);
-	}
+	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) return;
 	_GetCollisionMissile(a_this, a_AllCdPointCollector);
 }
 void ProjectileHook::GetCollisionArrow(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
-	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) {
-		spdlog::debug("levi hit type changed from arrow to beam type");
-
-		return;//	GetCollisionBeam(a_this, a_AllCdPointCollector);
-	};
+	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) return;
 	_GetCollisionArrow(a_this, a_AllCdPointCollector);
 }
 void ProjectileHook::GetCollisionProjectile(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
-	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) {
-		spdlog::debug("levi hit type changed from proj to beam type");
-
-		return;//	GetCollisionBeam(a_this, a_AllCdPointCollector);
-	};
+	if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) return;
 	_GetCollisionProjectile(a_this, a_AllCdPointCollector);
 }
 
-bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
+inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
 	auto projBase = a_this->GetProjectileBase();
-	if (projBase && projBase == Leviathan::LeviProjBaseA || projBase == Leviathan::LeviProjBaseL || projBase == Leviathan::LeviProjBaseH) {
-		if (Leviathan::isAxeCalled) {
+	if (projBase && WeaponIdentify::IsRelic(projBase, true)) {
+		if (Leviathan::isAxeCalled && Config::DontDamageWhileArrive)	return true;
 
-			for (auto& point : a_AllCdPointCollector->hits) {
-				auto collidableA = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
-				auto collidableB = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
-
-				if (collidableA) {
-					auto hitposA = collidableA->data.location;
-					a_this->data.location = hitposA;
-					auto victim = collidableA->As<RE::Actor>();
-					if (victim) {
-						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
-						victim->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
-						spdlog::info("levi caused {} damage to {} while arriving!!", damage, victim->GetName());
-						return true;
+	/*	auto model = a_this->Get3D();
+		if (model) {
+			auto controllers = model->GetControllers();
+			if (controllers) {
+				auto manager = controllers->AsNiControllerManager();
+				for (auto sequence : manager->activeSequences) {
+					spdlog::debug("active sequence is {}", sequence->name);
+					auto endSequence = manager->GetSequenceByName("mEnd");
+					if (endSequence) {
+						sequence = endSequence;
+						spdlog::debug("end sequence is {}", endSequence->name);
 					}
-					auto victimVO = collidableA->As<RE::ActorValueOwner>();
-					if (victimVO) {
-						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
-						victimVO->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
-						spdlog::info("levi caused {} damage to victimVO while arriving!!", damage);
-						return true;
-					}
-					spdlog::debug("levi hitted somewhere while arriving");
-					return true;
-				}
-				if (collidableB) {
-					auto hitposB = collidableB->data.location;
-					a_this->data.location = hitposB;
-					auto victim = collidableB->As<RE::Actor>();
-					if (victim) {
-						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
-						victim->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
-						spdlog::info("levi caused {} damage to {} while arriving!!", damage, victim->GetName());
-						return true;
-					}
-					auto victimVO = collidableB->As<RE::ActorValueOwner>();
-					if (victimVO) {
-						auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
-						victimVO->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
-						spdlog::info("levi caused {} damage to victimVO while arriving!!", damage);
-						return true;
-					}
-					spdlog::debug("levi hitted somewhere while arriving");
-					return true;
 				}
 			}
-			return true;
+		}
+	*/	for (auto& point : a_AllCdPointCollector->hits) {
+			auto ourProj 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
+			auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
+
+			if (ourProj) {
+			//	if (projBase == Leviathan::LeviProjBaseL) a_this->data.angle.z = Config::MaxAxeStuckAngle;
+			//	else a_this->data.angle.y = Config::MaxAxeStuckAngle;
+			}
+			if (target && !target->AsProjectile()) {
+				if (!Leviathan::isAxeStucked) Leviathan::isAxeStucked = true;
+			//	spdlog::debug("levi hitted to {}!!", target->GetName());
+				if (target->formType == RE::FormType::ActorCharacter) {
+					auto victim = target->As<RE::Actor>();
+					if (victim) {
+						if (a_this->IsMissileProjectile()) Leviathan::leviStuckedActor = victim;
+					//	auto damage = a_this->GetProjectileRuntimeData().weaponDamage;
+					//	victim->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
+					//	spdlog::debug("levi caused {} damage to {} {}", damage, victim->GetName(), (a_this->IsMissileProjectile() ?  "!!" : "while arriving!!"));
+					}
+				}
+			}
 		}
 
-		Leviathan::isAxeStucked = true;
-		Leviathan::ThrowedLevi2 = a_this->Get3D();
-		Leviathan::ThrowedLevi1 = a_this->loadedData->data3D.get();
-
 		if (Leviathan::throwState == Leviathan::ThrowState::kThrown) Leviathan::SetThrowState(Leviathan::ThrowState::kCanArrive);
+		
+		return false;
 	}
-//	else if (projBase && projBase == Draupnir::DraupnirSpearProjBaseL) a_this->GetProjectileRuntimeData().flags &= ~(1 << 2);
+/*
+	if (projBase == Draupnir::DraupnirsCallProjBaseL) {
+		for (auto& point : a_AllCdPointCollector->hits) {
+			auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
 
+			if (target && !target->AsProjectile()) {
+				if (target->formType == RE::FormType::ActorCharacter) {
+					auto victim = target->As<RE::Actor>();
+					if (victim) {
+						for (auto validTarget : Draupnir::DraupnirSpearHitActors) {
+							if (validTarget && validTarget == victim) {
+								victim->RemoveExtraArrows3D();
+								return false;
+							}
+						}
+					}
+				}
+			}
+		}
+		return true;
+	}
+*/
 	return false;
 }
 /**/
 uint32_t* ProjectileHook::Launch(uint32_t* handle, RE::Projectile::LaunchData* ldata)
 {
+	if (!ldata) return _Launch(handle, ldata);
+
 	auto fenix31415 = ldata->shooter;
 	if (fenix31415 && fenix31415->IsPlayerRef()) {
-		if (ldata->projectileBase == Leviathan::LeviProjBaseA) {
-			ldata->useOrigin = true;
-			ldata->origin = Leviathan::leviPosition;
-			if (Leviathan::ThrowedLevi2) {
-				if (Leviathan::ThrowedLevi2->GetFlags() & RE::NiAVObject::Flag::kDisplayObject) {
-					ldata->origin = Leviathan::ThrowedLevi2->world.translate;
-					spdlog::debug("we get origin from throwed levi 2!!");
+		auto projBase = ldata->projectileBase;
+		if (WeaponIdentify::IsRelic(projBase)) {
+			if (projBase == Leviathan::LeviProjBaseA) {
+				ldata->useOrigin = true;
+				ldata->origin = Leviathan::leviPosition;
+				auto stuckedLevi =	Leviathan::LastLeviProjectile ? Leviathan::LastLeviProjectile : nullptr;
+				if (!stuckedLevi) stuckedLevi =	(Leviathan::LeviathanAxeProjectileL ? Leviathan::LeviathanAxeProjectileL : 
+												(Leviathan::LeviathanAxeProjectileH ? Leviathan::LeviathanAxeProjectileH : nullptr));
+				if (stuckedLevi)	ldata->origin = stuckedLevi->data.location;
+				else spdlog::debug("we cant get leviathan's stucked proj");
+
+				if (Leviathan::leviStuckedBone) {
+					ldata->origin = Leviathan::leviStuckedBone->world.translate;
+				//	auto attachedLevi = Leviathan::leviStuckedBone->GetObjectByName(stuckedLevi->GetName());
+				//	if (attachedLevi) attachedLevi->GetFlags() &= RE::NiAVObject::Flag::kDisplayObject;		//	ctd
+				//	else spdlog::debug("we cant found attached levi");
+					Leviathan::leviStuckedBone = nullptr;
+				} else spdlog::debug("levi not stucked any bone");
+
+			//	fenix31415->GetWorldspace()->worldMapData.usableWidth;
+
+				if (Leviathan::leviStuckedActor) {
+					Leviathan::leviStuckedActor->RemoveExtraArrows3D();
+					spdlog::debug("levi stucked actor's extra arrows removed");
+					Leviathan::leviStuckedActor = nullptr;
+				//	RE::BaseExtraList extraList;
+				//	RE::ExtraAttachedArrows3D* attachedArrow;
+				//	auto targetData = Leviathan::leviStuckedActor->extraList.Remove<RE::ExtraAttachedArrows3D>(attachedArrow);
+				//	for (auto attachedLevi : attachedArrow->data) {
+				//		if (WeaponIdentify::IsRelic(attachedLevi.source)) {
+				//			attachedLevi.arrow3D.get()->DeleteThis();
+				//		}
+				//	}
+				} else spdlog::debug("levi not stucked anybody");
+
+				Leviathan::SetThrowState(Leviathan::ThrowState::kArriving);
+	/*	*/	}
+			if (!ldata->weaponSource && WeaponIdentify::LeviathanAxe && WeaponIdentify::DraupnirSpear) 
+				ldata->weaponSource = (WeaponIdentify::IsRelic(projBase, true) ? WeaponIdentify::LeviathanAxe : WeaponIdentify::DraupnirSpear);
+			if (ldata->weaponSource) {
+				if (!ldata->enchantItem) {
+					if (ldata->weaponSource->formEnchanting && ldata->weaponSource->formEnchanting->data.baseEnchantment)
+						ldata->enchantItem = ldata->weaponSource->formEnchanting->data.baseEnchantment;
 				}
 			}
-			else if (Leviathan::ThrowedLevi1) {
-				if (Leviathan::ThrowedLevi1->GetFlags() & RE::NiAVObject::Flag::kDisplayObject) {
-					ldata->origin = Leviathan::ThrowedLevi1->world.translate;
-					spdlog::debug("we get origin from throwed levi 1!!");
-				}
-			} 
-			else spdlog::debug("can't found levi for calling!");
 		}
 	}
 
 	return _Launch(handle, ldata);
 }
+/**/
+RE::Projectile::ImpactData* ProjectileHook::GetArrowImpactData(RE::ArrowProjectile *proj, RE::TESObjectREFR *a2, RE::NiPoint3 *a3, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable, uint32_t a6, char a7)
+{
+	auto impactData = _GetArrowImpactData(proj, a2, a3, a_velocity, a_collidable, a6, a7);
+	if (proj && impactData) {
+		auto projBase = proj->GetProjectileBase();
+		if (projBase == Leviathan::LeviProjBaseA) {
+			spdlog::debug("{} is impacted!", projBase->GetName());
+		//	proj->GetMissileRuntimeData().impactResult = RE::ImpactResult::kNone;
+		//	impactData->impactResult = RE::ImpactResult::kNone;
+		//	auto AnArchos = RE::PlayerCharacter::GetSingleton();
+		//	AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)
+		//			->CastSpellImmediate(Leviathan::SpellLeviProjA, false, nullptr, 1.f, false, WeaponIdentify::LeviathanAxe->attackDamage, AnArchos);
+		}
+		else if (WeaponIdentify::IsRelic(projBase, true)) {
+			Leviathan::isAxeStucked = true;
+			proj->GetMissileRuntimeData().impactResult = RE::ImpactResult::kStick;
+			impactData->impactResult = RE::ImpactResult::kStick;
+			Leviathan::leviStuckedBone = impactData->damageRootNode;
+			spdlog::debug("{} is sticked to {}!", projBase->GetName(), Leviathan::leviStuckedBone ? Leviathan::leviStuckedBone->name : "null");
+		//	if (projBase == Leviathan::LeviProjBaseL) proj->data.angle.z = Config::MaxAxeStuckAngle;
+		//	else proj->data.angle.y = Config::MaxAxeStuckAngle;
+			spdlog::debug("hit angle = [{}, {}, {}]", proj->data.angle.x, proj->data.angle.y, proj->data.angle.z);
+		}
+		else if (WeaponIdentify::IsRelic(projBase, false, true)) {
+			proj->GetMissileRuntimeData().impactResult = RE::ImpactResult::kStick;
+			impactData->impactResult = RE::ImpactResult::kStick;
+			auto hitBone = impactData->damageRootNode;
+			spdlog::debug("{} is sticked!", projBase->GetName());
+			if (a2 && a2->formType == RE::FormType::ActorCharacter) {
+				auto target = a2->As<RE::Actor>();
+				if (target && hitBone) {
+				//	spdlog::debug("draupnir attached to {} of {}!", hitBone->name, target->GetName());
+					int nthDraupnir = 0;
+					for (auto draupnir : Draupnir::DraupnirSpearProjectiles) {
+						if (draupnir && draupnir == proj) {
+							Draupnir::DraupnirSpearHitBones[nthDraupnir] = hitBone;
+							Draupnir::DraupnirSpearHitActors[nthDraupnir] = target;
+							spdlog::debug("{}. draupnir attached to {} of {}!",nthDraupnir , hitBone->name, target->GetName());
+						}
+						nthDraupnir++;
+					}
+				}
+				else spdlog::debug("draupnir attached to null");
+			}
+			
+			
+		}
+	}
+	return impactData;
+}
+void ProjectileHook::UpdateMovingCone(RE::ConeProjectile* proj, float dtime)
+{
+	_UpdateMovingCone(proj, dtime);
+	{
+		float DistanceMoved = proj->GetProjectileRuntimeData().distanceMoved;
+		const float cone_len = 169.f;
+		proj->GetConeRuntimeData().coneAngleTangent = cone_len / DistanceMoved;
+	}
+}
+
+/*
+bool ProjectileHook::GetKillOnCollisionMissile(RE::MissileProjectile* a_this)
+{
+	return !_GetKillOnCollisionMissile(a_this);
+}
+bool ProjectileHook::GetKillOnCollisionArrow(RE::ArrowProjectile* a_this)
+{
+	return !_GetKillOnCollisionArrow(a_this);
+}
+
+void ProjectileHook::ReLaunch(RE::Projectile* a_this, RE::NiPoint3* a_dV)
+{
+	using func_t = decltype(&ReLaunch);
+	REL::Relocation<func_t> func{ RELOCATION_ID(43007, 0) };
+	return func(a_this, a_dV);
+}
+
+uint32_t* ProjectileHook::_Launch(uint32_t* handle, RE::Projectile::LaunchData* ldata)
+{
+	using func_t = decltype(&Launch);
+	REL::Relocation<func_t> func{ RELOCATION_ID(33672, 34452) };
+	return func(handle, ldata);
+}
+void ProjectileHook::_UpdateMovingCone(RE::ConeProjectile* proj, float dtime)
+{
+	using func_t = decltype(&_UpdateMovingCone);
+	REL::Relocation<func_t> func{ RELOCATION_ID(42624, 43789) };
+	return func(proj, dtime);
+}
+*/

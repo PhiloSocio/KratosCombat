@@ -5,24 +5,27 @@
 class Config
 {
 public:
-	static inline std::string ThrowStartEvent		= "ThrowAttackStart";
 	
 	//Axe throw
-	static inline float ThrowSpeed					= 2600.f;		//	cm/s
-	static inline float ThrowRotationSpeed			= 720.f;		//	deg/s
+	static inline float ThrowSpeed					= 3600.f;		//	cm/s
+	static inline float ThrowRotationSpeed			= 1440.f;		//	deg/s
 	static inline std::string ThrowEvent			= "ThrowWeapon";
+	static inline std::string ThrowEventV			= "ThrowWeaponV";
+	static inline std::string ThrowEndEvent			= "ThrowAttackEnd";
 	
 	//Axe call
-	static inline float ArrivalTime					= 0.55f;		//	s
-	static inline float ArrivalRotationSpeed		= 18.f;			//	deg/s
-	static inline float ArrivalRoadCurveMagnitude	= 13.7f;			//	multiplier
-	static inline float CatchingTreshold			= 70.f;			//	cm
+	static inline float	ArrivalTime					= 0.53f;		//	s
+	static inline float	ArrivalRotationSpeed		= 18.f;			//	deg/s
+	static inline float	ArrivalRoadCurveMagnitude	= 12.f;			//	deg
+	static inline float	CatchingTreshold			= 69.f;			//	cm
 	static inline std::string CallEvent				= "CallWeapon";
+	static inline std::string CallAttackEvent		= "LeviCallAttack";
 	static inline std::string ChargeLeviEvent		= "LeviCharge";
-	
+	static inline bool	DontDamageWhileArrive		= false;
+
 	//Limit values
-	static inline float MaxArrivalSpeed				= 28000.f;		//	cm/s
-	static inline float MinArrivalSpeed				= 1000.f;		//	cm/s
+	static inline float MaxArrivalSpeed				= 16000.f;		//	cm/s
+	static inline float MinArrivalSpeed				= 1800.f;		//	cm/s
 	
 	static inline float MaxAxeStuckAngle			= 10.f;			//	cm/s
 	static inline float MinAxeStuckAngle			= -80.f;		//	cm/s
@@ -35,22 +38,13 @@ public:
 	static inline std::string SpearThrowEvent		= "ThrowSpear";
 	
 	//Weapon register values
-	static inline std::string LeviathanModESP			= "KratosCombatbyAnA.esp";
-	static inline std::string DraupnirModESP			= "Draupnir Spear Mechanic.esp";
+	static inline std::string LeviathanModESP		= "KratosCombatbyAnA.esp";
+	static inline std::string DraupnirModESP		= "Draupnir Spear Mechanic.esp";
 	
-	static inline std::string LeviathanAxeKeyword		= "LeviathanAxeKWD";
-	static inline std::string BladeOfChaosKeyword		= "BladeOfChaosKWD";
-	static inline std::string DraupnirSpearKeyword		= "DraupnirSpearKWD";
-/*
-	static inline std::string LeviProjectileEditorL	 = "ThrowedLeviathanAxeL";
-	static inline std::string LeviProjectileEditorH	 = "ThrowedLeviathanAxeH";
-	static inline std::string SpellLeviProjectileEditorL= "ThrowLeviathanSpell";
-	static inline std::string SpellLeviProjectileEditorH= "ThrowPowerLeviathanSpell";
-	static inline std::string SpellCatchLeviEID		 = "LeviInCatchRangeSpell";
-	static inline std::string SpellBarehandedStateEID	= "BarehandedStateSpell";
-	static inline std::string SpellDraupnirProjEIDL	 = "ThrowSpearSpell";
-	static inline std::string DraupnirProjectileEditorL = "ThrowedDraupnirSpear0";
-*/
+	static inline std::string LeviathanAxeKeyword	= "LeviathanAxeKWD";
+	static inline std::string BladeOfChaosKeyword	= "BladeOfChaosKWD";
+	static inline std::string DraupnirSpearKeyword	= "DraupnirSpearKWD";
+
 	static inline RE::SpellItem* SpellBHstate	= nullptr;
 	
 	static void CheckConfig();

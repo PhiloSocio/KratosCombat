@@ -79,37 +79,24 @@ void Config::CheckConfig()
 	ReadStringSetting(ini, "Main", "sBladeOfChaosKeyword", BladeOfChaosKeyword);
 	ReadStringSetting(ini, "Main", "sDraupnirSpearKeyword", DraupnirSpearKeyword);
 
-	if (ThrowSpeed < 1000.f)
-	{
-		ThrowSpeed = 1000.f;
-	}
-	else if (ThrowSpeed > 100000.f)
-	{
-		ThrowSpeed = 100000.f;
-	}
+	if (ini.GetBoolValue("Main", "bDontHitWhileArriving")) DontDamageWhileArrive = true;
+	else DontDamageWhileArrive = false;
 
-	if (ArrivalTime <= 0.f)
-	{
-		ArrivalTime = 0.02f;
-	}
-	else if (ArrivalTime > 360.f)
-	{
-		ArrivalTime = 360.f;
-	}
+	if		(ThrowSpeed < 1000.f)	ThrowSpeed = 1000.f;
+	else if	(ThrowSpeed > 100000.f)	ThrowSpeed = 100000.f;
 
-	if (DraupnirSpearCount > 9)
-	{
-		DraupnirSpearCount = 9;
-	}
-	else if (DraupnirSpearCount < 1)
-	{
-		DraupnirSpearCount = 1;
-	} DraupnirSpearCount -= 1;				// DraupnirSpearCount is 0-based
+	if		(ArrivalTime <= 0.f)	ArrivalTime = 0.02f;
+	else if	(ArrivalTime > 360.f)	ArrivalTime = 360.f;
 
-	for (int i = Config::DraupnirSpearCount; i <= 9; i++)
-	{
-		if (Draupnir::DraupnirSpearProjectiles[i] != nullptr)
-			Draupnir::DraupnirSpearProjectiles[i] = nullptr;
+	if		(DraupnirSpearCount > 9)	DraupnirSpearCount = 9;
+	else if	(DraupnirSpearCount < 1)	DraupnirSpearCount = 1;
+	DraupnirSpearCount -= 1;				// DraupnirSpearCount starts with 0
+
+	for (int i = Config::DraupnirSpearCount; i <= 9; i++) {
+		if (Draupnir::DraupnirSpearProjectiles[i] != nullptr) {
+			Draupnir::DraupnirSpearProjectiles[i] = nullptr;}
+		if (Draupnir::DraupnirSpearHitBones[i] != nullptr) {
+			Draupnir::DraupnirSpearHitBones[i] = nullptr;}
 			spdlog::debug("Draupnir spear {} is nullptr", i);
 	}
 
@@ -120,8 +107,7 @@ void Config::CheckConfig()
 	MinAxeStuckAngle *= 0.017453292f;
 	MaxAxeStuckAngle *= 0.017453292f;
 
-	if (ini.GetBoolValue("Main", "DebugModeOpen")) 
-	{
+	if (ini.GetBoolValue("Main", "DebugModeOpen")) {
 		spdlog::set_level(spdlog::level::debug);
 		spdlog::debug("Debug mode enabled");
 	} else spdlog::set_level(spdlog::level::info);
@@ -157,17 +143,21 @@ void Config::CheckProjectiles()
 	else 	spdlog::warn("Can't find default Leviathan Axe enchantment spell");
 
   	Draupnir::DraupnirSpearProjBaseL	= dataHandler->LookupForm<RE::BGSProjectile>(0x802, Config::DraupnirModESP);
+  	Draupnir::DraupnirsCallProjBaseL	= dataHandler->LookupForm<RE::BGSProjectile>(0x818, Config::DraupnirModESP);
 	Draupnir::SpellDraupnirProjL 		= dataHandler->LookupForm<RE::SpellItem>	(0x800, Config::DraupnirModESP);
-	Draupnir::StuckedDraupnir 			= dataHandler->LookupForm<RE::BGSExplosion>	(0x817, Config::DraupnirModESP);
+	Draupnir::SpellDraupnirsCallProjL	= dataHandler->LookupForm<RE::SpellItem>	(0x805, Config::DraupnirModESP);
 	Draupnir::DraupnirExplosion 		= dataHandler->LookupForm<RE::BGSExplosion>	(0x809, Config::DraupnirModESP);
 	if (Draupnir::DraupnirSpearProjBaseL)
 			spdlog::debug("Draupnir Spear projectile is {}", Draupnir::DraupnirSpearProjBaseL->GetName());
 	else 	spdlog::warn("Can't find Draupnir Spear projectile");
+	if (Draupnir::DraupnirsCallProjBaseL)
+			spdlog::debug("Draupnir's call projectile is {}", Draupnir::DraupnirsCallProjBaseL->GetName());
+	else 	spdlog::warn("Can't find Draupnir Spear projectile");
 	if (Draupnir::SpellDraupnirProjL)
 			spdlog::debug("Draupnir Spear projectile spell is {}", Draupnir::SpellDraupnirProjL->GetName());
 	else 	spdlog::warn("Can't find Draupnir Spear projectile spell");
-	if (Draupnir::StuckedDraupnir)
-			spdlog::debug("Stucked Draupnir Spear is {}", Draupnir::StuckedDraupnir->GetName());
+	if (Draupnir::SpellDraupnirsCallProjL)
+			spdlog::debug("Draupnir's call spell is {}", Draupnir::SpellDraupnirsCallProjL->GetName());
 	else 	spdlog::warn("Can't find Draupnir Spear projectile spell");
 	if (Draupnir::DraupnirExplosion)
 			spdlog::debug("Draupnir Spear explosion is {}", Draupnir::DraupnirExplosion->GetName());

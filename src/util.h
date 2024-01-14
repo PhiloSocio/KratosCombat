@@ -9,6 +9,9 @@
 #define PI4 0.7853981633974483f
 #define PI8 0.3926990816987242f
 
+#define downVec {0.f, 0.f, -1.f}
+#define upVec   {0.f, 0.f, 1.f}
+
 using namespace RE;
 
 namespace PointerUtil //yoinked po3's code
@@ -107,19 +110,19 @@ namespace KeyUtil
 		case 0x002:		return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_DPAD_DOWN);
 		case 0x004:		return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_DPAD_LEFT);
 		case 0x008:		return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_DPAD_RIGHT);
-		case 0x0010:			return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_START);
-		case 0x0020:			return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_BACK);
-		case 0x0040:		return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_LEFT_THUMB);
+		case 0x0010:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_START);
+		case 0x0020:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_BACK);
+		case 0x0040:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_LEFT_THUMB);
 		case 0x0080:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_RIGHT_THUMB);
 		case 0x0100:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_LEFT_SHOULDER);
-		case 0x0200: return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_RIGHT_SHOULDER);
-		case 0x1000:				return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_A);
-		case 0x2000:				return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_B);
-		case 0x4000:				return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_X);
-		case 0x8000:				return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_Y);
-		case 0x9:							return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_LT);
-		case 0xA:							return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_RT);
-		default:							return 282; // Invalid
+		case 0x0200:    return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_RIGHT_SHOULDER);
+		case 0x1000:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_A);
+		case 0x2000:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_B);
+		case 0x4000:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_X);
+		case 0x8000:	return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_Y);
+		case 0x9:		return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_LT);
+		case 0xA:		return static_cast<int>(GAMEPAD_OFFSETS::kGamepadButtonOffset_RT);
+		default:		return 282; // Invalid
 	}
 }
 
@@ -301,7 +304,6 @@ namespace MathUtil
                 a_matrix.entry[1][1] = cosA;
                 a_matrix.entry[2][2] = 1.0;
             } else {
-                // Hatalı eksen
                 return;
             }
         }

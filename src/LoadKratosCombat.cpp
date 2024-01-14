@@ -1,14 +1,8 @@
 #include "logger.h"
 #include "MainKratosCombat.h"
-#include "API/PrecisionAPI.h"
 
 #define ConfigPath "Data\\SKSE\\Plugins\\KratosCombat.ini"
 
-
-void OnDataLoaded()
-{
-	
-}
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
@@ -17,7 +11,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		ProjectileHook::Hook();
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
-		APIs::Request();
+	//	APIs::Request();
 		break;
 	case SKSE::MessagingInterface::kPreLoadGame:
 		break;
@@ -36,6 +30,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 
     SKSE::Init(skse);
 	SKSE::AllocTrampoline(1 << 10);
+	ProjectileHook::runtimeVer = skse->RuntimeVersion();
 
 	SetupLog();
 
