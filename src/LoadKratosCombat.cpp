@@ -17,7 +17,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		break;
 	case SKSE::MessagingInterface::kPostLoadGame:
 		AnimationEventTracker::GetSingleton()->Register();
-		InputEventTracker::GetSingleton()->Register();
+	//	InputEventTracker::GetSingleton()->Register();
 		WeaponIdentify::WeaponCheck();
 		Config::CheckProjectiles();
         break;
@@ -30,7 +30,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 
     SKSE::Init(skse);
 	SKSE::AllocTrampoline(1 << 10);
-	ProjectileHook::runtimeVer = skse->RuntimeVersion();
+//	ProjectileHook::runtimeVer = skse->RuntimeVersion();
 
 	SetupLog();
 

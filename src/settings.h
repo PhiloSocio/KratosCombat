@@ -1,6 +1,5 @@
 #pragma once
 #include "SimpleIni.h"
-#include "API/TrueDirectionalMovementAPI.h"
 
 class Config
 {
@@ -60,8 +59,8 @@ private:
 class APIs
 {
 public:
-	static inline TDM_API::IVTDM1* tdm = nullptr;
-	static inline TDM_API::APIResult result;
+//	static inline TDM_API::IVTDM1* tdm = nullptr;
+//	static inline TDM_API::APIResult result;
 
 	static void Request();
 };

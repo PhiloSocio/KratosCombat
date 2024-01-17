@@ -77,6 +77,7 @@ public:
 
 	static ThrowState GetThrowState();
 	static void SetThrowState(const ThrowState a_throwState);
+	static inline void SetStartPos(RE::NiPoint3& a_point);
 	static void Throw(bool isVertical);
 	static void Arrive();
 	static void Catch(RE::Projectile* a_levi, RE::PlayerCharacter* a_player) {return Catch(a_levi, a_player, false);}
@@ -117,7 +118,7 @@ public:
 
 	virtual EventChecker ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource) override;
 };
-
+/*
 class InputEventTracker : public RE::BSTEventSink<RE::InputEvent*>
 {
 public:
@@ -130,8 +131,8 @@ public:
 	static inline uint32_t	AimButton		= 0u;
 	static inline uint32_t	AxeCallButton	= 0u;
 };
+*/
 
-/**/
 class SpellCastTracker	// : public RE::BSTEventSink<RE::TESSpellCastEvent>
 {
 public:

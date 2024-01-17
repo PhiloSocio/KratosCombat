@@ -117,6 +117,33 @@ static void ReLaunch(RE::Projectile* a_this, RE::NiPoint3* a_dV)
 	REL::Relocation<func_t> func{ RELOCATION_ID(43007, 0) };
 	return func(a_this, a_dV);
 }
+inline void Leviathan::SetStartPos(RE::NiPoint3& a_point)
+{
+	auto stuckedLevi =	LastLeviProjectile ? LastLeviProjectile : nullptr;
+	if (!stuckedLevi) stuckedLevi =	(LeviathanAxeProjectileL ? LeviathanAxeProjectileL : 
+									(LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
+	if (stuckedLevi)	a_point = stuckedLevi->data.location;
+	else spdlog::debug("we cant get leviathan's stucked proj");
+
+	if (leviStuckedBone) {
+		a_point = leviStuckedBone->world.translate;
+		leviStuckedBone = nullptr;
+	} else spdlog::debug("levi not stucked any bone");
+
+	if (leviStuckedActor) {
+		leviStuckedActor->RemoveExtraArrows3D();
+		spdlog::debug("levi stucked actor's extra arrows removed");
+		leviStuckedActor = nullptr;
+	//	RE::BaseExtraList extraList;
+	//	RE::ExtraAttachedArrows3D* attachedArrow;
+	//	auto targetData = leviStuckedActor->extraList.Remove<RE::ExtraAttachedArrows3D>(attachedArrow);
+	//	for (auto attachedLevi : attachedArrow->data) {
+	//		if (WeaponIdentify::IsRelic(attachedLevi.source)) {
+	//			attachedLevi.arrow3D.get()->DeleteThis();
+	//		}
+	//	}
+	} else spdlog::debug("levi not stucked anybody");
+}
 void Leviathan::Throw(bool isVertical)
 {
 	auto AnArchos = PlayerCharacter::GetSingleton();
@@ -162,10 +189,49 @@ void Leviathan::Arrive()
 		isAxeThrowed = false;
 
 		if (stuckedLevi) leviPosition = stuckedLevi->data.location;
-		float leviDamage = 1.f;
-		if (WeaponIdentify::LeviathanAxe) leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
-		AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(SpellLeviProjA, false, nullptr, 1.f, false, leviDamage, AnArchos);
+	//	float leviDamage = 1.f;
+	//	if (WeaponIdentify::LeviathanAxe) leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
+	//	AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(SpellLeviProjA, false, nullptr, 1.f, false, leviDamage, AnArchos);
 
+		RE::NiPoint3 startPoint = leviPosition;
+		SetStartPos(startPoint);
+		RE::ProjectileHandle pHandle;
+		RE::Projectile::ProjectileRot pRot = {AnArchos->GetAimAngle(), AnArchos->GetAimHeading()};
+	//	RE::Projectile::LaunchData lData;
+	//	{
+	//	lData.shooter = AnArchos;
+	//	lData.origin = startPoint;
+	//	lData.spell = SpellLeviProjA;
+	//	lData.projectileBase = LeviProjBaseA;
+	//	lData.angleX = AnArchos->GetAimAngle();
+	//	lData.angleZ = AnArchos->GetAimHeading();
+	//	lData.contactNormal = {0.0f, 0.0f, 0.0f};
+	//	lData.combatController = AnArchos->GetActorRuntimeData().combatController;
+	//	lData.weaponSource = WeaponIdentify::LeviathanAxe;
+	//	lData.parentCell = AnArchos->GetParentCell();
+	//	lData.castingSource = RE::MagicSystem::CastingSource::kRightHand;
+	//	lData.enchantItem = WeaponIdentify::LeviathanAxe->formEnchanting->data.baseEnchantment;
+	//	lData.noDamageOutsideCombat = true;
+	//	lData.ammoSource = nullptr;
+	//	lData.unk50 = nullptr;
+	//	lData.desiredTarget = nullptr;
+	//	lData.unk60 = 0.0f;
+	//	lData.unk64 = 0.0f;
+	//	lData.poison = nullptr;
+	//	lData.area = 0;
+	//	lData.power = 1.0f;
+	//	lData.scale = 1.0f;
+	//	lData.alwaysHit = false;
+	//	lData.autoAim = false;
+	//	lData.useOrigin = true;
+	//	lData.deferInitialization = false;
+	//	lData.forceConeOfFire = false;
+	//	}
+		if (WeaponIdentify::LeviathanAxe) {
+		//	RE::Projectile::Launch(&pHandle, lData);
+			RE::Projectile::LaunchSpell(&pHandle, AnArchos, SpellLeviProjA, startPoint, pRot);
+			SetThrowState(Leviathan::ThrowState::kArriving);
+		} else spdlog::warn("you don't have the axe for calling!");
 		if (Config::SpellBHstate && AnArchos->HasSpell(Config::SpellBHstate)) AnArchos->RemoveSpell(Config::SpellBHstate);
 
 /*	*/	if (stuckedLevi) {
@@ -600,7 +666,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 
 	    return EventChecker::kContinue;
 }
-/**/
+/*
 //	check spell cast events
 EventChecker InputEventTracker::ProcessEvent(RE::InputEvent* const *a_event, RE::BSTEventSource<RE::InputEvent*> *a_eventSource)
 {
@@ -654,6 +720,7 @@ void InputEventTracker::Register() {
             spdlog::info("input event sink registered!");
     } else  spdlog::warn("input event sink not registered!");
 };
+*/
 /*
 //	check spell cast events
 EventChecker SpellCastTracker::ProcessEvent(const RE::TESSpellCastEvent* a_event, RE::BSTEventSource<RE::TESSpellCastEvent>* a_eventSource)

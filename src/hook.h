@@ -3,16 +3,7 @@
 class ProjectileHook
 {
 public:
-	static inline REL::Version runtimeVer;
-
-	struct Projectile__ImpactData 
-	{
-	public:
-	    uint8_t f0[0x40];
-	    RE::ImpactResult impactResult;
-	    uint8_t f44[12];
-	};
-	static_assert(sizeof(Projectile__ImpactData) == 0x50);
+//	static inline REL::Version runtimeVer;
 
 	static void Hook()
 	{
@@ -36,18 +27,20 @@ public:
 		_GetCollisionCone			= ConeProjectileVtbl.write_vfunc(0xBE, GetCollisionCone);
 		_GetCollisionBeam			= BeamProjectileVtbl.write_vfunc(0xBE, GetCollisionBeam);
 
+//		_UpdateMovingCone			= ConeProjectileVtbl.write_vfunc(0xAB, UpdateMovingCone);
+
 //		_GetKillOnCollisionMissile	= MissileProjectileVtbl.write_vfunc(0xB8, GetKillOnCollisionMissile);
 //		_GetKillOnCollisionArrow	= ArrowProjectileVtbl.write_vfunc(0xB8, GetKillOnCollisionArrow);
 
 		_GetArrowImpactData			= ArrowProjectileVtbl.write_vfunc(0xBD, GetArrowImpactData);
 //		_GetConeImpactData			= ConeProjectileVtbl.write_vfunc(0xBD, GetConeImpactData);
 
-		auto& longLiveFenix = SKSE::GetTrampoline();
-		spdlog::info("runtime version is {}", runtimeVer);
-		auto launchAddress			= (runtimeVer <= SKSE::RUNTIME_SSE_1_5_97) ? (REL::ID(33672).address() + 0x377) : (REL::ID(33672).address() + 0x377);
-		auto updateMovingAddress	= (runtimeVer <= SKSE::RUNTIME_SSE_1_5_97) ? (REL::ID(42624).address() + 0x155) : (REL::ID(42624).address() + 0x155);
-		_Launch						= longLiveFenix.write_call<5>(launchAddress, Launch);					//	credits to github.com/fenix31415	34452 for ae
-		_UpdateMovingCone			= longLiveFenix.write_call<5>(updateMovingAddress, UpdateMovingCone);	//	credits to github.com/fenix31415	43789 for ae
+//		auto& longLiveFenix = SKSE::GetTrampoline();
+//		spdlog::info("runtime version is {}", runtimeVer);
+//		auto launchAddress			= (runtimeVer <= SKSE::RUNTIME_SSE_1_5_97) ? (REL::ID(33672).address() + 0x377) : (REL::ID(34452).address() + 0x337);	//-40	//0x550A37
+//		auto updateMovingAddress	= (runtimeVer <= SKSE::RUNTIME_SSE_1_5_97) ? (REL::ID(42624).address() + 0x155) : (REL::ID(42624).address() + 0x155);
+//		_Launch						= longLiveFenix.write_call<5>(launchAddress, Launch);					//	credits to github.com/fenix31415	33672 for se,	34452 for ae
+//		_UpdateMovingCone			= longLiveFenix.write_call<5>(updateMovingAddress, UpdateMovingCone);	//	credits to github.com/fenix31415	42624 for se,	43789 for ae
 
 		spdlog::info("ProjectileHook done, long live Ersh and Fenix!");
 	}

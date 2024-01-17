@@ -48,8 +48,8 @@ void Config::CheckConfig()
 	CSimpleIniA ini;
 	ini.LoadFile(ConfigPath);
 
-	ReadIntSetting(ini, "Main", "iAimButtonID", InputEventTracker::AimButton);
-	ReadIntSetting(ini, "Main", "iCallingButtonID", InputEventTracker::AxeCallButton);
+//	ReadIntSetting(ini, "Main", "iAimButtonID", InputEventTracker::AimButton);
+//	ReadIntSetting(ini, "Main", "iCallingButtonID", InputEventTracker::AxeCallButton);
 
 	ReadFloatSetting(ini, "Main", "fThrowSpeed", ThrowSpeed);
 	ReadFloatSetting(ini, "Main", "fThrowRotationSpeed", ThrowRotationSpeed);
@@ -180,9 +180,9 @@ void Config::CheckProjectiles()
 void APIs::Request()
 {
 		spdlog::info("API's loading...");
-	if (!tdm) {
-		tdm = reinterpret_cast<TDM_API::IVTDM1*>(TDM_API::RequestPluginAPI(TDM_API::InterfaceVersion::V1));
-		if (tdm) spdlog::debug("TDM API loaded");
-		else spdlog::warn("TDM API failed to load");
-	}
+//	if (!tdm) {
+//		tdm = reinterpret_cast<TDM_API::IVTDM1*>(TDM_API::RequestPluginAPI(TDM_API::InterfaceVersion::V1));
+//		if (tdm) spdlog::debug("TDM API loaded");
+//		else spdlog::warn("TDM API failed to load");
+//	}
 }
