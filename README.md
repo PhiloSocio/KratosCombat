@@ -2,7 +2,8 @@
 
 * Axe throw and call mechanic.
 * Draupnir Spear's throwing and detonating system.
-* Compatible with 1.5.97 - 1.6.640 game versions.
+* Compatible with 1.5.x - 1.6.x game versions.
+    tested with 1.5.97, 1.6.318, 1.6.640
 
 ## Requirements
 
@@ -47,3 +48,4 @@ into your "`mods`" folder:
 * [Mrowr Purr](https://github.com/SkyrimScripting) for his guide videos.
 * [Monitor144hz](https://github.com/Monitor144hz) for his CommonlibSSE project template.
 * [Ersh](https://github.com/ersh1) for Precision API and projectile hook ID's.
+* [Fenix](https://github.com/fenix31415) for helping to work with projectiles.
