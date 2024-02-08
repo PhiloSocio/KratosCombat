@@ -1,6 +1,12 @@
 # Kratos Combat
 
 * Axe throw and call mechanic.
+  - Throwing axe to looking direction like an aimed magic projectile with an editable throw speed.
+  - Throwed axe's damage calculating with it's attack damage and thrower's one handed skill and archery skill.
+  - Throwed axe keeps current enchantment of the axe.
+  - Calling axe from it's current location: hitten bone, hitten object, hitten ground position, from havok or while is moving.
+  - The axe hits to living targets while arriving.
+  - Axe will arrive to your hand with a curved way like God of War.
 * Draupnir Spear's throwing and detonating system.
 * Compatible with 1.5.97 - 1.6.x game versions. (Tested with 1.5.97, 1.6.318, 1.6.640)
 
