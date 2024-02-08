@@ -48,5 +48,5 @@ into your "`mods`" folder:
 [powerof3](https://github.com/powerof3) for CommonlibSSE-NG.
 * [Mrowr Purr](https://github.com/SkyrimScripting) for his guide videos.
 * [Monitor144hz](https://github.com/Monitor144hz) for his CommonlibSSE project template.
-* [Ersh](https://github.com/ersh1) for Precision API and projectile hook ID's.
+* [Ersh](https://github.com/ersh1) for inspiring me with TrueDirectionalMovement mod's projectile stuff.
 * [Fenix](https://github.com/fenix31415) for helping to work with projectiles.
