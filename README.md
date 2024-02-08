@@ -1,6 +1,6 @@
 # Kratos Combat
 
-* Axe throw and call mechanic.
+* **Axe throw and call mechanic.**
   - Throwing axe to looking direction like an aimed magic projectile.
   - Throwed axe's damage calculating with it's attack damage and thrower's one handed skill and archery skill.
   - Throwed axe keeps current enchantment of the axe.
@@ -8,13 +8,13 @@
   - The axe hits to living targets while arriving.
   - Axe will arrive to your hand with a curved path like God of War.
   - Throwing and arriving speeds are completely editable with ini file.
-* Draupnir Spear's throwing and detonating system.
+* **Draupnir Spear's throwing and detonating system.**
   - Works same like the axe throwing.
   - Spears stucks their hit positions.
   - Stucked spears explodes one by one after your Draupnir's call move.
   - Explosion system not working with actor targets for now.
   - Explodable spear count editable with ini file.
-* Compatible with 1.5.97 - 1.6.x game versions. (Tested with 1.5.97, 1.6.318, 1.6.640)
+* **Compatible with 1.5.97 - 1.6.x game versions. (Tested with 1.5.97, 1.6.318, 1.6.640)**
 
 ## Requirements
 
