@@ -2,8 +2,6 @@
 
 * Axe throw and call mechanic.
 * Draupnir Spear's throwing and detonating system.
-* Compatible with 1.5.x - 1.6.x game versions.
-    tested with 1.5.97, 1.6.318, 1.6.640
 * Compatible with 1.5.97 - 1.6.x game versions. (Tested with 1.5.97, 1.6.318, 1.6.640)
 
 ## Requirements
