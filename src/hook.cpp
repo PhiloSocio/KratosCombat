@@ -376,56 +376,108 @@ void ProjectileHook::GetCollisionProjectile(RE::Projectile* a_this, RE::hkpAllCd
 inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
 	const auto projBase = a_this->GetProjectileBase();
-	if (projBase && WeaponIdentify::IsRelic(projBase, true)) {
-		if (Leviathan::isAxeCalled && Config::DontDamageWhileArrive)	return true;
+	if (projBase && WeaponIdentify::IsRelic(projBase)) {
+		
+		const auto& rtData = a_this->GetProjectileRuntimeData();
+		RE::Actor* shooter = nullptr;
+		if (rtData.shooter && rtData.shooter.get() && rtData.shooter.get().get())	shooter = rtData.shooter.get().get()->As<RE::Actor>();
+	
+		if (projBase && WeaponIdentify::IsRelic(projBase, true)) {
+			if (Leviathan::isAxeCalled && Config::DontDamageWhileArrive)	return true;
 
-	/*
-		if (const auto model = a_this->Get3D()) {
-			auto controllers = model->GetControllers();
-			if (controllers) {
-				auto manager = controllers->AsNiControllerManager();
-				for (auto sequence : manager->activeSequences) {
-					spdlog::debug("active sequence is {}", sequence->name);
-					auto endSequence = manager->GetSequenceByName("mEnd");
-					if (endSequence) {
-						sequence = endSequence;
-						spdlog::debug("end sequence is {}", endSequence->name);
+			const bool isArriving = projBase == Leviathan::LeviProjBaseA;
+			bool isTargetActor = false;
+			bool isSameTarget = false;
+	/**/
+			if (!isArriving && shooter) {
+				if (const auto model = a_this->Get3D()) {
+					auto controllers = model->GetControllers();
+					if (controllers) {
+						auto manager = controllers->AsNiControllerManager();
+						if (manager) {
+							auto endSequence = manager->GetSequenceByName("mEnd");
+							if (endSequence) shooter->PlayAnimation(manager, endSequence, endSequence);
+						}
+					//	for (auto sequence : manager->activeSequences) {
+					//	//	spdlog::debug("active sequence is {}", sequence->name);
+					//		auto endSequence = manager->GetSequenceByName("mEnd");
+					//		if (endSequence) {
+					//			shooter->PlayAnimation(manager, endSequence, endSequence);
+					//	//		spdlog::debug("end sequence is {}", endSequence->name);
+					//		}
+					//	}
 					}
 				}
 			}
+
+			for (auto& point : a_AllCdPointCollector->hits) {
+				const auto ourProj 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
+				const auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
+
+			//	if (ourProj) {
+			//		if (projBase == Leviathan::LeviProjBaseL) a_this->data.angle.z = Config::MaxAxeStuckAngle;
+			//		else a_this->data.angle.y = Config::MaxAxeStuckAngle;
+			//	}
+				if (target && !target->AsProjectile()) {
+					if (!Leviathan::isAxeStucked && !isArriving) Leviathan::isAxeStucked = true;
+				//	spdlog::debug("levi hitted to {}!!", target->GetName());
+					if (target->formType == RE::FormType::ActorCharacter) {
+						if (const auto victim = target->As<RE::Actor>()) {
+							if (a_this->IsMissileProjectile()) {
+								if (Leviathan::leviLastHitActor == victim || Leviathan::leviStuckedActor == victim) isSameTarget = true;
+								if (!isArriving) Leviathan::leviStuckedActor = victim;
+
+								if (!target->IsDead()) {
+									isTargetActor = true;
+									RE::EnchantmentItem* ench = nullptr;
+									if (rtData.weaponSource && rtData.weaponSource->formEnchanting) ench = rtData.weaponSource->formEnchanting;
+
+									if (shooter && !isArriving) {
+										if (ench) {
+											if (const auto eff = ench->GetCostliestEffectItem(); eff && eff->IsHostile()) {
+												shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, ench);
+											//	ench->data.chargeOverride -= 1000u;
+											}
+										} else {
+											if (rtData.weaponSource)
+												shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				if ((!isTargetActor || isSameTarget) && isArriving) return true;
+
+	#ifdef EXPERIMENTAL
+				const bool isVertical = !isArriving && projBase == Leviathan::LeviProjBaseH;
+				auto& angle = a_this->data.angle;
+				auto& matrixL = a_this->Get3D2()->local.rotate;
+				auto& matrixW = a_this->Get3D2()->world.rotate;
+				Leviathan::SetHitRotation(angle, isVertical);
+				Leviathan::SetHitRotation(matrixL, isVertical);
+				Leviathan::SetHitRotation(matrixW, isVertical);
+	#endif
+			}
+
+			if (Leviathan::throwState == Leviathan::ThrowState::kThrown) Leviathan::SetThrowState(Leviathan::ThrowState::kCanArrive);
+			
+			return false;
 		}
-	*/	
+	/**/
+		else if (projBase == Draupnir::DraupnirSpearProjBaseL) {
+			for (auto& point : a_AllCdPointCollector->hits) {
+				const auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
 
-		const bool isArriving = projBase == Leviathan::LeviProjBaseA;
-		bool isTargetActor = false;
-		bool isSameTarget = false;
-		for (auto& point : a_AllCdPointCollector->hits) {
-			const auto ourProj 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
-			const auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
-
-		//	if (ourProj) {
-		//		if (projBase == Leviathan::LeviProjBaseL) a_this->data.angle.z = Config::MaxAxeStuckAngle;
-		//		else a_this->data.angle.y = Config::MaxAxeStuckAngle;
-		//	}
-			if (target && !target->AsProjectile()) {
-				if (!Leviathan::isAxeStucked && !isArriving) Leviathan::isAxeStucked = true;
-			//	spdlog::debug("levi hitted to {}!!", target->GetName());
-				if (target->formType == RE::FormType::ActorCharacter) {
-					if (const auto victim = target->As<RE::Actor>()) {
-						if (a_this->IsMissileProjectile()) {
-							if (Leviathan::leviLastHitActor == victim || Leviathan::leviStuckedActor == victim) isSameTarget = true;
-							if (!isArriving) Leviathan::leviStuckedActor = victim;
-							const auto& rtData = a_this->GetProjectileRuntimeData();
-
-							if (!target->IsDead()) {
-								isTargetActor = true;
+				if (target) {
+					if (target->formType == RE::FormType::ActorCharacter) {
+						if (const auto victim = target->As<RE::Actor>()) {
+							if (!victim->IsDead()) {
 								RE::EnchantmentItem* ench = nullptr;
 								if (rtData.weaponSource && rtData.weaponSource->formEnchanting) ench = rtData.weaponSource->formEnchanting;
 
-								RE::Actor* shooter = nullptr;
-								if (const auto shooterRef = rtData.shooter.get().get())	shooter = shooterRef->As<RE::Actor>();
-
-								if (shooter && !isArriving) {
+								if (shooter) {
 									if (ench) {
 										if (const auto eff = ench->GetCostliestEffectItem(); eff && eff->IsHostile()) {
 											shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, ench);
@@ -441,79 +493,31 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
 					}
 				}
 			}
-			if ((!isTargetActor || isSameTarget) && isArriving) return true;
-
-#ifdef EXPERIMENTAL
-			const bool isVertical = !isArriving && projBase == Leviathan::LeviProjBaseH;
-			auto& angle = a_this->data.angle;
-			auto& matrixL = a_this->Get3D2()->local.rotate;
-			auto& matrixW = a_this->Get3D2()->world.rotate;
-			Leviathan::SetHitRotation(angle, isVertical);
-			Leviathan::SetHitRotation(matrixL, isVertical);
-			Leviathan::SetHitRotation(matrixW, isVertical);
-#endif
+			return false;
 		}
+	/**/
+#ifdef EXPERIMENTAL
+		else if (projBase == Draupnir::DraupnirsCallProjBaseL) {
+			for (auto& point : a_AllCdPointCollector->hits) {
+				const auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
 
-		if (Leviathan::throwState == Leviathan::ThrowState::kThrown) Leviathan::SetThrowState(Leviathan::ThrowState::kCanArrive);
-		
-		return false;
-	}
-/**/
-	else if (projBase == Draupnir::DraupnirSpearProjBaseL) {
-		for (auto& point : a_AllCdPointCollector->hits) {
-			const auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
-
-			if (target) {
-				if (target->formType == RE::FormType::ActorCharacter) {
-					if (const auto victim = target->As<RE::Actor>()) {
-						if (!victim->IsDead()) {
-							RE::EnchantmentItem* ench = nullptr;
-							const auto& rtData = a_this->GetProjectileRuntimeData();
-							if (rtData.weaponSource && rtData.weaponSource->formEnchanting) ench = rtData.weaponSource->formEnchanting;
-
-							RE::Actor* shooter = nullptr;
-							if (const auto shooterRef = rtData.shooter.get().get())	shooter = shooterRef->As<RE::Actor>();
-
-							if (shooter) {
-								if (ench) {
-									if (const auto eff = ench->GetCostliestEffectItem(); eff && eff->IsHostile()) {
-										shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, ench);
-									//	ench->data.chargeOverride -= 1000u;
-									}
-								} else {
-									if (rtData.weaponSource)
-										shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
+				if (target) {
+					if (target->formType == RE::FormType::ActorCharacter) {
+						if (const auto victim = target->As<RE::Actor>()) {
+							for (auto validTarget : Draupnir::DraupnirSpearHitActors) {
+								if (validTarget && validTarget == victim) {
+									victim->RemoveExtraArrows3D();
+									return false;
 								}
 							}
 						}
 					}
 				}
 			}
+			return true;
 		}
-		return false;
-	}
-/**/
-#ifdef EXPERIMENTAL
-	else if (projBase == Draupnir::DraupnirsCallProjBaseL) {
-		for (auto& point : a_AllCdPointCollector->hits) {
-			const auto target 	= RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
-
-			if (target) {
-				if (target->formType == RE::FormType::ActorCharacter) {
-					if (const auto victim = target->As<RE::Actor>()) {
-						for (auto validTarget : Draupnir::DraupnirSpearHitActors) {
-							if (validTarget && validTarget == victim) {
-								victim->RemoveExtraArrows3D();
-								return false;
-							}
-						}
-					}
-				}
-			}
-		}
-		return true;
-	}
 #endif
+	}
 	return false;
 }
 /*
