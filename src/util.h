@@ -263,15 +263,15 @@ namespace MathUtil
 
     struct Algebra
     {
-        [[nodiscard]] static inline float generateRandomFloat(float lower, float upper) {
+        [[nodiscard]] static inline float generateRandomFloat(const float lower, const float upper) {
             static std::default_random_engine generator;
             static std::uniform_real_distribution<float> distribution(lower, upper);
                 return distribution(generator);
         }
-        [[nodiscard]] static void SetRotationMatrix(RE::NiMatrix3& a_matrix, float sacb, float cacb, float sb) {
-        	float cb = std::sqrtf(1 - sb * sb);
-        	float ca = cacb / cb;
-        	float sa = sacb / cb;
+        [[nodiscard]] static void SetRotationMatrix(RE::NiMatrix3& a_matrix, const float sacb, const float cacb, const float sb) {
+        	const float cb = std::sqrtf(1 - sb * sb);
+        	const float ca = cacb / cb;
+        	const float sa = sacb / cb;
         	a_matrix.entry[0][0] = ca;
         	a_matrix.entry[1][0] = sa;
         	a_matrix.entry[2][0] = 0.0;
@@ -282,9 +282,9 @@ namespace MathUtil
         	a_matrix.entry[1][2] = -ca * sb;
         	a_matrix.entry[2][2] = cb;
         }
-        [[nodiscard]] static void RotateMatrixAroundAxis(NiMatrix3& a_matrix, float angleRad, const char* axis) {
-            float cosA = std::cos(angleRad);
-            float sinA = std::sin(angleRad);
+        [[nodiscard]] static void RotateMatrixAroundAxis(NiMatrix3& a_matrix, const float angleRad, const char* axis) {
+            const float cosA = std::cos(angleRad);
+            const float sinA = std::sin(angleRad);
             if (std::strcmp(axis, "x") == 0) {
                 a_matrix.entry[0][0] = 1.0;
                 a_matrix.entry[1][1] = cosA;
@@ -341,6 +341,35 @@ namespace MathUtil
             // Orijinal matris ile çarpma
             a_matrix = a_matrix * rotationMatrixX * rotationMatrixY * rotationMatrixZ;
         }
+    //    [[nodiscard]] static NiMatrix3 SetRotationMatrixByVector(float Ax, float Ay, float Az, float Bx, float By, float Bz) {
+    //        const float cosAxBx = std::cos(Bx);
+    //        const float cosAxBy = std::cos(angleRadX);
+    //        const float cosAxBz = std::cos(angleRadY);
+    //        const float cosAyBx = std::cos(angleRadY);
+    //        const float cosAyBy = std::cos(By);
+    //        const float cosAyBz = std::cos(angleRadZ);
+    //        const float cosAzBx = std::cos(angleRadY);
+    //        const float cosAzBy = std::cos(angleRadZ);
+    //        const float cosAzBz = std::cos(Bz);
+
+    //        NiMatrix3 matrix;
+    //        // X axis
+    //        matrix.entry[0][0] = 1.0;
+    //        matrix.entry[1][0] = cosX;
+    //        matrix.entry[2][0] = -sinX;
+
+    //        // Y axis
+    //        matrix.entry[0][1] = cosY;
+    //        matrix.entry[1][1] = sinY;
+    //        matrix.entry[2][1] = 1.0;
+
+    //        // Z axis
+    //        matrix.entry[0][2] = sinZ;
+    //        matrix.entry[1][2] = cosZ;
+    //        matrix.entry[2][2] = 1.0;
+
+    //        return matrix;
+    //    }
     };
 }
 namespace ObjectUtil

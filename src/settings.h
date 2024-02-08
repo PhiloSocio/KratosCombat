@@ -13,9 +13,9 @@ public:
 	static inline std::string ThrowEndEvent			= "ThrowAttackEnd";
 	
 	//Axe call
-	static inline float	ArrivalTime					= 0.53f;		//	s
+	static inline float	ArrivalTime					= 0.52f;		//	s
 	static inline float	ArrivalRotationSpeed		= 18.f;			//	deg/s
-	static inline float	ArrivalRoadCurveMagnitude	= 12.f;			//	deg
+	static inline float	ArrivalRoadCurveMagnitude	= 18.f;			//	deg
 	static inline float	CatchingTreshold			= 69.f;			//	cm
 	static inline std::string CallEvent				= "CallWeapon";
 	static inline std::string CallAttackEvent		= "LeviCallAttack";
@@ -23,8 +23,8 @@ public:
 	static inline bool	DontDamageWhileArrive		= false;
 
 	//Limit values
-	static inline float MaxArrivalSpeed				= 16000.f;		//	cm/s
-	static inline float MinArrivalSpeed				= 1800.f;		//	cm/s
+	static inline float MaxArrivalSpeed				= 60000.f;		//	cm/s
+	static inline float MinArrivalSpeed				= 1600.f;		//	cm/s
 	
 	static inline float MaxAxeStuckAngle			= 10.f;			//	cm/s
 	static inline float MinAxeStuckAngle			= -80.f;		//	cm/s

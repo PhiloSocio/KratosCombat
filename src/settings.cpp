@@ -85,8 +85,8 @@ void Config::CheckConfig()
 	if		(ThrowSpeed < 1000.f)	ThrowSpeed = 1000.f;
 	else if	(ThrowSpeed > 100000.f)	ThrowSpeed = 100000.f;
 
-	if		(ArrivalTime <= 0.f)	ArrivalTime = 0.02f;
-	else if	(ArrivalTime > 360.f)	ArrivalTime = 360.f;
+	if		(ArrivalTime <= 0.f)	ArrivalTime = 0.05f;
+	else if	(ArrivalTime > 60.f)	ArrivalTime = 60.f;
 
 	if		(DraupnirSpearCount > 9)	DraupnirSpearCount = 9;
 	else if	(DraupnirSpearCount < 1)	DraupnirSpearCount = 1;
@@ -97,9 +97,11 @@ void Config::CheckConfig()
 			Draupnir::DraupnirSpearProjectiles[i] = nullptr;}
 		if (Draupnir::DraupnirSpearHitBones[i] != nullptr) {
 			Draupnir::DraupnirSpearHitBones[i] = nullptr;}
-			spdlog::debug("Draupnir spear {} is nullptr", i);
+		//	spdlog::debug("Draupnir spear {} is nullptr", i);
 	}
 
+	if (ArrivalRoadCurveMagnitude > 100.f)	ArrivalRoadCurveMagnitude = 100.f;
+	if (ArrivalRoadCurveMagnitude < -100.f)	ArrivalRoadCurveMagnitude = -100.f;
 	ArrivalRoadCurveMagnitude *= 0.017453292f;
 	ArrivalRoadCurveMagnitude = sinf(ArrivalRoadCurveMagnitude);
 	ThrowRotationSpeed *= 0.017453292f;
@@ -108,7 +110,7 @@ void Config::CheckConfig()
 	MaxAxeStuckAngle *= 0.017453292f;
 
 	if (ini.GetBoolValue("Main", "DebugModeOpen")) {
-		spdlog::set_level(spdlog::level::debug);
+		spdlog::set_level(spdlog::level::trace);
 		spdlog::debug("Debug mode enabled");
 	} else spdlog::set_level(spdlog::level::info);
 	spdlog::info("Kratos Combat's configurations checked.");

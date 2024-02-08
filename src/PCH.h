@@ -12,3 +12,10 @@ using namespace std::literals;
 
 	using rFlag = RE::TESForm::RecordFlags;
 	using pFlag = RE::Projectile::Flags;
+
+#define DEBUG_MODE
+//#undef DEBUG_MODE
+
+// for experimental draupnir spear detonating features:
+//#define EXPERIMENTAL
+//#undef EXPERIMENTAL

@@ -1,31 +1,35 @@
 #pragma once
-// Ersh
+
+// huge thanks to Ersh & fenix
+
+static float* g_deltaTime = (float*)RELOCATION_ID(523660, 410199).address();			//	sensitive to slow time spell
+static float* g_deltaTimeRealTime = (float*)RELOCATION_ID(523661, 410200).address();	//	const
+
 class ProjectileHook
 {
 public:
 //	static inline REL::Version runtimeVer;
-
 	static void Hook()
 	{
 		spdlog::info("Hooking Projectiles...");
-		REL::Relocation<std::uintptr_t> ProjectileVtbl{ RE::VTABLE_Projectile[0] };
-		REL::Relocation<std::uintptr_t> MissileProjectileVtbl{ RE::VTABLE_MissileProjectile[0] };
+	//	REL::Relocation<std::uintptr_t> ProjectileVtbl{ RE::VTABLE_Projectile[0] };
+	//	REL::Relocation<std::uintptr_t> MissileProjectileVtbl{ RE::VTABLE_MissileProjectile[0] };
 		REL::Relocation<std::uintptr_t> ArrowProjectileVtbl{ RE::VTABLE_ArrowProjectile[0] };
-		REL::Relocation<std::uintptr_t> FlameProjectileVtbl{ RE::VTABLE_FlameProjectile[0] };
-		REL::Relocation<std::uintptr_t> ConeProjectileVtbl{ RE::VTABLE_ConeProjectile[0] };
-		REL::Relocation<std::uintptr_t> BeamProjectileVtbl{ RE::VTABLE_BeamProjectile[0] };
+	//	REL::Relocation<std::uintptr_t> FlameProjectileVtbl{ RE::VTABLE_FlameProjectile[0] };
+	//	REL::Relocation<std::uintptr_t> ConeProjectileVtbl{ RE::VTABLE_ConeProjectile[0] };
+	//	REL::Relocation<std::uintptr_t> BeamProjectileVtbl{ RE::VTABLE_BeamProjectile[0] };
 
-		_GetLinearVelocityProj		= ProjectileVtbl.write_vfunc(0x86, GetLinearVelocityProj);
-		_GetLinearVelocityMissile	= MissileProjectileVtbl.write_vfunc(0x86, GetLinearVelocityArrow);
+	//	_GetLinearVelocityProj		= ProjectileVtbl.write_vfunc(0x86, GetLinearVelocityProj);
+	//	_GetLinearVelocityMissile	= MissileProjectileVtbl.write_vfunc(0x86, GetLinearVelocityArrow);
 		_GetLinearVelocityArrow		= ArrowProjectileVtbl.write_vfunc(0x86, GetLinearVelocityArrow);
-		_GetLinearVelocityCone		= ConeProjectileVtbl.write_vfunc(0x86, GetLinearVelocityCone);
+	//	_GetLinearVelocityCone		= ConeProjectileVtbl.write_vfunc(0x86, GetLinearVelocityCone);
 
-		_GetCollisionProjectile		= ProjectileVtbl.write_vfunc(0xBE, GetCollisionProjectile);
-		_GetCollisionMissile		= MissileProjectileVtbl.write_vfunc(0xBE, GetCollisionMissile);
-		_GetCollisionArrow			= ArrowProjectileVtbl.write_vfunc(0xBE, GetCollisionArrow);							//	hkpCollidable* a_collidable
-		_GetCollisionFlame			= FlameProjectileVtbl.write_vfunc(0xBE, GetCollisionFlame);
-		_GetCollisionCone			= ConeProjectileVtbl.write_vfunc(0xBE, GetCollisionCone);
-		_GetCollisionBeam			= BeamProjectileVtbl.write_vfunc(0xBE, GetCollisionBeam);
+	//	_GetCollisionProjectile		= ProjectileVtbl.write_vfunc(0xBE, GetCollisionProjectile);
+	//	_GetCollisionMissile		= MissileProjectileVtbl.write_vfunc(0xBE, GetCollisionMissile);
+		_GetCollisionArrow			= ArrowProjectileVtbl.write_vfunc(0xBE, GetCollisionArrow);
+	//	_GetCollisionFlame			= FlameProjectileVtbl.write_vfunc(0xBE, GetCollisionFlame);
+	//	_GetCollisionCone			= ConeProjectileVtbl.write_vfunc(0xBE, GetCollisionCone);
+	//	_GetCollisionBeam			= BeamProjectileVtbl.write_vfunc(0xBE, GetCollisionBeam);
 
 //		_UpdateMovingCone			= ConeProjectileVtbl.write_vfunc(0xAB, UpdateMovingCone);
 
@@ -57,16 +61,14 @@ private:
 	static void GetCollisionCone(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);// {_GetCollisionCone(a_this, a_AllCdPointCollector); }
 	static void GetCollisionBeam(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)		{_GetCollisionBeam(a_this, a_AllCdPointCollector);}
 
-//	static bool GetKillOnCollisionMissile(RE::MissileProjectile* a_this);
-//	static bool GetKillOnCollisionArrow(RE::ArrowProjectile* a_this);
+	static bool GetKillOnCollisionMissile(RE::MissileProjectile* a_this);
+	static bool GetKillOnCollisionArrow(RE::ArrowProjectile* a_this);
 
-	static uint32_t* Launch(uint32_t* handle, RE::Projectile::LaunchData* ldata);
+//	static uint32_t* Launch(uint32_t* handle, RE::Projectile::LaunchData* ldata);
 //	static uint32_t* _Launch(uint32_t* handle, RE::Projectile::LaunchData* ldata);
 	static void UpdateMovingCone(RE::ConeProjectile* proj, float dtime);
 //	static void _UpdateMovingCone(RE::ConeProjectile* proj, float dtime);
 	static RE::Projectile::ImpactData* GetArrowImpactData(RE::ArrowProjectile *proj, RE::TESObjectREFR *a2, RE::NiPoint3 *a3, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable, uint32_t a6, char a7);
-
-//	static void ReLaunch(RE::Projectile* a_this, RE::NiPoint3* a_dV);
 
 	static void LeviAndDraupnir(RE::Projectile* a_this);
 	static inline bool LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
@@ -83,13 +85,12 @@ private:
 	static inline REL::Relocation<decltype(GetCollisionCone)> _GetCollisionCone;
 	static inline REL::Relocation<decltype(GetCollisionBeam)> _GetCollisionBeam;
 
-//	static inline REL::Relocation<decltype(GetKillOnCollisionMissile)> _GetKillOnCollisionMissile;
-//	static inline REL::Relocation<decltype(GetKillOnCollisionArrow)> _GetKillOnCollisionArrow;
+	static inline REL::Relocation<decltype(GetKillOnCollisionMissile)> _GetKillOnCollisionMissile;
+	static inline REL::Relocation<decltype(GetKillOnCollisionArrow)> _GetKillOnCollisionArrow;
 
 	/*	long live fenix!	*/
-	static inline REL::Relocation<decltype(Launch)> _Launch;
+//	static inline REL::Relocation<decltype(Launch)> _Launch;
 	static inline REL::Relocation<decltype(UpdateMovingCone)> _UpdateMovingCone;
 	static inline REL::Relocation<decltype(GetArrowImpactData)> _GetArrowImpactData;
 //	static inline REL::Relocation<decltype(GetConeImpactData)> _GetConeImpactData;
 };
-/**/

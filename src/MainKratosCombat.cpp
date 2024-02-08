@@ -5,7 +5,7 @@
 using namespace Util;
 //static std::jthread axeEquipThread;
 //static std::jthread axeChargeThread;
-static void DelayedCast(RE::Actor* a_caster, RE::SpellItem* a_spell, RE::TESObjectREFR* a_target, float a_delaySec)
+static void DelayedCast(RE::Actor* a_caster, RE::SpellItem* a_spell, RE::NiNode* a_target, float a_delaySec)
 {
 	if (!a_spell) return;
 	if (!a_caster) return;
@@ -15,12 +15,18 @@ static void DelayedCast(RE::Actor* a_caster, RE::SpellItem* a_spell, RE::TESObje
 	if (!a_spell) return;
 	if (!a_caster) return;
 	spdlog::debug("draupnir's call triggered!");
-	a_caster->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(a_spell, false, a_target, 1.f, false, 10.f, a_caster);
+//	a_caster->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(a_spell, false, nullptr, 1.f, false, 10.f, a_caster);
+	
+	if (!a_target) return;
+	RE::ProjectileHandle pHandle;
+	RE::NiPoint3 startPoint = a_target->world.translate + RE::NiPoint3(0.f, 0.f, 128.f);
+	RE::Projectile::ProjectileRot pRot = {a_caster->GetAimAngle(), a_caster->GetAimHeading()};
+	RE::Projectile::LaunchSpell(&pHandle, a_caster, a_spell, startPoint, pRot);
 	spdlog::debug("draupnir's call end!");
 }
 
 //WEAPON IDENTIFICATION
-void WeaponIdentify::WeaponIdentifier(TESObjectWEAP* a_RHandWeapon)
+void WeaponIdentify::WeaponIdentifier(RE::PlayerCharacter* a_player, RE::TESObjectWEAP* a_RHandWeapon)
 {
 	if (!a_RHandWeapon) return;
     auto RHandWeaponKWDlist = a_RHandWeapon->As<BGSKeywordForm>();
@@ -33,6 +39,17 @@ void WeaponIdentify::WeaponIdentifier(TESObjectWEAP* a_RHandWeapon)
     	RelicName = "the Leviathan Axe";
 		LeviathanAxe = a_RHandWeapon;
     	spdlog::info("{} is {}", LeviathanAxe->GetName(), RelicName);
+
+		if (WeaponIdentify::LeviathanAxe->HasWorldModel()) {spdlog::debug("Levi is throwable"); Leviathan::SetThrowState(Leviathan::ThrowState::kThrowable);}
+		else spdlog::debug("Levi is not equipped for real");
+
+		if (Leviathan::SpellCatchLevi && a_player->AsMagicTarget()->HasMagicEffect(Leviathan::EffCatchLevi)) {a_player->RemoveSpell(Leviathan::SpellCatchLevi);}
+
+		if (Leviathan::LeviathanAxeProjectileA 
+		&& (Leviathan::throwState == Leviathan::ThrowState::kArriving
+		 || Leviathan::throwState == Leviathan::ThrowState::kArrived)) 
+		  	Leviathan::Catch(Leviathan::LeviathanAxeProjectileA, a_player, true);
+
 			return;
 	}
     if (RHandWeaponKWDlist->HasKeywordString(Config::BladeOfChaosKeyword)) {
@@ -58,16 +75,26 @@ void WeaponIdentify::WeaponCheck()
     isDraupnirSpear = false;
 	isRelic = false;
 
-	auto AnArchos = PlayerCharacter::GetSingleton();
-	if		(AnArchos->GetNodeByName("Weapon"))					{RHandBone = AnArchos->GetNodeByName("Weapon");}
+	const auto AnArchos = PlayerCharacter::GetSingleton();
+	if		(!AnArchos) return;
+	if		(AnArchos->GetNodeByName("NPC R Finger20 [RF20]"))	{RHandBone = AnArchos->GetNodeByName("NPC R Finger20 [RF20]");}
+	else if	(AnArchos->GetNodeByName("Weapon"))					{RHandBone = AnArchos->GetNodeByName("Weapon");}
 	else if	(AnArchos->GetNodeByName("NPC R MagicNode [RMag]"))	{RHandBone = AnArchos->GetNodeByName("NPC R MagicNode [RMag]");}
-	else if	(AnArchos->GetNodeByName("NPC R Finger20 [RF20]"))	{RHandBone = AnArchos->GetNodeByName("NPC R Finger20 [RF20]");}
 	else if	(AnArchos->GetNodeByName("NPC R Hand [RHnd]"))		{RHandBone = AnArchos->GetNodeByName("NPC R Hand [RHnd]");}
-		spdlog::debug("Right hand bone is {}", RHandBone->name);
-	if (AnArchos->GetEquippedObject(false)){
+
+	if	(AnArchos->GetNodeByName("Weapon"))						{WeaponBone = AnArchos->GetNodeByName("Weapon");}
+	//	spdlog::debug("Right hand bone is {}", RHandBone->name);
+
+	auto pcSkillArchery	= AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kArchery);
+	auto pcSkill1Handed	= AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kOneHanded);
+	auto pcDamageMult	= AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kAttackDamageMult);
+	DamageMult	= 1.f + (pcSkill1Handed / 120) + (pcSkillArchery / 80);
+	DamageMult	*= pcDamageMult;
+
+	if (AnArchos->GetEquippedObject(false)) {
 		if (AnArchos->GetEquippedObject(false)->IsWeapon()){
 			auto RHandWeapon = AnArchos->GetEquippedObject(false)->As<TESObjectWEAP>();
-				return WeaponIdentifier(RHandWeapon);
+				return WeaponIdentifier(AnArchos, RHandWeapon);
 		}
 	}
 	spdlog::info("you are barehanded");
@@ -110,20 +137,27 @@ void Leviathan::SetThrowState(ThrowState a_state)	{throwState = a_state;
 	}
 	spdlog::debug("!!Throw state changed as {}", stateName);
 }
-
+/*
 static void ReLaunch(RE::Projectile* a_this, RE::NiPoint3* a_dV)
 {
 	using func_t = decltype(&ReLaunch);
-	REL::Relocation<func_t> func{ RELOCATION_ID(43007, 0) };
+	REL::Relocation<func_t> func{ RELOCATION_ID(43007, 44198) };
 	return func(a_this, a_dV);
 }
-inline void Leviathan::SetStartPos(RE::NiPoint3& a_point)
+*/
+inline void Leviathan::SetStartPos(RE::NiPoint3& a_point, RE::PlayerCharacter* a_caller)
 {
 	auto stuckedLevi =	LastLeviProjectile ? LastLeviProjectile : nullptr;
 	if (!stuckedLevi) stuckedLevi =	(LeviathanAxeProjectileL ? LeviathanAxeProjectileL : 
 									(LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
-	if (stuckedLevi)	a_point = stuckedLevi->data.location;
-	else spdlog::debug("we cant get leviathan's stucked proj");
+	if (stuckedLevi) {
+		a_point = stuckedLevi->data.location; 
+	} else spdlog::debug("we cant get leviathan's stucked proj!");
+
+//	if (LeviathanAxeProjectileA) {
+//		auto& rtData = stuckedLevi->GetProjectileRuntimeData();
+//		rtData.flags |= (1 << 25);
+//	}
 
 	if (leviStuckedBone) {
 		a_point = leviStuckedBone->world.translate;
@@ -143,20 +177,37 @@ inline void Leviathan::SetStartPos(RE::NiPoint3& a_point)
 	//		}
 	//	}
 	} else spdlog::debug("levi not stucked anybody");
+
+	auto pcCell = a_caller->parentCell;
+	auto bound = pcCell->GetRuntimeData().cellData.exterior->worldX;
+	auto pcPos = a_caller->GetPosition();
+	float dist = pcPos.GetDistance(a_point);
+	if (dist > 36000.f) {	// ~42000 is limit
+		spdlog::info("levi too far from you! ({} m)", dist / 100.f);
+		auto dir = a_point - pcPos;
+		dir.Unitize();
+		a_point = pcPos + dir * 36000.f;
+	}
 }
 void Leviathan::Throw(bool isVertical)
 {
-	auto AnArchos = PlayerCharacter::GetSingleton();
-	auto leviThrowSpell = (isVertical ? SpellLeviProjH : SpellLeviProjL);
+	const auto AnArchos = PlayerCharacter::GetSingleton();
+	const auto leviThrowSpell = (isVertical ? SpellLeviProjH : SpellLeviProjL);
+//	auto leviBaseProj = (isVertical ? LeviProjBaseH : LeviProjBaseL);
 	if (WeaponIdentify::LeviathanAxe && leviThrowSpell && AnArchos->GetEquippedObject(false) == WeaponIdentify::LeviathanAxe) 
 	{	//switching to projectile
-		auto leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
-		auto mag = leviDamage + (isVertical ? leviDamage / 2.f : 0.f);
-	//	auto leviProjBaseEff = leviThrowSpell->effects[0]->baseEffect;
-	//	if (leviProjBaseEff) {
-	//		leviProjBaseEff->data.projectileBase->data.defaultWeaponSource = WeaponIdentify::LeviathanAxe;
-	//		leviProjBaseEff->data.associatedForm = WeaponIdentify::LeviathanAxe;
-	//	} else spdlog::debug("not found throwing effect!");
+		const auto leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
+		float mag = leviDamage * WeaponIdentify::DamageMult;
+		if (isVertical) mag *= 1.5f;
+		const auto leviProjEff = leviThrowSpell->effects[0];
+		auto& leviProjEffSetting = leviProjEff->effectItem;
+		leviProjEffSetting.magnitude = mag;
+
+	//	if (const auto leviProjBaseEff = leviProjEff->baseEffect) {
+	//		leviProjBaseEff->data.projectileBase->SetModel(WeaponIdentify::LeviathanAxe->GetModel());
+	//	//	leviProjBaseEff->data.projectileBase->data.defaultWeaponSource = WeaponIdentify::LeviathanAxe;
+	//	//	leviProjBaseEff->data.associatedForm = WeaponIdentify::LeviathanAxe;
+	//	} else spdlog::warn("not found throwing effect!");
 //
 //		auto extraData = AnArchos->extraList;
 //		extraData.SetInventoryChanges(RE::InventoryChanges)
@@ -164,8 +215,20 @@ void Leviathan::Throw(bool isVertical)
 	//	AnArchos->RemoveWeapon(RE::BIPED_OBJECT::kOneHandAxe);
 	//	AnArchos->NotifyAnimationGraph("UnequipNoAnim");
 //
+	//	AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(leviThrowSpell, false, nullptr, 1.f, false, mag, AnArchos);
+	//	auto origin = AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->GetMagicNode()->world.translate;
 
-		AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(leviThrowSpell, false, nullptr, 1.f, false, mag, AnArchos);
+		auto origin = WeaponIdentify::RHandBone->world.translate;
+		RE::ProjectileHandle pHandle;
+		RE::Projectile::ProjectileRot pRot = {AnArchos->GetAimAngle(), AnArchos->GetAimHeading()};
+		RE::Projectile::LaunchData lData(AnArchos, origin, pRot, leviThrowSpell);
+
+		lData.weaponSource = WeaponIdentify::LeviathanAxe;
+		if (lData.weaponSource->formEnchanting) lData.enchantItem = lData.weaponSource->formEnchanting;//->data.baseEnchantment;
+		else spdlog::debug("levi not has a valid enchantment");
+
+		RE::Projectile::Launch(&pHandle, lData);
+
 		if (!AnArchos->HasSpell(Config::SpellBHstate)) AnArchos->AddSpell(Config::SpellBHstate);
 		isAxeCalled = false;
 		isAxeThrowed = true;
@@ -173,73 +236,60 @@ void Leviathan::Throw(bool isVertical)
 
 		if (Leviathan::leviStuckedBone)		Leviathan::leviStuckedBone 	= nullptr;
 		if (Leviathan::leviStuckedActor)	Leviathan::leviStuckedActor	= nullptr;
-			spdlog::info("Leviathan Axe throwed, damage is: {}", mag);
+		if (Leviathan::leviLastHitActor)	Leviathan::leviLastHitActor	= nullptr;
+			spdlog::info("Leviathan Axe throwed, raw damage is: {}", mag);
 		if (AnArchos->HasSpell(SpellCatchLevi)) AnArchos->RemoveSpell(SpellCatchLevi);
-	} else spdlog::info("Leviathan Axe is not equipped for throwing");
+	} else spdlog::info("Leviathan Axe is not equipped for throwing!");
 }
 void Leviathan::Arrive()
 {
 	spdlog::debug("Levi is calling...");
 	auto stuckedLevi =	LastLeviProjectile ? LastLeviProjectile : nullptr;
 	if (!stuckedLevi)	stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : (LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
-	auto AnArchos = PlayerCharacter::GetSingleton();
+	const auto AnArchos = PlayerCharacter::GetSingleton();
 
 	if (SpellLeviProjA) {
 		isAxeCalled = true;
 		isAxeThrowed = false;
 
-		if (stuckedLevi) leviPosition = stuckedLevi->data.location;
-	//	float leviDamage = 1.f;
-	//	if (WeaponIdentify::LeviathanAxe) leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
-	//	AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(SpellLeviProjA, false, nullptr, 1.f, false, leviDamage, AnArchos);
+		const auto leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
+		float mag = leviDamage * WeaponIdentify::DamageMult;
+		const auto leviProjEff = SpellLeviProjA->effects[0];
+		auto& leviProjEffSetting = leviProjEff->effectItem;
+		leviProjEffSetting.magnitude = mag * 0.4f;
 
+		if (stuckedLevi) leviPosition = stuckedLevi->data.location;
 		RE::NiPoint3 startPoint = leviPosition;
-		SetStartPos(startPoint);
+		SetStartPos(startPoint, AnArchos);
 		RE::ProjectileHandle pHandle;
-		RE::Projectile::ProjectileRot pRot = {AnArchos->GetAimAngle(), AnArchos->GetAimHeading()};
-	//	RE::Projectile::LaunchData lData;
-	//	{
-	//	lData.shooter = AnArchos;
-	//	lData.origin = startPoint;
-	//	lData.spell = SpellLeviProjA;
-	//	lData.projectileBase = LeviProjBaseA;
-	//	lData.angleX = AnArchos->GetAimAngle();
-	//	lData.angleZ = AnArchos->GetAimHeading();
-	//	lData.contactNormal = {0.0f, 0.0f, 0.0f};
-	//	lData.combatController = AnArchos->GetActorRuntimeData().combatController;
-	//	lData.weaponSource = WeaponIdentify::LeviathanAxe;
-	//	lData.parentCell = AnArchos->GetParentCell();
-	//	lData.castingSource = RE::MagicSystem::CastingSource::kRightHand;
-	//	lData.enchantItem = WeaponIdentify::LeviathanAxe->formEnchanting->data.baseEnchantment;
-	//	lData.noDamageOutsideCombat = true;
-	//	lData.ammoSource = nullptr;
-	//	lData.unk50 = nullptr;
-	//	lData.desiredTarget = nullptr;
-	//	lData.unk60 = 0.0f;
-	//	lData.unk64 = 0.0f;
-	//	lData.poison = nullptr;
-	//	lData.area = 0;
-	//	lData.power = 1.0f;
-	//	lData.scale = 1.0f;
-	//	lData.alwaysHit = false;
-	//	lData.autoAim = false;
-	//	lData.useOrigin = true;
-	//	lData.deferInitialization = false;
-	//	lData.forceConeOfFire = false;
-	//	}
+		RE::Projectile::ProjectileRot pRot = {-AnArchos->GetAimAngle(), -AnArchos->GetAimHeading()};
+		RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellLeviProjA);
+	//	const float dist = WeaponIdentify::RHandBone->world.translate.GetDistance(startPoint);
+	//	spdlog::debug("levi arriving from {}cm far away!", dist);
+
 		if (WeaponIdentify::LeviathanAxe) {
-		//	RE::Projectile::Launch(&pHandle, lData);
-			RE::Projectile::LaunchSpell(&pHandle, AnArchos, SpellLeviProjA, startPoint, pRot);
+			lData.noDamageOutsideCombat = true;	//	can be an option
+			lData.weaponSource = WeaponIdentify::LeviathanAxe;
+			if (lData.weaponSource->formEnchanting) lData.enchantItem = lData.weaponSource->formEnchanting;
+
+		//	arrivalSpeed = dist / Config::ArrivalTime;
+		//	if		(arrivalSpeed < Config::MinArrivalSpeed)	arrivalSpeed = Config::MinArrivalSpeed;
+		//	else if	(arrivalSpeed > Config::MaxArrivalSpeed)	arrivalSpeed = Config::MaxArrivalSpeed;
+		//	LeviProjBaseA->data.speed = arrivalSpeed;
+
+			RE::Projectile::Launch(&pHandle, lData);
+		//	RE::Projectile::LaunchSpell(&pHandle, AnArchos, SpellLeviProjA, startPoint, pRot);
 			SetThrowState(Leviathan::ThrowState::kArriving);
 		} else spdlog::warn("you don't have the axe for calling!");
-		if (Config::SpellBHstate && AnArchos->HasSpell(Config::SpellBHstate)) AnArchos->RemoveSpell(Config::SpellBHstate);
 
 /*	*/	if (stuckedLevi) {
-			auto& fFlags = stuckedLevi->formFlags;
+		//	auto& fFlags = stuckedLevi->formFlags;
 			auto& runtimeData = stuckedLevi->GetProjectileRuntimeData();
 			auto& pFlags = runtimeData.flags;
-			if (!(pFlags & (1 << 25))) pFlags |= (1 << 25);
-			spdlog::debug("levi destroyed before call");
+			if (!(pFlags & (1 << 25))) {
+				pFlags |= (1 << 25);
+			//		spdlog::debug("levi destroyed before call");
+			} else	spdlog::debug("levi is already destroyed");
 
 		//	if ((fFlags & rFlag::kInitialized)) {
 		//		if (!(fFlags & rFlag::kDisabled)) {
@@ -268,24 +318,86 @@ void Leviathan::Arrive()
 }
 void Leviathan::Catch(RE::Projectile* a_levi, RE::PlayerCharacter* a_player, bool a_justDestroy)
 {
-	if (a_levi) {
+	if (!a_player) return;
+	if (a_justDestroy) {
+		if (a_levi) {
 		auto& runtimeData = a_levi->GetProjectileRuntimeData();
 		runtimeData.flags |= (1 << 25);								//	set as destroyed, RE::Projectile::Flags::kDestroyed
+		} return;
 	}
-
-	if (a_justDestroy || !a_player) return;
 
 	if (EffCatchLevi && SpellCatchLevi && !a_player->AsMagicTarget()->HasMagicEffect(EffCatchLevi)) {
 		a_player->AddSpell(SpellCatchLevi);
 	} else spdlog::debug("WEIRD!! you already in catch spell effect");
 
 	if (throwState == ThrowState::kCanArrive) SetThrowState(ThrowState::kArrived);
-	isAxeCalled = false;
 
 	if (WeaponIdentify::LeviathanAxe)
 		RE::ActorEquipManager::GetSingleton()->EquipObject(a_player, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, false, false, true, true);
 	else spdlog::warn("you not have the leviathan axe");
-	spdlog::debug("Levi proj catched");
+
+	if (Leviathan::leviStuckedBone)		Leviathan::leviStuckedBone 	= nullptr;
+	if (Leviathan::leviStuckedActor)	Leviathan::leviStuckedActor	= nullptr;
+	if (Leviathan::leviLastHitActor)	Leviathan::leviLastHitActor	= nullptr;
+
+	std::jthread delayedCast([=]() {
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		isAxeCalled = false;
+		if (Config::SpellBHstate && a_player->HasSpell(Config::SpellBHstate)) a_player->RemoveSpell(Config::SpellBHstate);
+		spdlog::debug("Levi proj catched");
+	});
+	delayedCast.detach();
+
+//	if (a_levi) {
+//		auto& runtimeData = a_levi->GetProjectileRuntimeData();
+//		runtimeData.flags |= (1 << 25);								//	set as destroyed, RE::Projectile::Flags::kDestroyed
+//	}
+}
+void Leviathan::SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical)
+{
+	if  (a_vertical) {
+		a_matrix.entry[0][0] = 0.02f;	//	const
+		a_matrix.entry[0][1] = -0.54f;	//	same
+		a_matrix.entry[0][2] = 0.84f;	//	
+		a_matrix.entry[1][0] = 0.01f;	//	const
+		a_matrix.entry[1][1] = 0.84f;	//	
+		a_matrix.entry[1][2] = 0.54f;	//	
+		a_matrix.entry[2][0] = -1.f;	//	const
+		a_matrix.entry[2][1] = 0.0f;	//	const same
+		a_matrix.entry[2][2] = 0.02f;	//	const
+	} else {
+		a_matrix.entry[0][0] = 0.79f;	//	
+		a_matrix.entry[0][1] = -0.54f;	//	same
+		a_matrix.entry[0][2] = 0.29f;	//	
+		a_matrix.entry[1][0] = 0.51f;	//	
+		a_matrix.entry[1][1] = 0.84f;	//	same
+		a_matrix.entry[1][2] = 0.19f;	//	
+		a_matrix.entry[2][0] = -0.34f;	//	const
+		a_matrix.entry[2][1] = 0.0f;	//	const same
+		a_matrix.entry[2][2] = 0.93f;	//	const
+	}
+
+//	vertical axe turn
+//	[0.018283, 0.011742, -0.999764]
+//	[-0.540305, 0.841469, 0.000002]
+//	[0.841270, 0.540178, 0.021729]
+//
+//	lateral axe turn
+//	[0.790722, 0.507721, -0.342020]
+//	[-0.540305, 0.841469, 0.000002]
+//	[0.287801, 0.184794, 0.939693]
+}
+void Leviathan::SetHitRotation(RE::NiPoint3& a_angles, const bool a_vertical)
+{
+	if  (a_vertical) {
+	//	a_angles.x = 0.f;		//	const
+		a_angles.y = -88.6f;	//	const
+		a_angles.z = -32.7f;	//	
+	} else {
+	//	a_angles.x = 0.f;		//	const
+		a_angles.y = -20.f;		//	const
+		a_angles.z = -32.7f;	//	
+	}
 }
 /*
 void Leviathan::Charge(const int a_DurationSec, const float a_Magnitude)
@@ -342,33 +454,42 @@ void Leviathan::Charge(const int a_DurationSec, const float a_Magnitude)
 //DRAUPNIR SPEAR
 void Draupnir::Throw()
 {
-	auto AnArchos = PlayerCharacter::GetSingleton();
-	auto& runtimeData = AnArchos->GetActorRuntimeData();
+	const auto AnArchos = PlayerCharacter::GetSingleton();
+//	auto& runtimeData = AnArchos->GetActorRuntimeData();
 	if (WeaponIdentify::DraupnirSpear && SpellDraupnirProjL && AnArchos->GetEquippedObject(false) == WeaponIdentify::DraupnirSpear)
 	{
-		auto draupnirDamage = static_cast<float>(WeaponIdentify::DraupnirSpear->attackDamage);
-		auto mag = draupnirDamage;
-	//	if (runtimeData.currentProcess && runtimeData.currentProcess->high) {
-	//		auto atkData = runtimeData.currentProcess->high->attackData.get();
-	//		if (atkData) {
-	//			atkData->data.flags.any(RE::AttackData::AttackFlag::kPowerAttack);
-	//			mag *= 1.2;
-	//		}
-	//	}
-		auto effDraupnir = SpellDraupnirProjL->effects[0]->baseEffect;
-		DraupnirSpearProjBaseL->data.defaultWeaponSource = WeaponIdentify::DraupnirSpear;
-		effDraupnir->data.associatedForm = WeaponIdentify::DraupnirSpear;
-		AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(SpellDraupnirProjL, false, nullptr, 1.f, false, mag, AnArchos);
+		const auto draupnirDamage = static_cast<float>(WeaponIdentify::DraupnirSpear->attackDamage);
+		float mag = draupnirDamage * WeaponIdentify::DamageMult;
+		const auto effDraupnir = SpellDraupnirProjL->effects[0];
+		auto& leviProjEffSetting = effDraupnir->effectItem;
+		leviProjEffSetting.magnitude = mag;
+
+		auto origin = WeaponIdentify::RHandBone->world.translate;
+		RE::ProjectileHandle pHandle;
+		RE::Projectile::ProjectileRot pRot = {AnArchos->GetAimAngle(), AnArchos->GetAimHeading()};
+		RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
+		lData.weaponSource = WeaponIdentify::DraupnirSpear;
+		if (lData.weaponSource->formEnchanting) lData.enchantItem = lData.weaponSource->formEnchanting;
+		else spdlog::debug("draupnir not has a valid enchantment");
+
+		RE::Projectile::Launch(&pHandle, lData);
+	//	auto effBaseDraupnir = effDraupnir->baseEffect;
+	//	if (effBaseDraupnir) {
+	//		effBaseDraupnir->data.projectileBase->data.defaultWeaponSource = WeaponIdentify::LeviathanAxe;
+	//		effBaseDraupnir->data.associatedForm = WeaponIdentify::LeviathanAxe;
+	//	} else spdlog::warn("not found throwing effect!");
+	//	DraupnirSpearProjBaseL->data.defaultWeaponSource = WeaponIdentify::DraupnirSpear;
+	//	AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(SpellDraupnirProjL, false, nullptr, 1.f, false, mag, AnArchos);
 	} else 	spdlog::info("Draupnir Spear is not equipped for throwing");
 }
-void Draupnir::Call(const float a_magnitude)	//detonate throwed draupnir spears like ragnarok
+void Draupnir::Call(const float a_damage, const float a_force)	//detonate throwed draupnir spears like ragnarok
 {
 	int i = 0;	//	spear counter
 	int j = 1;	//	explodable spear counter
-	for (auto proj : DraupnirSpearProjectiles) {
+	for (const auto proj : DraupnirSpearProjectiles) {
 		i++;
 		if (proj) {
-			auto& fFlags = proj->formFlags;
+			const auto& fFlags = proj->formFlags;
 				spdlog::debug("{}. Draupnir flags: {:032b}", i, fFlags);
 				/*	[crashed flags]
 				00111001010010000101010001101000
@@ -379,6 +500,8 @@ void Draupnir::Call(const float a_magnitude)	//detonate throwed draupnir spears 
 				000000000000000000000010010 1 0000	// kNonOccluder. 4. from right
 				000000000000000000000000000111 1 0	// kAltered. 1. from right
 				01000011 1 00000000000000000000000	// kDestroyed. 23. from right
+				00100011010011010110010111101000	// not has the kmoved flag but is stucked to a non actor object already
+				11101011010000001011010110011000	// stucked non living object
 				*/
 				/*	[working flags]
 				00000000000000000000000000001000	// kInitialized. (3. from right)
@@ -395,6 +518,7 @@ void Draupnir::Call(const float a_magnitude)	//detonate throwed draupnir spears 
 							/*	[runtime flags]
 							10000100011100011000000001000000 // IMPORTANT CRASH
 							01111111011111111111111111111111 // crashed with all zero formFlags
+							01000111000100001111101111110001 // not has kmoved flag while stucked to the ground
 
 							10000100011100011000000101000000 //	stucked to objects.
 							kGravityUpdateModel, kInited, kDestroyAfterHit, kAddedToManager, kAddedVisualEffectOnGround, kAutoAim, kProcessedImpacts
@@ -402,6 +526,7 @@ void Draupnir::Call(const float a_magnitude)	//detonate throwed draupnir spears 
 							10000110001101011000000001000000 //	stucked to characters.
 							10000110001100011000000001000000 // stucked to characters. explosion time edit working but not exploding.
 							10000110001100011000000001000000 // stucked to characters. explosion time edit working but not exploding. 3d is dissapeared.
+							10100110000100011000000001000000
 
 							10000110001100011000000011000000 // it says not has explosion
 
@@ -415,37 +540,77 @@ void Draupnir::Call(const float a_magnitude)	//detonate throwed draupnir spears 
 
 							10000100011100011000000001000000 // exploded, explosion timer < 0, formID = 0x0
 							*/
-						auto expl = runtimeData.explosion;
-						if (expl) {
+						if  (!(pFlags & (1 << 8))) {
+							if (!(pFlags & (1 << 2)) && !(pFlags & (1 << 22)) && (pFlags & (1 << 21)) && (pFlags & (1 << 25))) {	//	means hitted to a living target
+								if (!SpellDraupnirsCallProjL) return;
+#ifdef EXPERIMENTAL
+							//	experimental
+								const auto AnArchos = RE::PlayerCharacter::GetSingleton();
+								for (auto hitBone : DraupnirSpearHitBones) {
+									const auto target = DraupnirSpearHitActors[i - 1];
+									if (hitBone && target) {
+										const float randomFloat = MathUtil::Algebra::generateRandomFloat(-0.3f, -0.1f);
+										const auto delay = randomFloat + static_cast<float>(j) / 2.f;
+										std::jthread delayedCast([=]() {
+    										DelayedCast(AnArchos, SpellDraupnirsCallProjL, hitBone, delay);
+											target->RemoveExtraArrows3D();
+											DraupnirSpearHitBones[i - 1] = nullptr;
+											DraupnirSpearHitActors[i - 1] = nullptr;
+										});
+										delayedCast.detach();
+									}
+								}
+								j++;
+#endif
+							}	continue;
+						}
+						if (const auto expl = runtimeData.explosion) {
 							if (pFlags & (1 << 15)) {	//	kDestroyAfterHit flag required, otherwise the explosion will cast every moment
-								if ((pFlags & (1 << 31))) {
+								if (!(pFlags & 0u/*(1 << 31)*/)) {	// I don't know why but causing crashes without kMoved flag
 									if (expl->GetFormID()) spdlog::debug("{}. draupnir explosion is: {:08x}", i, expl->formID);
 									else spdlog::debug("{}. draupnir explosion not has formID", i);
 								//	if (!(pFlags & (1 << 22))) pFlags |= (1 << 22);	//	i tried it for make working the explosions after hitting living targets, but not worked
 								//	if (pFlags & (1 << 13)) pFlags &= ~(1 << 13);
 								//	if (pFlags & (1 << 25)) pFlags &= ~(1 << 25);
 								//		spdlog::debug("{}. Draupnir updated runtime flags: {:032b}", i, pFlags);
-									expl->data.damage	= a_magnitude;
-									expl->data.force	= a_magnitude;
+									expl->data.damage	= a_damage;
+									expl->data.force	= a_force;
 
-								//	experimental
-									if (!(pFlags & (1 << 2)) && !(pFlags & (1 << 22)) && (pFlags & (1 << 25))) {	//	means hitted to a living target
+									if (!(pFlags & (1 << 2)) && !(pFlags & (1 << 22)) && (pFlags & (1 << 21)) && (pFlags & (1 << 25))) {	//	means hitted to a living target
+										if (!SpellDraupnirsCallProjL) return;
+#ifdef EXPERIMENTAL
+									//	experimental
+										const auto AnArchos = RE::PlayerCharacter::GetSingleton();
+										for (auto hitBone : DraupnirSpearHitBones) {
+											const auto target = DraupnirSpearHitActors[i - 1];
+											if (hitBone && target) {
+												const float randomFloat = MathUtil::Algebra::generateRandomFloat(-0.1f, 0.1f);
+												const auto delay = randomFloat + static_cast<float>(j) / 4.f;
+												std::jthread delayedCast([=]() {
+    												DelayedCast(AnArchos, SpellDraupnirsCallProjL, hitBone, delay);
+													target->RemoveExtraArrows3D();
+													DraupnirSpearHitBones[i - 1] = nullptr;
+													DraupnirSpearHitActors[i - 1] = nullptr;
+												});
+												delayedCast.detach();
+											}
+										}
 										j++;
+#endif
 										continue;
 									}
 
 									if (runtimeData.explosionTimer > 0.f) {
 										if (!(pFlags & (1 << 2)) && !(pFlags & (1 << 20))) runtimeData.explosionTimer = 0.02f;	//	explodes immediately if is not stucked anywhere
 										else {
-											float randomFloat = MathUtil::Algebra::generateRandomFloat(-0.1f, 0.2f);
-											runtimeData.explosionTimer = randomFloat + static_cast<float>(j) / 2.f;
+										//	float randomFloat = MathUtil::Algebra::generateRandomFloat(-0.1f, 0.1f);
+											runtimeData.explosionTimer = static_cast<float>(j) / 4.f;// + randomFloat;
 										} j++;	//	update explodable spear counter
 									} else spdlog::info("{}. Draupnir not has explosion timer", i);
 
-									auto formID = proj->GetFormID();
-									if (formID) spdlog::info("{}. Draupnir Spear's ({:08x}) explositon timer is: {}", i, formID, runtimeData.explosionTimer);
+									if (const auto formID = proj->GetFormID()) spdlog::info("{}. Draupnir Spear's ({:08x}) explositon timer is: {}", i, formID, runtimeData.explosionTimer);
 									else {spdlog::debug("{}. Draupnir Spear's (null) explositon timer is: {}", i, runtimeData.explosionTimer);}
-								} else {spdlog::debug("{}. Draupnir is not moved (runtimeFlag)", i);}
+								} else {spdlog::debug("{}. Draupnir is not exist", i);}
 							} else {spdlog::debug("{}. Draupnir is not destructable (runtimeFlag)", i);}
 						} else {spdlog::info("{}. Draupnir not has explosion", i);}
 					} else {spdlog::debug("{}. Draupnir is kStillLoading (formFlag)", i);}
@@ -453,40 +618,42 @@ void Draupnir::Call(const float a_magnitude)	//detonate throwed draupnir spears 
 			} else {spdlog::debug("{}. Draupnir is not inited (formFlag)", i);}
 		} else {spdlog::debug("{}. Draupnir Spear is nullptr", i);}
 	}
-//	experimental	
-//	int k = 0;
-//	int l = 1;
-//	for (auto hitBone : DraupnirSpearHitBones) {
-//		auto proj = DraupnirSpearProjectiles[k];
-//		auto target = DraupnirSpearHitActors[k];
-//		if (proj && hitBone && target) {
-//			if (SpellDraupnirsCallProjL) {
-//				auto AnArchos = RE::PlayerCharacter::GetSingleton();
-//				float randomFloat = MathUtil::Algebra::generateRandomFloat(-0.1f, 0.2f);
-//				auto delay = randomFloat + static_cast<float>(l) / 2.f;
-//				l++;
-//				std::jthread delayedCast([=]() {
-//    				DelayedCast(AnArchos, SpellDraupnirsCallProjL, target, delay);
-//					target->RemoveExtraArrows3D();
-//				});
-//				delayedCast.detach();
-//			}
-//		}
-//		k++;
-//	}
+#ifdef EXPERIMENTAL
+//	experimental
+	if (!SpellDraupnirsCallProjL) return;
+	const auto AnArchos = RE::PlayerCharacter::GetSingleton();
+	int k = 0;
+	int l = 1;
+	for (auto hitBone : DraupnirSpearHitBones) {
+		const auto proj = DraupnirSpearProjectiles[k];
+		const auto target = DraupnirSpearHitActors[k];
+		if (proj && hitBone && target) {
+			const float randomFloat = MathUtil::Algebra::generateRandomFloat(-0.1f, 0.1f);
+			const auto delay = randomFloat + static_cast<float>(l) / 4.f;
+			l++;
+			std::jthread delayedCast([=]() {
+    			DelayedCast(AnArchos, SpellDraupnirsCallProjL, hitBone, delay);
+				target->RemoveExtraArrows3D();
+			});
+			delayedCast.detach();
+		}
+		k++;
+	}
+#endif
 }
 
 using EventChecker = RE::BSEventNotifyControl;
-void AnimationEventTracker::Register()
+bool AnimationEventTracker::Register()
 {
-	auto playerCharacter = PlayerCharacter::GetSingleton();
-	bool bSuccess = playerCharacter->AddAnimationGraphEventSink(AnimationEventTracker::GetSingleton());
+	const auto pc = PlayerCharacter::GetSingleton();
+
+	bool bSinked = false;
+	bool bSuccess = pc->AddAnimationGraphEventSink(AnimationEventTracker::GetSingleton());
 	if (bSuccess) {
 		spdlog::info("Registered {}", typeid(BSAnimationGraphEvent).name());
 	} else {
 		BSAnimationGraphManagerPtr graphManager;
-		playerCharacter->GetAnimationGraphManager(graphManager);
-		bool bSinked = false;
+		pc->GetAnimationGraphManager(graphManager);
 		if (graphManager) {			
 			for (auto& animationGraph : graphManager->graphs) {
 				if (bSinked) {
@@ -501,11 +668,12 @@ void AnimationEventTracker::Register()
 				}
 			}
 		}
-		
+
 		if (!bSinked) {
 			spdlog::info("Failed to register {}", typeid(BSAnimationGraphEvent).name());
 		}		
 	}
+	return bSuccess || bSinked;
 }
 
 EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_event, BSTEventSource<BSAnimationGraphEvent>* a_eventSource)
@@ -532,15 +700,15 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 		}
 		else if (eventTag == Config::CallAttackEvent) {
 			if (WeaponIdentify::isLeviathanAxe) {
-				auto AnArchos = PlayerCharacter::GetSingleton();
+				const auto AnArchos = PlayerCharacter::GetSingleton();
 				AnArchos->NotifyAnimationGraph("MCO_AttackInitiate");
 			}
 			else spdlog::warn("Levi is not callable");
 		}
 		else if (eventTag == Config::ThrowEndEvent) {
 			if (WeaponIdentify::isLeviathanAxe) {
-				auto AnArchos = PlayerCharacter::GetSingleton();
-				auto eqManager = RE::ActorEquipManager::GetSingleton();
+				const auto AnArchos = PlayerCharacter::GetSingleton();
+				const auto eqManager = RE::ActorEquipManager::GetSingleton();
 				if (AnArchos && eqManager)
 					eqManager->UnequipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, true, false, false, true, nullptr);
 				else spdlog::warn("WEIRD!! can't unequipped levi");
@@ -557,7 +725,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 			Draupnir::Call(1.f);
 		}
 */
-	auto AnArchos = PlayerCharacter::GetSingleton();
+//	const auto AnArchos = PlayerCharacter::GetSingleton();
 		switch (hash(eventTag.data(), eventTag.size())) {
 		// Start phase
 		case "CallWeapon"_h:
@@ -568,30 +736,33 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 			break;
 		case "CatchLevi"_h:
 			WeaponIdentify::WeaponCheck();
-			if (WeaponIdentify::LeviathanAxe && AnArchos->GetEquippedObject(false) == WeaponIdentify::LeviathanAxe)
-				Leviathan::Catch(Leviathan::LeviathanAxeProjectileA, AnArchos);
-			else spdlog::warn("Levi is not catched!!");
-			break;
-		case "LeviCallAttack"_h:
 			if (WeaponIdentify::LeviathanAxe) {
-				auto AnArchos = PlayerCharacter::GetSingleton();
-				auto eqManager = RE::ActorEquipManager::GetSingleton();
-				auto& actorState1	= AnArchos->AsActorState()->actorState1;
-				auto& actorState2	= AnArchos->AsActorState()->actorState2;
-				if (!actorState1.swimming) {
-					if (AnArchos && eqManager) {
-					//	spdlog::debug("we tricked the game :))");
-						actorState1.swimming = true;
-						eqManager->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, true, false, false, true, nullptr);
-					//	actorState2.weaponState = RE::WEAPON_STATE::kDrawn;
-					//	actorState1.meleeAttackState = RE::ATTACK_STATE_ENUM::kNextAttack;
-						actorState1.swimming = false;
-					}
-				} else {
-					spdlog::debug("levi call attack triggered in water");
-					if (AnArchos && eqManager)
-						eqManager->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, true, false, false, true, nullptr);
+				const auto AnArchos = PlayerCharacter::GetSingleton();
+				if (AnArchos->GetEquippedObject(false) == WeaponIdentify::LeviathanAxe) {
+					Leviathan::Catch(Leviathan::LeviathanAxeProjectileA, AnArchos);
 				}
+			} else spdlog::warn("Levi is not catched!!");
+			break;
+		case "LeviCallAttack"_h:	//event: attackPowerStartInPlace, attackStart, PowerAttack [IDLE:000E8456], NormalAttack [IDLE:00013215]
+			if (WeaponIdentify::LeviathanAxe) {
+				const auto AnArchos = PlayerCharacter::GetSingleton();
+				const auto eqManager = RE::ActorEquipManager::GetSingleton();
+			//	auto& actorState1	= AnArchos->AsActorState()->actorState1;
+			//	auto& actorState2	= AnArchos->AsActorState()->actorState2;
+			//	if (!actorState1.swimming) {
+					if (AnArchos && eqManager) {
+						eqManager->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe, nullptr, 1U, nullptr, false, true, false, true);
+			//			spdlog::debug("we tricked the game :))");
+			//			actorState1.swimming = true;
+			//			actorState2.weaponState = RE::WEAPON_STATE::kDrawn;
+			//			actorState1.meleeAttackState = RE::ATTACK_STATE_ENUM::kNextAttack;
+			//			actorState1.swimming = false;
+					}
+			//	} else {
+			//		spdlog::debug("levi call attack triggered in water");
+			//		if (AnArchos && eqManager)
+			//			eqManager->EquipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, true, false, false, true, nullptr);
+			//	}
 			}
 			else spdlog::warn("Levi is not callable");
 			break;
@@ -609,21 +780,21 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 			break;
 		case "ThrowAttackEnd"_h:
 			if (WeaponIdentify::isLeviathanAxe) {
-				auto AnArchos = PlayerCharacter::GetSingleton();
-				auto eqManager = RE::ActorEquipManager::GetSingleton();
+				const auto AnArchos = PlayerCharacter::GetSingleton();
+				const auto eqManager = RE::ActorEquipManager::GetSingleton();
 				auto& actorState1	= AnArchos->AsActorState()->actorState1;
 			//	auto& actorState2	= AnArchos->AsActorState()->actorState2;
 				if (!actorState1.swimming) {
-					spdlog::debug("we tricked the game :))");
+				//	spdlog::debug("we tricked the game :))");
 					actorState1.swimming = true;
 					if (AnArchos && eqManager) {
-						eqManager->UnequipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, true, false, false, true, nullptr);
+						eqManager->UnequipObject(AnArchos, WeaponIdentify::LeviathanAxe, nullptr, 1U, nullptr, true, false, true, true);
 					} else spdlog::warn("WEIRD!! can't unequipped levi");
 					actorState1.swimming = false;
 				} else {
 					spdlog::debug("levi throwed in water");
 					if (AnArchos && eqManager)
-						eqManager->UnequipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, true, false, false, true, nullptr);
+						eqManager->UnequipObject(AnArchos, WeaponIdentify::LeviathanAxe, nullptr, 1U, nullptr, true, false, true, true);
 					else spdlog::warn("WEIRD!! can't unequipped levi");
 				}
 			}
@@ -635,20 +806,20 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 			Draupnir::Throw();
 			break;
 		case "DraupnirsCall"_h:
-			Draupnir::Call(WeaponIdentify::DraupnirSpear ? WeaponIdentify::DraupnirSpear->attackDamage : 7.f);
+			if (WeaponIdentify::DraupnirSpear) {
+				const float draupnirDamage = WeaponIdentify::DraupnirSpear->attackDamage;
+				const float damage = draupnirDamage * WeaponIdentify::DamageMult;
+				Draupnir::Call(damage, draupnirDamage);
+			} else Draupnir::Call(10.f, 7.f);
 			break;
 		case "weaponDraw"_h:
 			WeaponIdentify::WeaponCheck();
-			if (WeaponIdentify::LeviathanAxe && AnArchos->GetEquippedObject(false) == WeaponIdentify::LeviathanAxe) {
-				if (WeaponIdentify::LeviathanAxe->HasWorldModel()) {spdlog::debug("Levi is throwable"); Leviathan::SetThrowState(Leviathan::ThrowState::kThrowable);}
-				else spdlog::debug("Levi is not equipped for real");
-
-				if (Leviathan::SpellCatchLevi && AnArchos->AsMagicTarget()->HasMagicEffect(Leviathan::EffCatchLevi)) {AnArchos->RemoveSpell(Leviathan::SpellCatchLevi);}
-
-				if (Leviathan::LeviathanAxeProjectileA
-				 && (Leviathan::throwState == Leviathan::ThrowState::kArriving
-				  || Leviathan::throwState == Leviathan::ThrowState::kArrived)) Leviathan::Catch(Leviathan::LeviathanAxeProjectileA, AnArchos, true);
-				else spdlog::debug("levi not arrived or arriving!!");
+			if (WeaponIdentify::LeviathanAxe) {
+				const auto AnArchos = PlayerCharacter::GetSingleton();
+				if (AnArchos->GetEquippedObject(false) == WeaponIdentify::LeviathanAxe) {
+					if (WeaponIdentify::LeviathanAxe->HasWorldModel()) {spdlog::debug("Levi is throwable"); Leviathan::SetThrowState(Leviathan::ThrowState::kThrowable);}
+					else spdlog::debug("Levi is not equipped for real");
+				}
 			}
 			break;
 	//	case "CastOKStart"_h:

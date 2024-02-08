@@ -11,10 +11,13 @@ public:
 	static inline bool isRelic;
 	
 	static inline RE::NiAVObject* RHandBone			= nullptr;
+	static inline RE::NiAVObject* WeaponBone		= nullptr;
 	static inline RE::TESObjectWEAP* RHandWeapon	= nullptr;
 	static inline RE::TESObjectWEAP* LeviathanAxe	= nullptr;
 	static inline RE::TESObjectWEAP* BladeOfChaos	= nullptr;
 	static inline RE::TESObjectWEAP* DraupnirSpear	= nullptr;
+
+	static inline float DamageMult = 18.f;
 
 	static bool IsRelic(RE::Projectile *a_proj)													{return IsRelic(a_proj, false, false);}
 	static bool IsRelic(RE::Projectile *a_proj, bool a_onlyLevi)								{return IsRelic(a_proj, a_onlyLevi, false);}
@@ -27,7 +30,7 @@ public:
 
 private:
 
-	static void WeaponIdentifier(RE::TESObjectWEAP* a_RHandWeapon);
+	static void WeaponIdentifier(RE::PlayerCharacter* a_player, RE::TESObjectWEAP* a_RHandWeapon);
 };
 
 class Leviathan
@@ -49,6 +52,7 @@ public:
 	static inline RE::NiPoint3 leviPosition		= {0.f, 0.f, 0.f};
 	static inline RE::NiNode* leviStuckedBone	= nullptr;
 	static inline RE::Actor* leviStuckedActor	= nullptr;
+	static inline RE::Actor* leviLastHitActor	= nullptr;
 	static inline float throwedTime				= 0.f;
 	static inline float arrivalSpeed			= Config::MinArrivalSpeed;
 
@@ -77,12 +81,14 @@ public:
 
 	static ThrowState GetThrowState();
 	static void SetThrowState(const ThrowState a_throwState);
-	static inline void SetStartPos(RE::NiPoint3& a_point);
+	static inline void SetStartPos(RE::NiPoint3& a_point, RE::PlayerCharacter* a_caller);
 	static void Throw(bool isVertical);
 	static void Arrive();
 	static void Catch(RE::Projectile* a_levi, RE::PlayerCharacter* a_player) {return Catch(a_levi, a_player, false);}
 	static void Catch(RE::Projectile* a_levi, RE::PlayerCharacter* a_player, bool a_justDestroy);
 	static void Charge(const int a_DurationSec, const float a_Magnitude);
+	static void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical);
+	static void SetHitRotation(RE::NiPoint3& a_angles, const bool a_vertical);
 };
 
 class Draupnir
@@ -101,7 +107,7 @@ public:
 	static inline RE::BGSExplosion* DraupnirExplosion		= nullptr;
 
 	static void Throw();
-	static void Call(float a_magnitude);
+	static void Call(const float a_damage, const float a_force);
 
 	/* forced detonation?
 	forced detonation needed for living targets, because timing projectile explosions not working after hitting to actors.
@@ -114,7 +120,7 @@ class AnimationEventTracker : public RE::BSTEventSink<RE::BSAnimationGraphEvent>
 public:
 	static AnimationEventTracker* GetSingleton() {static AnimationEventTracker singleton; return &singleton;};
 
-	static void Register();
+	static bool Register();
 
 	virtual EventChecker ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource) override;
 };
