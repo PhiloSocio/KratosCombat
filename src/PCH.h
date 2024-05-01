@@ -19,3 +19,7 @@ using namespace std::literals;
 // for experimental draupnir spear detonating features:
 //#define EXPERIMENTAL
 //#undef EXPERIMENTAL
+#define EXPERIMENTAL_CHARGE_LEVI
+#define EXPERIMENTAL_SKIP_EQUIP_ANIM
+//#define EXPERIMENTAL_EXTRAARROW
+//#define EXPERIMENTAL_SHIELD

@@ -7,32 +7,49 @@ inline void UpdateConfig()
 {
 	Config::CheckConfig();
 	Config::CheckProjectiles();
+	if (!Kratos::GetSingleton()->Initialize()) spdlog::warn("can't get important magic effects!");
 }
 inline void InstallHooks() 
 {
 	ProjectileHook::Hook();
+#ifdef EXPERIMENTAL_SKIP_EQUIP_ANIM
+	PlayerHook::Hook();
+#endif
 }
 inline bool RegisterEvents() 
 {
-	return
-		AnimationEventTracker::Register();
-	//	InputEventTracker::Register();
+	return (
+		AnimationEventTracker::Register() &&
+		MagicEffectApplyTracker::Register()
+	//	InputEventTracker::Register()
+	);
 }
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
 		InstallHooks();
-		UpdateConfig();
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
 	//	APIs::Request();
 		break;
 	case SKSE::MessagingInterface::kPreLoadGame:
+		if (auto Levi = LeviathanAxe::GetSingleton()) {
+			Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, false, true);
+			spdlog::debug("last charged weapons checked!");
+		}
 		break;
 	case SKSE::MessagingInterface::kPostLoadGame:
 	case SKSE::MessagingInterface::kNewGame:
+		UpdateConfig();
 		if (RegisterEvents()) WeaponIdentify::WeaponCheck();
+		else spdlog::error("cannot registered the event sinks, please save the game then load it");
+		break;
+	case SKSE::MessagingInterface::kSaveGame:
+		if (auto Levi = LeviathanAxe::GetSingleton()) {
+			Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, false, true);
+			spdlog::debug("last charged weapons checked!");
+		}
 		break;
 	}
 }
@@ -45,7 +62,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     spdlog::info("{} v{} is loading...", plugin->GetName(), plugin->GetVersion());
 
     SKSE::Init(skse);
-	SKSE::AllocTrampoline(1 << 10);
+//	SKSE::AllocTrampoline(1 << 10);
 //	ProjectileHook::runtimeVer = skse->RuntimeVersion();
 
 
@@ -60,7 +77,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 }
 /**/
 SKSEPluginInfo(
-    .Version = REL::Version{ 1, 0, 1, 0 },
+    .Version = REL::Version{ 1, 2, 1, 0 },
     .Name = "KratosCombat"sv,
     .Author = "AnArchos"sv,
     .SupportEmail = "patreon.com/AnArchos"sv,
