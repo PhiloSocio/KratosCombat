@@ -1,45 +1,10 @@
 #pragma once
+#include "util.h"
 #include "settings.h"
 #include "hook.h"
 
-class WeaponIdentify
-{
-public:
-    static inline bool isLeviathanAxe;
-    static inline bool isBladeOfChaos;
-    static inline bool isDraupnirSpear;
-    static inline bool isBladeOfOlympus;
-    static inline bool isRelic;
-    static inline bool isKratos;
-
-    static inline bool skipEquipAnim;
-
-    static inline RE::NiAVObject* RHandBone         = nullptr;
-    static inline RE::NiAVObject* LHandBone         = nullptr;
-    static inline RE::NiAVObject* WeaponBone        = nullptr;
-    static inline RE::NiAVObject* ShieldBone        = nullptr;
-    static inline RE::TESObjectWEAP* LeviathanAxe   = nullptr;
-    static inline RE::TESObjectWEAP* BladeOfChaos   = nullptr;
-    static inline RE::TESObjectWEAP* DraupnirSpear  = nullptr;
-    static inline RE::TESObjectWEAP* BladeOfOlympus = nullptr;
-    static inline RE::TESObjectARMO* GuardianShield = nullptr;
-
-    static inline float DamageMult = 18.f;
-
-    static bool IsRelic(RE::Projectile *a_proj)                                                 {return IsRelic(a_proj, false, false);}
-    static bool IsRelic(RE::Projectile *a_proj, bool a_onlyLevi)                                {return IsRelic(a_proj, a_onlyLevi, false);}
-    static bool IsRelic(RE::Projectile *a_proj, bool a_onlyLevi, bool a_onlyDraupnir)           {return IsRelic(a_proj->GetProjectileBase(), a_onlyLevi, a_onlyDraupnir);}
-    static bool IsRelic(RE::BGSProjectile *a_baseProj)                                          {return IsRelic(a_baseProj, false, false);}
-    static bool IsRelic(RE::BGSProjectile *a_baseProj, bool a_onlyLevi)                         {return IsRelic(a_baseProj, a_onlyLevi, false);}
-    static bool IsRelic(RE::BGSProjectile *a_baseProj, bool a_onlyLevi, bool a_onlyDraupnir);
-    
-    static void WeaponCheck();
-
-private:
-
-    static void WeaponIdentifier(RE::PlayerCharacter* a_player, RE::TESObjectWEAP* a_RHandWeapon, RE::TESObjectARMO* a_shield);
-};
-/**/
+static bool _skipEquipAnim, _skipLoad3D;
+static int _load3Ddelay;
 
 class Kratos
 {
@@ -56,23 +21,32 @@ public:
         kBladeOfOlympus = 4u,
     };
 
-    enum class Skill : std::uint8_t {
+    enum class Shield : std::uint8_t {
         kNone = 0u,
-        kRage = 1u,
-        kWeaponCharge = 2u,
-        kRunicAttack = 3u,
+        kGuardianShield = 1u,
+        kDauntlessShield = 2u,
+        kStoneWallShield = 3u,
+        kShatterStarShield = 4u,
+        kOnslaughtShield = 5u,
+    };
+
+    enum class Action : std::uint8_t {
+        kRage = 0u,
+        kWeaponCharge = 1u,
+        kSpecialIdle = 2u
     };
 
     enum class Rage : std::uint8_t {
-        kSpartan = 0u,
+        kFury = 0u,
         kValor = 1u,
         kWrath = 2u,
-        kOlympus = 3u,
+        kLegacy = 3u,
     };
 //--------------------------
-    struct Actions {
+    struct VanillaActions {
         RE::BGSAction* normalAttack = nullptr;
         RE::BGSAction* powerAttack = nullptr;
+        RE::BGSAction* dualPowerAttack = nullptr;
     };
 
     struct VFXeffects {
@@ -81,9 +55,10 @@ public:
         RE::BGSArtObject* handFlame = nullptr;      //  Fireball01HandEffects [ARTO:0001B211], FireCloakHandEffects [ARTO:00036342]
         RE::BGSArtObject* iceCloak = nullptr;       //  FXIceCloak01 [ARTO:0004253F]
         RE::BGSArtObject* fireCloak = nullptr;      //  FXFireCloak01 [ARTO:0002ACD7]
-        RE::BGSArtObject* spartanRage = nullptr;
-        RE::BGSArtObject* olympusRage = nullptr;
-        RE::BGSArtObject* valorRage = nullptr;
+        RE::BGSArtObject* fury = nullptr;
+        RE::BGSArtObject* legacy = nullptr;
+        RE::BGSArtObject* valor = nullptr;
+        RE::BGSArtObject* wrath = nullptr;
     };
 
     struct SoundEffects {
@@ -114,39 +89,67 @@ public:
         //  other spell ID's
         RE::FormID leviChargeCoolDown;
         RE::FormID AxeThrownState;
-        RE::FormID rageCoolDown;
+        RE::FormID strenghtBuff;
         RE::FormID spartanRage;
     };
 
-    Actions action;
+    struct KratosValues {
+        float* strength         = nullptr;
+        float* defense          = nullptr;
+        float* runic            = nullptr;
+        float* vitality         = nullptr;
+        float* cooldown         = nullptr;
+        float* luck             = nullptr;
+        float* rage             = nullptr;
+        float* rageLimit        = nullptr;
+        float* rageBuffAmount   = nullptr;
+        float* rageDamageAmount = nullptr;
+    };
+
+    VanillaActions action;
     VFXeffects VFXeffect;
     SoundEffects soundEffect;
     ChargeData chargeData;
     SpellID spellID;
+    KratosValues values;
 //-------------------------- Functions
-    bool IsEquipped(const Relic a_relic);
-    bool IsCanCallAxe(RE::Actor* a_actor);
-    bool IsCanRage(RE::Actor* a_actor);
-    bool IsCanCharge(RE::Actor* a_actor, Relic a_relic = Relic::kLeviathanAxe); // 1: levi, 2: blade of chaos, 3: draupnir
-    bool IsShieldOpened();
+    void Update(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
 
-    void SetIsCanCallAxe(RE::Actor* a_actor, const bool a_isCan = true);
-    void SetIsCanRage(RE::Actor* a_actor, const bool a_isCan = true);
-    void SetIsCanCharge(RE::Actor* a_actor, const bool a_isCan = true, Relic a_relic = Relic::kLeviathanAxe); // 1: levi, 2: blade of chaos, 3: draupnir
-    void SetCoolDownOf(const Skill a_skill, const uint8_t a_coolDownSec);
+    float CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult = 1.f);
 
-    void OpenShield(RE::Actor* a_actor);
-    void CloseShield(RE::Actor* a_actor);
-    void StartRage(RE::Actor* a_actor, const Rage a_rage);
-    void EndRage(RE::Actor* a_actor);
+    bool IsEquipped(const Relic a_relic) const;
+    bool IsCanCallAxe(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton()) const;
+    bool IsCanRage(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton()) const;
+    bool IsInRage(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    bool IsWantFinishRage() const {return _isWantFinishRage;}
+    bool IsCanCharge(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), Relic a_relic = Relic::kLeviathanAxe) const;
+    bool IsShieldOpened() const;
+    bool IsAiming() const {return _isAiming;}
+
+    Kratos::Relic GetEquippedRelic() const;
+    Kratos::Rage GetRageType() const;
+    Kratos::Rage GetLastTriggeredRageType() const;
+
+    void RestoreRage(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const float a_value = 0.f, const bool a_justRestore = false);
+
+    void SetIsCanCallAxe(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const bool a_isCan = true);
+    void SetIsCanRage(const bool a_isCan = true, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void SetIsCanCharge(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const bool a_isCan = true, Relic a_relic = Relic::kLeviathanAxe); // 1: levi, 2: blade of chaos, 3: draupnir
+    void Aim(const bool a_startAim) {_isAiming = a_startAim;}
+
+    void OpenShield(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void CloseShield(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void StartRage(const Rage a_rage = Rage::kFury, const bool a_justAnim = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void EndRage(const Rage a_rage = Rage::kFury, const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void DoKratosAction(const Action a_action, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
 //--------------------------
     RE::SpellItem*      SpellAxeThrownState = nullptr;
     RE::SpellItem*      SpellSpartanRage    = nullptr;
-    RE::SpellItem*      SpellRageCoolDown   = nullptr;
+    RE::SpellItem*      SpellStrenghtBuff   = nullptr;
     RE::SpellItem*      SpellLeviChargeCD   = nullptr;
     RE::EffectSetting*  EffectAxeThrownState= nullptr;
     RE::EffectSetting*  EffectSpartanRage   = nullptr;
-    RE::EffectSetting*  EffectRageCoolDown  = nullptr;
+    RE::EffectSetting*  EffectStrenghtBuff  = nullptr;
     RE::EffectSetting*  EffectLeviChargeCD  = nullptr;
 
     RE::SpellItem*      SpellAimButton      = nullptr;
@@ -162,15 +165,68 @@ public:
     RE::EffectSetting*  EffMidDistButton    = nullptr;
     RE::EffectSetting*  EffLongDistButton   = nullptr;
 
+    RE::TESGlobal* gLeviathanAxeFormID   = nullptr;
+    RE::TESGlobal* gBladeOfChaosFormID   = nullptr;
+    RE::TESGlobal* gDraupnirSpearFormID  = nullptr;
+    RE::TESGlobal* gBladeOfOlympusFormID = nullptr;
+    RE::TESGlobal* gGuardianShieldFormID = nullptr;
 private:
+friend class AttackHook;
     bool _isShieldOpened;
+    bool _isInRage;
+    bool _isWantFinishRage;
+    bool _isAiming;
+    Rage _lastTriggeredRage;
+    bool _gettingHittedInValor;
+    RE::TESBoundObject* _LastEquippedObjectR = nullptr;
+    RE::TESBoundObject* _LastEquippedObjectL = nullptr;
     Kratos() = default;
     ~Kratos() = default;
 };
+class WeaponIdentify
+{
+public:
+    static inline bool isLeviathanAxe;
+    static inline bool isBladeOfChaos;
+    static inline bool isDraupnirSpear;
+    static inline bool isBladeOfOlympus;
+    static inline bool isGuardianShield;
+    static inline bool isRelic;
+    static inline bool isKratos;
+    static inline bool isBarehanded;
+
+    static inline bool skipEquipAnim;
+
+    static inline RE::NiAVObject* RHandBone         = nullptr;
+    static inline RE::NiAVObject* LHandBone         = nullptr;
+    static inline RE::NiAVObject* WeaponBone        = nullptr;
+    static inline RE::NiAVObject* ShieldBone        = nullptr;
+    static inline RE::TESObjectWEAP* LeviathanAxe   = nullptr;
+    static inline RE::TESObjectWEAP* BladeOfChaos   = nullptr;
+    static inline RE::TESObjectWEAP* DraupnirSpear  = nullptr;
+    static inline RE::TESObjectWEAP* BladeOfOlympus = nullptr;
+    static inline RE::TESObjectARMO* GuardianShield = nullptr;
+    static inline RE::TESBoundObject* EquippedObjR  = nullptr;
+    static inline RE::TESBoundObject* EquippedObjL  = nullptr;
+
+    static inline float DamageMult = 1.f;
+
+    static bool IsRelic(RE::Projectile *a_proj, const bool a_onlyLevi = false, const bool a_onlyDraupnir = false)           {return IsRelic(a_proj->GetProjectileBase(), a_onlyLevi, a_onlyDraupnir);}
+    static bool IsRelic(RE::BGSProjectile *a_baseProj, const bool a_onlyLevi = false, const bool a_onlyDraupnir = false);
+
+    static void Initialize(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    static void WeaponCheck(const bool a_specialityCheck = false);
+    static void SpecialityCheck(RE::TESObjectWEAP* a_RHandWeapon, RE::TESObjectARMO* a_shield, const Kratos::Relic a_relic, const Kratos::Shield a_specialShield);
+private:
+    static void WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_RHandWeapon, RE::TESObjectARMO* a_shield);
+};
+/**/
+
 class LeviathanAxe
 {
 public:
     static LeviathanAxe* GetSingleton();// {static LeviathanAxe singleton; return &singleton;}
+    bool Initialize();
 
     struct Data {
         RE::TESObjectWEAP* weap     = nullptr;
@@ -191,21 +247,21 @@ public:
 
     enum class ThrowState : std::uint_fast8_t {
         kNone = 0,
-        kArrived = 1,
-        kThrowable = 2,
-        kThrown = 3,
-        kCanArrive = 4,
-        kArriving = 5
+        kThrowable = 1,
+        kThrown = 2,
+        kCanArrive = 3,
+        kArriving = 4,
+        kArrived = 5
     };
 
     Data data;
 
     void SetThrowState(const ThrowState a_throwState);
     ThrowState GetThrowState() const;
-    void SetStartPos(RE::NiPoint3& a_point, RE::PlayerCharacter* a_caller);
-    void Throw(const bool isVertical);
-    void Call();
-    void Catch(RE::Projectile* a_levi, RE::PlayerCharacter* a_player, const bool a_justDestroy = false);
+    void SetStartPos(RE::NiPoint3& a_point, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void Throw(const bool isVertical, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void Call(const bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void Catch(bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     //  experimental:
     void Charge(const uint8_t a_chargeHitCount = 10u, const float a_magnitude = 1.5f, const uint8_t a_coolDown = 10u);
     void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false);
@@ -213,7 +269,15 @@ public:
     void SetHitRotation(RE::NiPoint3& a_angles, const RE::NiPoint3& a_direction, const bool a_vertical);
     void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical);
 
+    bool isAxeCalled;
+    bool isAxeThrowed;
+    bool isAxeStucked;
 //  RE::Projectile::LaunchData* LeviThrowData   = nullptr;
+
+private:
+friend class WeaponIdentify;
+friend class AnimationEventTracker;
+friend class ProjectileHook;
 
     RE::Projectile* LeviathanAxeProjectileL = nullptr;
     RE::Projectile* LeviathanAxeProjectileH = nullptr;
@@ -233,78 +297,36 @@ public:
     RE::EffectSetting* EffCatchLevi = nullptr;
     RE::EnchantmentItem* EnchCharge = nullptr;
 
-    bool isAxeCalled;
-    bool isAxeThrowed;
-    bool isAxeStucked;
-private:
     uint8_t chargeHitCount = 0;
     ThrowState throwState;
 
     LeviathanAxe()  = default;
     ~LeviathanAxe() = default;
 };
-
-/*  old
-class Leviathan
+class BladeOfChaos
 {
 public:
-    static Leviathan* GetSingleton() {static Leviathan singleton; return &singleton;}
+    static  BladeOfChaos* GetSingleton() {static BladeOfChaos singleton; return &singleton;}
 
-    enum class ThrowState : std::uint_fast8_t
-    {
-        kNone = 0,
-        kArrived = 1,
-        kThrowable = 2,
-        kThrown = 3,
-        kCanArrive = 4,
-        kArriving = 5,
-    };
-    static inline ThrowState throwState;
-
-    static inline RE::NiPoint3 leviPosition     = {0.f, 0.f, 0.f};
-    static inline RE::NiNode* leviStuckedBone   = nullptr;
-    static inline RE::Actor* leviStuckedActor   = nullptr;
-    static inline RE::Actor* leviLastHitActor   = nullptr;
-    static inline float throwedTime             = 0.f;
-    static inline float arrivalSpeed            = Config::MinArrivalSpeed;
-
-    static inline RE::Projectile::LaunchData* LeviThrowData = nullptr;
-
-    static inline RE::Projectile* LeviathanAxeProjectileL   = nullptr;
-    static inline RE::Projectile* LeviathanAxeProjectileH   = nullptr;
-    static inline RE::Projectile* LeviathanAxeProjectileA   = nullptr;
-    static inline RE::Projectile* LastLeviProjectile        = nullptr;
-
-    static inline RE::BGSProjectile* LeviProjBaseL  = nullptr;  //  ligth attack throw
-    static inline RE::BGSProjectile* LeviProjBaseH  = nullptr;  //  heavy attack throw
-    static inline RE::BGSProjectile* LeviProjBaseA  = nullptr;  //  arriving leviathan
-    static inline RE::SpellItem* SpellLeviProjL     = nullptr;  //  light throw
-    static inline RE::SpellItem* SpellLeviProjH     = nullptr;  //  heavy throw
-    static inline RE::SpellItem* SpellLeviProjA     = nullptr;  //  call levi
-
-    static inline RE::SpellItem* SpellCatchLevi     = nullptr;
-    static inline RE::EffectSetting* EffCatchLevi   = nullptr;
-
-    static inline RE::EnchantmentItem* EnchCharge   = nullptr;
-
-    static inline bool isAxeCalled  = false;
-    static inline bool isAxeThrowed = false;
-    static inline bool isAxeStucked = false;
-
-    static void SetThrowState(const ThrowState a_throwState);
-    static inline void SetStartPos(RE::NiPoint3& a_point, RE::PlayerCharacter* a_caller);
-    static void Throw(bool isVertical);
-    static void Arrive();
-    static void Catch(RE::Projectile* a_levi, RE::PlayerCharacter* a_player) {return Catch(a_levi, a_player, false);}
-    static void Catch(RE::Projectile* a_levi, RE::PlayerCharacter* a_player, bool a_justDestroy);
-    static void Charge(const int a_DurationSec, const float a_Magnitude);
-    static void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical);
-    static void SetHitRotation(RE::NiPoint3& a_angles, const bool a_vertical);
+    void    Update() {_lastChargeTime = AsyncUtil::GameTime::GetEngineTime();}
+    bool    IsScorching() const {return _isScorching;}
+    void    SetIsScorching(const bool a_isScorching = true) {_isScorching = a_isScorching;}
+    float   GetScorchingSpeed();
+    void    SetScorchingSpeed(const float a_speed, const bool a_forced = false);
+    void    BuffScorchingSpeed(const float a_buff = 0.05f, const bool a_forced = false);
+    void    DeBuffScorchingSpeed();
+    bool    IsQueueEnd();
+private:
+    bool    _isScorching = false;
+    float   _fScorchingSpeed = 0.5f;
+    float   _lastChargeTime;
 };
-*/
 class Draupnir
 {
 public:
+    static Draupnir* GetSingleton() {static Draupnir singleton; return &singleton;}
+    bool Initialize();
+
     static inline RE::SpellItem*        SpellDraupnirProjL          = nullptr;
     static inline RE::SpellItem*        SpellDraupnirsCallProjL     = nullptr;
     static inline RE::Projectile*       DraupnirSpearProjectiles[9];                            //  they will be explode after Draupnir's Call move
@@ -315,22 +337,50 @@ public:
     static inline RE::BGSProjectile*    DraupnirSpearProjBaseL      = nullptr;
     static inline RE::BGSProjectile*    DraupnirsCallProjBaseL      = nullptr;
 
-    static inline RE::BGSExplosion* StuckedDraupnir         = nullptr;
-    static inline RE::BGSExplosion* DraupnirExplosion       = nullptr;
+    static inline RE::BGSExplosion* StuckedDraupnir     = nullptr;
+    static inline RE::BGSExplosion* DraupnirExplosion   = nullptr;
+    static inline RE::BGSArtObject* DraupnirStuckedFX   = nullptr;
 
+    static void Update();
     static void Throw();
+    static void MeleeThrow();
+    static void ArtilleryOfTheAncients(const float a_delay, const float a_duration);
+    static void RainOfDraupnir();
+    static void AddSpearHit(RE::NiNode* a_bone, RE::Actor* a_actor = nullptr);
+    static void AddSpearHit(RE::Projectile* a_proj);
     static void Call(const float a_damage, const float a_force);
+    static void StartExplosions(const float a_delay);
 
     /* forced detonation?
     forced detonation needed for living targets, because timing projectile explosions not working after hitting to actors.
     */
+private:
+friend class ProjectileHook;
+    static inline float nextExplosionTime = 0.f;
+    static inline float timeToDoneExplosions = 0.f;
+    static inline float explosionDelay = 0.f;
+    static inline size_t currentHitIndex = 0;
+    static inline bool explosionsStarted = false;
+    static inline RE::NiAVObject* spearModel = nullptr;
+    static inline std::vector<RE::FormID> MeleeHitProjectileIDs;
+    static inline RE::BSFixedString DefaultDraupnirModel;
+    static inline std::vector<std::tuple<RE::NiNode*, RE::Actor*, RE::Projectile*>> spearHits;
+    static void TriggerExplosions(float a_delay, float a_force, RE::ProjectileHandle* a_pHandle);
+    static void TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::ProjectileHandle* a_pHandle, RE::Actor* a_target);
+    static void TriggerExplosionAtLocation(RE::Projectile* a_proj, RE::ProjectileHandle* a_pHandle);
+    
+    static inline float nextLaunchTime = 0.0f;
+    static inline float nextLaunchDelay = 0.0f;
+    static inline float lastLaunchTime = 0.0f;
+    static inline bool draupnirRainStarted = false;
 };
+
 
 using EventChecker = RE::BSEventNotifyControl;
 class AnimationEventTracker : public RE::BSTEventSink<RE::BSAnimationGraphEvent>
 {
 public:
-    static AnimationEventTracker* GetSingleton() {static AnimationEventTracker singleton; return &singleton;};
+    static AnimationEventTracker* GetSingleton() {static AnimationEventTracker singleton; return &singleton;}
 
     static bool Register();
 
@@ -339,38 +389,52 @@ public:
 class MagicEffectApplyTracker : public RE::BSTEventSink<RE::TESMagicEffectApplyEvent>
 {
 public:
-    static MagicEffectApplyTracker* GetSingleton() {static MagicEffectApplyTracker singleton; return &singleton;};
+    static MagicEffectApplyTracker* GetSingleton() {static MagicEffectApplyTracker singleton; return &singleton;}
 
     static bool Register();
 
     virtual EventChecker ProcessEvent(const RE::TESMagicEffectApplyEvent* a_event, RE::BSTEventSource<RE::TESMagicEffectApplyEvent>* a_eventSource) override;
 };
-/*
 class InputEventTracker : public RE::BSTEventSink<RE::InputEvent*>
 {
 public:
     static InputEventTracker* GetSingleton() {static InputEventTracker singleton; return &singleton;}
 
-    static void Register();
+    static bool Register();
 
-    virtual EventChecker ProcessEvent(RE::InputEvent* const *a_event, RE::BSTEventSource<RE::InputEvent*> *a_eventSource) override;
-
-    static inline uint32_t  AimButton       = 0u;
-    static inline uint32_t  AxeCallButton   = 0u;
+    virtual EventChecker ProcessEvent(RE::InputEvent* const* a_event, RE::BSTEventSource<RE::InputEvent*>* a_eventSource) override;
+private:
+    enum : std::uint32_t
+    {
+        kInvalid = static_cast<std::uint32_t>(-1),
+        kKeyboardOffset = 0,
+        kMouseOffset = 256,
+        kGamepadOffset = 266,
+    };
+    std::uint32_t GetOffsettedKeyCode(std::uint32_t a_keyCode, RE::INPUT_DEVICE a_inputDevice) const;
+    InputEventTracker() = default;
+    InputEventTracker(const InputEventTracker&) = delete;
+    InputEventTracker(InputEventTracker&&) = delete;
+    virtual ~InputEventTracker() = default;
+    InputEventTracker& operator=(const InputEventTracker&) = delete;
+    InputEventTracker& operator=(InputEventTracker&&) = delete;
+    std::uint32_t GetGamepadIndex(RE::BSWin32GamepadDevice::Key a_key);
 };
-*/
-
-class SpellCastTracker  // : public RE::BSTEventSink<RE::TESSpellCastEvent>
+class HitEventTracker : public RE::BSTEventSink<RE::TESHitEvent>
 {
 public:
-//  static SpellCastTracker* GetSingleton() {static SpellCastTracker singleton; return &singleton;};
-//
-//  static void Register();
-//
-//  virtual EventChecker ProcessEvent(const RE::TESSpellCastEvent* a_event, RE::BSTEventSource<RE::TESSpellCastEvent>* a_eventSource) override;
+    static MagicEffectApplyTracker* GetSingleton() {static MagicEffectApplyTracker singleton; return &singleton;}
 
-    static inline RE::SpellItem*        SpellAimButton      = nullptr;
-    static inline RE::SpellItem*        SpellAxeCallButton  = nullptr;
-    static inline RE::EffectSetting*    EffectAimButton     = nullptr;
-    static inline RE::EffectSetting*    EffectAxeCallButton = nullptr;
+    static bool Register();
+
+    virtual EventChecker ProcessEvent(const RE::TESHitEvent* a_event, RE::BSTEventSource<RE::TESHitEvent>* a_eventSource) override;
 };
+inline bool RegisterEvents() 
+{
+    return !(
+        !AnimationEventTracker::Register() ||
+        !MagicEffectApplyTracker::Register() ||
+        !InputEventTracker::Register()// ||
+    //    HitEventTracker::Register()
+    );
+}

@@ -3,6 +3,7 @@
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 #include "REL/Relocation.h"
+#include <vector>
 
 //#include <glm.hpp>
 
@@ -23,3 +24,5 @@ using namespace std::literals;
 #define EXPERIMENTAL_SKIP_EQUIP_ANIM
 //#define EXPERIMENTAL_EXTRAARROW
 //#define EXPERIMENTAL_SHIELD
+#define EXPERIMENTAL_THROWPOISON
+#define NEW_DRAUPNIR_EXPLOSION_METHOD

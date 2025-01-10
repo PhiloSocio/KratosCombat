@@ -12,6 +12,10 @@
 #define downVec {0.f, 0.f, -1.f}
 #define upVec   {0.f, 0.f, 1.f}
 
+static float* g_deltaTime = (float*)RELOCATION_ID(523660, 410199).address();            //  sensitive to slow time spell
+static float* g_deltaTimeRealTime = (float*)RELOCATION_ID(523661, 410200).address();    //  const
+static float* g_engineTime = (float*)RELOCATION_ID(517597, 404125).address();           //  credits to https://github.com/jarari
+
 using namespace RE;
 
 namespace PointerUtil //yoinked po3's code
@@ -31,29 +35,44 @@ inline auto adjust_pointer(U* a_ptr, std::ptrdiff_t a_adjust) noexcept
     }
 }
 }
+namespace AsyncUtil
+{
+    class GameTime
+    {
+    public:
+        GameTime() = default;
+        static float GetEngineTime() {return *g_engineTime;}
+        void RegisterForUpdate(const float a_delaySeconds) {_done = false; _registerTime = GetEngineTime(); _updateTime = _registerTime + a_delaySeconds;}
+        float GetUpdateTime() {return _updateTime;}
+        bool IsTimeToUpdate() {if (!_done && GetEngineTime() >= _updateTime) {_done = true; return true;} else return false;}
+    private:
+        float _registerTime;
+        float _updateTime;
+        bool _done;
+    };
+}
 namespace SystemUtil
 {
     struct File 
     {
-        
-    static std::vector<std::string> GetConfigs(std::string_view a_folder, std::string_view a_suffix, std::string_view a_extension = ".ini"sv)
-    {
-        std::vector<std::string> configs{};
+        static std::vector<std::string> GetConfigs(std::string_view a_folder, std::string_view a_suffix, std::string_view a_extension = ".ini"sv)
+        {
+            std::vector<std::string> configs{};
 
-        for (const auto iterator = std::filesystem::directory_iterator(a_folder); const auto& entry : iterator) {
-            if (entry.exists()) {
-                if (const auto& path = entry.path(); !path.empty() && path.extension() == a_extension) {
-                    if (const auto& fileName = entry.path().string(); fileName.rfind(a_suffix) != std::string::npos) {
-                        configs.push_back(fileName);
+            for (const auto iterator = std::filesystem::directory_iterator(a_folder); const auto& entry : iterator) {
+                if (entry.exists()) {
+                    if (const auto& path = entry.path(); !path.empty() && path.extension() == a_extension) {
+                        if (const auto& fileName = entry.path().string(); fileName.rfind(a_suffix) != std::string::npos) {
+                            configs.push_back(fileName);
+                        }
                     }
                 }
             }
+
+            std::ranges::sort(configs);
+
+            return configs;
         }
-
-        std::ranges::sort(configs);
-
-        return configs;
-    }
     };
 }
 
@@ -263,9 +282,21 @@ namespace MathUtil
 
     struct Algebra
     {
-        [[nodiscard]] static inline float generateRandomFloat(const float lower, const float upper) {
+
+        static inline RE::NiPoint3 GetForwardVector(RE::Actor* a_actor)
+        {
+            RE::NiPoint3 forwardVector;
+            if (a_actor) {
+                const float yaw = a_actor->data.angle.z;
+                forwardVector.x = std::sin(yaw);
+                forwardVector.y = std::cos(yaw);
+                forwardVector.z = 0.0f;
+            }   return forwardVector;
+        }
+
+        [[nodiscard]] static inline float GenerateRandomFloat(const float lower, const float upper) {
             static std::default_random_engine generator;
-            static std::uniform_real_distribution<float> distribution(lower, upper);
+            std::uniform_real_distribution<float> distribution(lower, upper);
                 return distribution(generator);
         }
         [[nodiscard]] static inline void SetRotationMatrix(RE::NiMatrix3& a_matrix, const float sacb, const float cacb, const float sb) {
@@ -376,63 +407,211 @@ namespace ObjectUtil
 {
     struct Projectile
     {
-        static bool DeleteAnExtraArrow(RE::Actor* a_victim, RE::NiAVObject* a_arrow3D)
+        static bool DeleteAnExtraArrow(RE::TESObjectREFR* a_victim, RE::NiAVObject* a_arrow3D)
         {
+            bool result = false;
             if (a_victim && a_arrow3D) {
             //    auto attachedArrows = static_cast<RE::ExtraAttachedArrows3D*>(a_victim->extraList.GetByType(RE::ExtraDataType::kAttachedArrows3D));
             //    for (auto& extraArrow : attachedArrows->data) {
             //        if (extraArrow.arrow3D.get() == a_arrow3D) {extraArrow.timeStamp = (uint64_t)0; return true;}
             //    }
-                if (auto* xList = &a_victim->extraList) 
-                    if (auto xArrows = xList->GetByType<RE::ExtraAttachedArrows3D>())
+                if (auto* xList = &a_victim->extraList; xList) 
+                    if (auto xArrows = xList->GetByType<RE::ExtraAttachedArrows3D>(); xArrows)
                         if (!xArrows->data.empty())
                             for (auto& extraArrow : xArrows->data) {
-                                if (extraArrow.arrow3D.get() && extraArrow.arrow3D.get()->name == a_arrow3D->name) {extraArrow.timeStamp = 0; return true;}
+                                if (extraArrow.arrow3D.get() && extraArrow.arrow3D.get() == a_arrow3D) {
+                                    extraArrow.timeStamp = 0;
+                                    extraArrow.arrow3D = nullptr;
+                                    result = true;
+                                }
                             }
-            } return false;
+            } return result;
+        }
+        static bool DeleteAnExtraArrow(RE::TESObjectREFR* a_victim, RE::BSFixedString& a_arrow3Dname)
+        {
+            bool result = false;
+            if (a_victim) {
+                if (auto* xList = &a_victim->extraList; xList) 
+                    if (auto xArrows = xList->GetByType<RE::ExtraAttachedArrows3D>(); xArrows)
+                        if (!xArrows->data.empty())
+                            for (auto& extraArrow : xArrows->data) {
+                                if (extraArrow.arrow3D.get() && extraArrow.arrow3D.get()->name == a_arrow3Dname) {extraArrow.timeStamp = 0; result = true;}
+                            }
+            } return result;
         }
     };
 
     struct Actor
     {
-        static void EquipItem(RE::Actor* a_actor, RE::FormID a_formID, const bool a_skipAnim = false,
-         uint32_t a_count = 1U, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false,
-         const RE::BGSEquipSlot *a_slot = (const RE::BGSEquipSlot *)nullptr) {
-            if (a_actor) {
-                auto eqManager = RE::ActorEquipManager::GetSingleton();
-			    auto invChanges = a_actor->GetInventoryChanges();
-			    auto entries = invChanges ? invChanges->entryList : nullptr;
-                RE::ExtraDataList* xList = nullptr;
-                if (entries)
-			        for (auto entry : *entries) {
-			        	if (entry && eqManager && entry->extraLists && entry->object && entry->object->formID == a_formID) {
-			        		if (entry->extraLists->empty()) spdlog::debug("your extralist is empty!");
-                            else xList = entry->extraLists->front();
-                            eqManager->EquipObject(a_actor, entry->object, xList, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow);
-			        		    break;
-			        	}
-			        }
-                else spdlog::debug("there is no inventory changes!");
+        /*
+        *  Requires my modder utility for this function: https://github.com/PhiloSocio/SkipEquipAnimation
+        */
+        static void SkipEquipAnimation(RE::Actor* a_this, const bool a_skip = true, int a_load3dDelayMS = 0, const bool a_skip3DLoading = false)
+        {
+            if (a_this) {
+                a_this->SetGraphVariableBool("SkipEquipAnimation", a_skip);
+                a_this->SetGraphVariableInt("LoadBoundObjectDelay", a_load3dDelayMS);
+                a_this->SetGraphVariableBool("Skip3DLoading", a_skip3DLoading);
             }
         }
-        static void UnEquipItem(RE::Actor* a_actor, const bool a_isLeft, const bool a_soundPlay)
+        static void SendAnimationEvent(RE::Actor* a_this, const RE::BSFixedString a_tag, const RE::BSFixedString a_payload = "")
+        {
+            if (a_this) {
+                RE::BSAnimationGraphManagerPtr graphManager;
+
+                a_this->GetAnimationGraphManager(graphManager);
+
+                if (graphManager) {
+                    bool bSinked = false;
+                    for (auto& animationGraph : graphManager->graphs) {
+                        if (auto eventSource = animationGraph->GetEventSource<RE::BSAnimationGraphEvent>(); eventSource) {
+                            RE::BSAnimationGraphEvent event = {a_tag, a_this, a_payload};
+                            a_this->ProcessEvent(&event, eventSource);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        static bool DoAction(RE::BGSAction* a_action, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton())
+        {
+            if (auto taskInterface = SKSE::GetTaskInterface(); taskInterface && a_action && a_actor) {
+                taskInterface->AddTask([a_action, a_actor]() {
+		            std::unique_ptr<TESActionData> data(TESActionData::Create());
+                    if (data) {
+                        //data->source = a_actor->As<TESObjectREFR>()->GetHandle().get();   //  alternate
+		                data->source = NiPointer<TESObjectREFR>(a_actor);
+		                data->action = a_action;
+		                typedef bool func_t(TESActionData*);
+		                REL::Relocation<func_t> func{ RELOCATION_ID(40551, 41557) };        //  credits to https://github.com/jarari
+		                return func(data.get());
+                    } return false;
+                });
+            } return false;
+        }
+        static RE::InventoryEntryData* GetInventoryEntryDataForWeapon(RE::Actor* a_actor, RE::FormID a_weapID)
         {
             if (a_actor) {
+                const auto invChanges = a_actor->GetInventoryChanges();
+                RE::BSSimpleList<RE::InventoryEntryData *> *entries = nullptr;
+                if (invChanges) entries = invChanges->entryList;
+                spdlog::debug("before crash 1");
+                if (entries && !entries->empty())
+                    for (auto entry : *entries) {
+                        if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
+                            spdlog::debug("before crash 2");
+                            return entry;
+                        }
+                    }
+            } spdlog::warn("can't get the weapon's entry data"); return nullptr;
+        }
+        static void EquipInventoryItem(RE::Actor* a_actor, RE::FormID a_formID, const bool a_skipAnim = false,
+         uint32_t a_count = 1U, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false,
+         const RE::BGSEquipSlot *a_slot = (const RE::BGSEquipSlot *)nullptr, const bool a_skip3D = false) {
+            if (a_actor) {
+                SkipEquipAnimation(a_actor, a_skipAnim, 0, a_skip3D);
+                auto eqManager = RE::ActorEquipManager::GetSingleton();
+                auto invChanges = a_actor->GetInventoryChanges();
+                auto entries = invChanges ? invChanges->entryList : nullptr;
+                RE::ExtraDataList* xList = nullptr;
+                if (entries)
+                    for (auto entry : *entries) {
+                        if (entry && eqManager && entry->extraLists && entry->object && entry->object->formID == a_formID) {
+                            if (entry->extraLists->empty()) spdlog::warn("your bound object's extralist is empty!");
+                            else xList = entry->extraLists->front();
+                            eqManager->EquipObject(a_actor, entry->object, xList, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow);
+                                break;
+                        }
+                    }
+                else spdlog::warn("there is no inventory changes!");
+            }
+        }
+        static void EquipItem(RE::Actor* a_actor, RE::TESBoundObject* a_boundObject, const bool a_skipAnim = false,
+         uint32_t a_count = 1U, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false,
+         const RE::BGSEquipSlot *a_slot = (const RE::BGSEquipSlot *)nullptr, const bool a_skip3D = false) {
+            if (a_actor) {
+                SkipEquipAnimation(a_actor, a_skipAnim, 0, a_skip3D);
+                auto eqManager = RE::ActorEquipManager::GetSingleton();
+                auto invChanges = a_actor->GetInventoryChanges();
+                auto entries = invChanges ? invChanges->entryList : nullptr;
+                RE::ExtraDataList* xList = nullptr;
+                if (entries)
+                    for (auto entry : *entries) {
+                        if (entry && eqManager && entry->extraLists) {
+                            if (entry->extraLists->empty()) spdlog::warn("your bound object's extralist is empty!");
+                            else xList = entry->extraLists->front();
+                                break;
+                        }
+                    }
+                else spdlog::warn("there is no inventory changes!");
+                eqManager->EquipObject(a_actor, a_boundObject, xList, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow);
+            }
+        }
+        static void UnEquipItem(RE::Actor* a_actor, const bool a_isLeft, const bool a_soundPlay, const bool a_forced = false, const bool a_immediately = false,
+         const bool a_skipAnim = false, const bool a_skip3D = false)
+        {
+            if (a_actor) {
+                SkipEquipAnimation(a_actor, a_skipAnim, 0, a_skip3D);
                 auto eData = a_actor->GetEquippedEntryData(a_isLeft);
                 auto xLists = eData ? eData->extraLists : nullptr;
                 auto xList = xLists ? xLists->front() : nullptr;
                 auto obj = a_actor->GetEquippedObject(a_isLeft);
                 auto boundObj = obj ? obj->As<RE::TESBoundObject>() : nullptr;
                 auto eqManager = RE::ActorEquipManager::GetSingleton();
-                eqManager->UnequipObject(a_actor, boundObj, xList, 1u, nullptr, true, false, a_soundPlay, false, nullptr);
+                if (boundObj && eqManager)
+                    eqManager->UnequipObject(a_actor, boundObj, xList, 1u, nullptr, !a_immediately, a_forced, a_soundPlay, a_immediately, nullptr);
             }
         }
-        static void SetIsSwimming(RE::Actor* a_victim, RE::ExtraDataList* a_xList)
+        static void CastSpell(RE::SpellItem* a_spell, RE::Actor* a_actor, RE::TESObjectREFR *a_target, RE::Actor *a_blameActor, 
+         float a_magnitudeOverride = -1.f, const bool a_noHitEffectArt = false, const float a_effectiveness = 1.f, const bool a_hostileEffectivenessOnly = false)
         {
-            if (a_xList) {
-                auto xLoc = static_cast<RE::ExtraLocation*>(a_xList->GetByType(RE::ExtraDataType::kLocation));
-                //wip
+            if (a_actor && a_spell) {
+                if (a_spell->effects[0] && a_magnitudeOverride < 0.f) a_magnitudeOverride = a_spell->effects[0]->GetMagnitude();
+                if (auto mCaster = a_actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant); mCaster) {
+                    mCaster->CastSpellImmediate(a_spell, a_noHitEffectArt, a_target, a_effectiveness, a_hostileEffectivenessOnly, a_magnitudeOverride, a_blameActor);
+                }
             }
+        }
+        static float GetAttackDamage(RE::Actor* a_attacker, RE::Actor* a_target)
+        {
+            float damage = 0.f;
+            if (a_attacker && a_target && a_attacker->GetAttackingWeapon()) {
+                RE::HitData hitData;
+                hitData.Populate(a_attacker, a_target, a_attacker->GetAttackingWeapon());
+                damage = hitData.totalDamage;
+            } return damage;
+        }
+        static float GetWeaponAttackDamage(RE::Actor* a_attacker, RE::Actor* a_target, RE::TESObjectWEAP* a_weapon)
+        {
+            float damage = 0.f;
+            if (a_attacker && a_target && a_weapon) {
+                if (auto weaponIE = GetInventoryEntryDataForWeapon(a_attacker, a_weapon->formID); weaponIE) {
+                    spdlog::debug("before crash 3");
+                    RE::HitData hitData;
+                    hitData.Populate(a_attacker, a_target, weaponIE);
+                    damage = hitData.totalDamage;
+                }
+            } return damage;
+        }
+        static RE::BSTArray<RE::Actor*> GetNearCombatTargets(RE::Actor* a_this, const float a_distance)
+        {
+            RE::BSTArray<RE::Actor*> nearTargets;
+            if (a_this && a_this->IsInCombat()) {
+                auto allyCombatGroup = a_this->GetCombatGroup();
+                if (!allyCombatGroup) return nearTargets;
+                auto enemyCombatGroupArray = allyCombatGroup->targets;
+                if (!enemyCombatGroupArray.empty())
+                    for (auto& enemyCombatGroup : enemyCombatGroupArray) {
+                        if (auto target = enemyCombatGroup.targetHandle.get().get(); target) {
+                            auto distance = target->GetPosition().GetDistance(a_this->GetPosition());
+                            if (distance <= a_distance) {
+                                nearTargets.emplace_back(target);
+                                spdlog::debug("{} is a near combat target!", target->GetName());
+                            } else spdlog::debug("{} is not a near combat target!", target->GetName());
+                        }
+                    }
+            }
+            return nearTargets;
         }
     };
 
@@ -455,7 +634,8 @@ namespace ObjectUtil
         static RE::AlchemyItem* GetEquippedObjPoison(RE::Actor* a_actor, const bool a_isLeft = false)
         {
             if (a_actor) {
-                if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); auto xList = eData->IsPoisoned() ? eData->extraLists : nullptr) { // causing crashes somehow
+                if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); eData) {
+                    auto xList = eData->IsPoisoned() ? eData->extraLists : nullptr;
                     if (xList) return GetPoison(xList);
                 }
             } return nullptr;
@@ -465,7 +645,7 @@ namespace ObjectUtil
             if (a_xList && !a_xList->empty()) {
                 for (auto xData : *a_xList) {
                     if (xData)
-                        if (auto xPoison = xData->GetByType<RE::ExtraPoison>(); auto poison = xPoison->poison) {
+                        if (auto xPoison = xData->GetByType<RE::ExtraPoison>(); auto poison = xPoison ? xPoison->poison : nullptr) {
                             return poison;
                         }
                 }
@@ -479,19 +659,19 @@ namespace ObjectUtil
         static void EnchantEquippedWeapon(RE::Actor* a_actor, RE::EnchantmentItem* a_ench, const float a_charge = 500.f, const bool a_isLeft = false, const bool a_removeOnUnequip = false)
         {
             if (!a_actor || !a_ench) return;
-            if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); auto xList = eData->extraLists) {
+            if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); auto xList = eData ? eData->extraLists : nullptr) {
                 if (xList) return EnchantItem(xList, a_ench, a_charge, a_removeOnUnequip);
             }
         }
         static void DisEnchantEquippedWeapon(RE::Actor* a_actor, const bool a_isLeft = false, const bool a_defaultEnch = false)
         {
             if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); auto obj = a_actor->GetEquippedObject(a_isLeft)) {
-                if (auto weap = obj->As<RE::TESObjectWEAP>()) {
+                if (auto weap = obj->As<RE::TESObjectWEAP>(); weap) {
                     if (a_defaultEnch && weap->formEnchanting) {
                         weap->formEnchanting = nullptr;
                         weap->amountofEnchantment = 0;
                     }
-                    if (auto xList = eData->extraLists) {
+                    if (auto xList = eData->extraLists; xList) {
                         return DisEnchantItem(xList);
                     }
                 }
@@ -501,14 +681,14 @@ namespace ObjectUtil
         {
             if (a_actor && a_actor->AsActorValueOwner()) {
                 float maxCharge = 0.f;
-                if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); auto xList = eData->extraLists) {
+                if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); auto xList = eData ? eData->extraLists : nullptr) {
                     if (eData->object && eData->object->As<RE::TESObjectWEAP>()) {
                         maxCharge = eData->object->As<RE::TESObjectWEAP>()->amountofEnchantment;
                     } for (auto xData : *xList) {
-                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>()) {
+                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch) {
                             maxCharge = (float)xEnch->charge - 1.f;
                         }
-                        if (auto xCharge = xData->GetByType<RE::ExtraCharge>()) {
+                        if (auto xCharge = xData->GetByType<RE::ExtraCharge>(); xCharge) {
                             float sum = xCharge->charge + a_charge;
                             if (sum < 0.f) sum = 0.f;
                             xCharge->charge = sum >= maxCharge ? maxCharge : sum;
@@ -525,13 +705,13 @@ namespace ObjectUtil
         static void ChargeInventoryWeapon(RE::Actor* a_actor, RE::FormID a_weapID, const float a_charge)
         {
             if (a_actor) {
-			    auto invChanges = a_actor->GetInventoryChanges();
-			    auto entries = invChanges->entryList;
-                for (auto entry : *entries) {
-			    	if (entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
-			    		ChargeWeapon(entry, a_charge);
-			    	}
-			    }
+                auto invChanges = a_actor->GetInventoryChanges();
+                if (auto entries = invChanges ? invChanges->entryList : nullptr; entries && !entries->empty())
+                    for (auto entry : *entries) {
+                        if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
+                            ChargeWeapon(entry, a_charge);
+                        }
+                    }
             }
         }
         static void ChargeWeapon(RE::InventoryEntryData* a_eData, const float a_charge)
@@ -539,18 +719,19 @@ namespace ObjectUtil
             if (a_eData && a_eData->extraLists && !a_eData->extraLists->empty()) {
                 float maxCharge = 0.f;
                 auto xList = a_eData->extraLists;
-			    if (a_eData->object && a_eData->object->As<RE::TESObjectWEAP>()) {
+                if (a_eData->object && a_eData->object->As<RE::TESObjectWEAP>()) {
                     maxCharge = a_eData->object->As<RE::TESObjectWEAP>()->amountofEnchantment;
                 } for (auto xData : *xList) {
-                    if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>()) {
-                        maxCharge = (float)xEnch->charge - 1.f;
-                    }
-                    if (auto xCharge = xData->GetByType<RE::ExtraCharge>()) {
-                        float sum = xCharge->charge + a_charge;
-                        if (sum < 0.f) sum = 0.f;
-                        xCharge->charge = sum >= maxCharge ? maxCharge : sum;
-                            break;
-                    }
+                    if (xData)
+                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch) {
+                            maxCharge = (float)xEnch->charge - 1.f;
+                        }
+                        if (auto xCharge = xData->GetByType<RE::ExtraCharge>(); xCharge) {
+                            float sum = xCharge->charge + a_charge;
+                            if (sum < 0.f) sum = 0.f;
+                            xCharge->charge = sum >= maxCharge ? maxCharge : sum;
+                                break;
+                        }
                 }
             }
         }
@@ -559,30 +740,33 @@ namespace ObjectUtil
         {
             if (!a_actor || !a_ench) return;
 
-			auto invChanges = a_actor->GetInventoryChanges();
-			auto entries = invChanges->entryList;
+            auto invChanges = a_actor->GetInventoryChanges();
+            auto entries = invChanges ? invChanges->entryList : nullptr;
             RE::BSSimpleList<RE::ExtraDataList *>* xList = nullptr;
-            for (auto entry : *entries) {
-				if (entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
-					xList = entry->extraLists;
-				}
-			} if (xList) return EnchantItem(xList, a_ench, a_charge, a_removeOnUnequip);
+            if (entries && !entries->empty())
+                for (auto entry : *entries) {
+                    if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
+                        xList = entry->extraLists;
+                    }
+                } if (xList) return EnchantItem(xList, a_ench, a_charge, a_removeOnUnequip);
         }
         static void EnchantItem(RE::BSSimpleList<RE::ExtraDataList *>* a_xList, RE::EnchantmentItem* a_ench, const float a_charge = 500.f, const bool a_removeOnUnequip = false)
         {
-            if (!a_xList || !a_ench) return;
+            if (!a_xList || a_xList->empty() || !a_ench) return;
 
             bool isEnchanted = false;
             bool isCharged = false;
             for (auto xData : *a_xList) {
-                if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>()) {
-                    xEnch->enchantment = a_ench;
-                    xEnch->charge = a_charge;
-                    xEnch->removeOnUnequip = a_removeOnUnequip;
-                    isEnchanted = true;
-                } if (auto xCharge = xData->GetByType<RE::ExtraCharge>()) {
-                    xCharge->charge = a_charge;
-                    isCharged = true;
+                if (xData) {
+                    if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch) {
+                        xEnch->enchantment = a_ench;
+                        xEnch->charge = a_charge;
+                        xEnch->removeOnUnequip = a_removeOnUnequip;
+                        isEnchanted = true;
+                    } if (auto xCharge = xData->GetByType<RE::ExtraCharge>(); xCharge) {
+                        xCharge->charge = a_charge;
+                        isCharged = true;
+                    }
                 }
             }
             if (!isEnchanted)
@@ -593,7 +777,7 @@ namespace ObjectUtil
                     newEnch->removeOnUnequip = a_removeOnUnequip;
                 //    RE::ExtraEnchantment* newEnch = new RE::ExtraEnchantment(a_ench, a_charge, a_removeOnUnequip);
                 //    RE::ExtraEnchantment newEnch(a_ench, a_charge, a_removeOnUnequip);    //  causing crashes
-                    xData->Add(newEnch);
+                    if (xData) xData->Add(newEnch);
                         break;
                 }
             if (!isCharged)
@@ -601,38 +785,40 @@ namespace ObjectUtil
                 //    RE::ExtraCharge* newCharge = new RE::ExtraCharge();
                     RE::ExtraCharge* newCharge = RE::BSExtraData::Create<RE::ExtraCharge>();
                     newCharge->charge = a_charge;
-                    xData->Add(newCharge);
+                    if (xData) xData->Add(newCharge);
                         break;
                 }
         }
         static void DisEnchantInventoryWeapon(RE::Actor* a_actor, RE::FormID a_weapID)
         {
             if (a_actor) {
-			    auto invChanges = a_actor->GetInventoryChanges();
-			    auto entries = invChanges->entryList;
+                auto invChanges = a_actor->GetInventoryChanges();
+                auto entries = invChanges->entryList;
                 RE::BSSimpleList<RE::ExtraDataList *>* xList = nullptr;
                 for (auto entry : *entries) {
-			    	if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
-			    		xList = entry->extraLists;
-			    	}
-			    } if (xList) return DisEnchantItem(xList);
+                    if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
+                        xList = entry->extraLists;
+                    }
+                } if (xList) return DisEnchantItem(xList);
             }
         }
         static void DisEnchantItem(RE::BSSimpleList<RE::ExtraDataList *>* a_xList)
         {
             if (a_xList) {
                 for (auto xData : *a_xList) {
-                    if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>()) {
-                        xEnch->enchantment = nullptr;
-                        xEnch->charge = 0;
-                        xData->Remove(xEnch);
-                        xEnch->~ExtraEnchantment();
-                        xEnch = nullptr;
-                    } if (auto xCharge = xData->GetByType<RE::ExtraCharge>()) {
-                        xCharge->charge = 0.f;
-                        xData->Remove(xCharge);
-                        xCharge->~ExtraCharge();
-                        xCharge = nullptr;
+                    if (xData) {
+                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch) {
+                            xEnch->enchantment = nullptr;
+                            xEnch->charge = 0;
+                            xData->Remove(xEnch);
+                            xEnch->~ExtraEnchantment();
+                            xEnch = nullptr;
+                        } if (auto xCharge = xData->GetByType<RE::ExtraCharge>(); xCharge) {
+                            xCharge->charge = 0.f;
+                            xData->Remove(xCharge);
+                            xCharge->~ExtraCharge();
+                            xCharge = nullptr;
+                        }
                     }
                 }
             }
@@ -642,21 +828,15 @@ namespace ObjectUtil
         {
             RE::EnchantmentItem* ench = nullptr;
             if (a_actor)
-                if (auto obj = a_actor->GetEquippedObject(a_isLeft); auto ID = obj->formID) ench = GetInventoryItemEnchantment(a_actor, ID, a_baseEnchPrior);
+                if (auto obj = a_actor->GetEquippedObject(a_isLeft); obj) ench = GetInventoryItemEnchantment(a_actor, obj->formID, a_baseEnchPrior);
             return ench;
         }
         static float GetEquippedWeaponCharge(RE::Actor* a_actor, const bool a_isLeft = false)
         {
             float charge = 0.f;
             if (a_actor && a_actor->AsActorValueOwner()) {
-                if (auto eData = a_actor->GetEquippedEntryData(a_isLeft); auto xList = eData->extraLists) {
-                    for (auto xData : *xList) {
-                        if (auto xCharge = xData->GetByType<RE::ExtraCharge>()) {
-                            charge = xCharge->charge;
-                                break;
-                        }
-                    }
-                }
+                const auto av = a_isLeft ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kRightItemCharge;
+                charge = a_actor->AsActorValueOwner()->GetActorValue(av);
             } return charge;
         }
         static RE::EnchantmentItem* GetInventoryItemEnchantment(RE::Actor* a_actor, RE::FormID a_weapID, const bool a_baseEnchPrior = false)
@@ -664,14 +844,14 @@ namespace ObjectUtil
             RE::EnchantmentItem* formEnch = nullptr;
             RE::EnchantmentItem* ench = nullptr;
             if (a_actor) {
-			    auto invChanges = a_actor->GetInventoryChanges();
-			    auto entries = invChanges->entryList;
+                auto invChanges = a_actor->GetInventoryChanges();
+                auto entries = invChanges->entryList;
                 for (auto entry : *entries) {
-			    	if (entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
-                        if (auto eForm = entry->object->As<RE::TESEnchantableForm>()) formEnch = eForm->formEnchanting;
-                        if (auto xList = entry->extraLists) ench = GetExtraEnchantment(xList);
+                    if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
+                        if (auto eForm = entry->object->As<RE::TESEnchantableForm>(); eForm) formEnch = eForm->formEnchanting;
+                        if (auto xList = entry->extraLists; xList && !xList->empty()) ench = GetExtraEnchantment(xList);
                     }
-			    }
+                }
             }
             if (a_baseEnchPrior) return formEnch ? formEnch : ench;
             else return ench ? ench : formEnch;
@@ -681,7 +861,7 @@ namespace ObjectUtil
             if (a_xList && !a_xList->empty()) {
                 for (auto xData : *a_xList) {
                     if (xData)
-                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>()) return xEnch->enchantment;
+                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch) return xEnch->enchantment;
                 }
             } return nullptr;
         }

@@ -3,4 +3,5 @@ set(sources ${sources}
     src/hook.cpp
     src/settings.cpp
     src/MainKratosCombat.cpp
+    src/Papyrus.cpp
 )

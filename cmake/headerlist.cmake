@@ -5,4 +5,5 @@ set(headers ${headers}
     src/hook.h 
     src/settings.h
     src/MainKratosCombat.h
+    src/Papyrus.h
 )
