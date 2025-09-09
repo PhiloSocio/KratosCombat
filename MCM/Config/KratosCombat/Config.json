@@ -1,0 +1,488 @@
+{
+    "modName": "KratosCombat",
+    "displayName": "AnA - Kratos Combat",
+    "minMcmVersion": 11,
+    "cursorFillMode": "topToBottom",
+    "pages": [{
+        "pageDisplayName": "$KratosCombat_SettingsPage",
+        "cursorFillMode": "topToBottom",
+        "content": [
+            {
+                "text": "$KratosCombat_Keybindings_HeaderText",
+                "type": "header"
+            },
+            {
+                "id": "iAxeCallKey:Keybindings",
+                "text": "$KratosCombat_AxeCallKey_OptionText",
+                "type": "keymap",
+                "help": "$KratosCombat_AxeCallKey_InfoText",
+                "ignoreConflicts": false,
+                "valueOptions": {
+                  "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "iAimKey:Keybindings",
+                "text": "$KratosCombat_AimKey_OptionText",
+                "type": "keymap",
+                "help": "$KratosCombat_AimKey_InfoText",
+                "ignoreConflicts": false,
+                "valueOptions": {
+                  "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "iRunicKey:Keybindings",
+                "text": "$KratosCombat_RunicKey_OptionText",
+                "type": "keymap",
+                "help": "$KratosCombat_RunicKey_InfoText",
+                "ignoreConflicts": false,
+                "valueOptions": {
+                  "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "iFinisherKey:Keybindings",
+                "text": "$KratosCombat_FinisherKey_OptionText",
+                "type": "keymap",
+                "help": "$KratosCombat_FinisherKey_InfoText",
+                "ignoreConflicts": false,
+                "valueOptions": {
+                  "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "iMediumDistanceKey:Keybindings",
+                "text": "$KratosCombat_MediumDistanceKey_OptionText",
+                "type": "keymap",
+                "help": "$KratosCombat_MediumDistanceKey_InfoText",
+                "ignoreConflicts": false,
+                "valueOptions": {
+                  "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "iLongDistanceKey:Keybindings",
+                "text": "$KratosCombat_LongDistanceKey_OptionText",
+                "type": "keymap",
+                "help": "$KratosCombat_LongDistanceKey_InfoText",
+                "ignoreConflicts": false,
+                "valueOptions": {
+                  "sourceType": "ModSettingInt"
+                }
+            },
+
+            {
+                "text": "$KratosCombat_RageType_HeaderText",
+                "type": "header"
+            },
+            {
+                "id": "uRageType:Rage",
+                "text": "$KratosCombat_SpartanRage_OptionText",
+                "type": "enum",
+                "help": "$KratosCombat_SpartanRage_InfoText",
+                "valueOptions": {
+                    "options": [
+                        "$KratosCombat_SpartanRage_Fury",
+                        "$KratosCombat_SpartanRage_Valor",
+                        "$KratosCombat_SpartanRage_Wrath",
+                        "$KratosCombat_SpartanRage_Legacy"
+                    ],
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "text": "$KratosCombat_SpartanRageLimit_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_SpartanRageLimit_InfoText",
+                "valueOptions": {
+                    "min": 60,
+                    "max": 6000,
+                    "step": 6,
+                    "sourceType": "GlobalValue",
+                    "sourceForm": "KratosCombat.esp|831"
+                }
+            },
+            {
+                "text": "$KratosCombat_SpartanRageIncreaseRate_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_SpartanRageIncreaseRate_InfoText",
+                "valueOptions": {
+                    "min": 1,
+                    "max": 600,
+                    "step": 1,
+                    "sourceType": "GlobalValue",
+                    "sourceForm": "KratosCombat.esp|82F"
+                }
+            },
+            {
+                "text": "$KratosCombat_SpartanRageDecreaseRate_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_SpartanRageDecreaseRate_InfoText",
+                "valueOptions": {
+                    "min": 1,
+                    "max": 600,
+                    "step": 1,
+                    "sourceType": "GlobalValue",
+                    "sourceForm": "KratosCombat.esp|830"
+                }
+            },
+            {
+                "text": "$KratosCombat_SpartanRageValue_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_SpartanRageValue_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 6000,
+                    "step": 1,
+                    "sourceType": "GlobalValue",
+                    "sourceForm": "KratosCombat.esp|82E"
+                }
+            },
+            {
+                "id": "bRageBarOpen:Rage",
+                "text": "$KratosCombat_RageBarOpen_OptionText",
+                "type": "toggle",
+                "help": "$KratosCombat_RageBarOpen_InfoText",
+                "valueOptions": {
+                    "sourceType": "ModSettingBool"
+                }
+            },
+            {
+                "id": "uRageBarPosX:Rage",
+                "text": "$KratosCombat_RageBarPosX_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_RageBarPosX_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 3840,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "uRageBarPosY:Rage",
+                "text": "$KratosCombat_RageBarPosY_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_RageBarPosY_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 2160,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "uRageBarScaleX:Rage",
+                "text": "$KratosCombat_RageBarScaleX_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_RageBarScaleX_InfoText",
+                "valueOptions": {
+                    "min": 1,
+                    "max": 200,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "uRageBarScaleY:Rage",
+                "text": "$KratosCombat_RageBarScaleY_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_RageBarScaleY_InfoText",
+                "valueOptions": {
+                    "min": 1,
+                    "max": 200,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "uRageBarRot:Rage",
+                "text": "$KratosCombat_RageBarRotation_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_RageBarRotation_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 359,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "uRageBarTransparency:Rage",
+                "text": "$KratosCombat_RageBarTransparency_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_RageBarTransparency_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 100,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            },
+
+            {
+                "text": "$KratosCombat_SpecialEquipments_HeaderText",
+                "type": "header"
+            },
+            {
+                "text": "$KratosCombat_SpecialWeapon_OptionText",
+                "type": "enum",
+                "help": "$KratosCombat_SpecialWeapon_InfoText",
+                "valueOptions": {
+                    "options": [
+                        "$KratosCombat_SpecialWeapon_None",
+                        "$KratosCombat_SpecialWeapon_LeviathanAxe",
+                        "$KratosCombat_SpecialWeapon_BladeOfChaos",
+                        "$KratosCombat_SpecialWeapon_DraupnirSpear",
+                        "$KratosCombat_SpecialWeapon_BladeOfOlympus",
+                        "$KratosCombat_SpecialWeapon_Mjolnir",
+                        "$KratosCombat_SpecialWeapon_Trident"
+                    ],
+                    "sourceType": "GlobalValue",
+                    "sourceForm": "KratosCombat.esp|82B"
+                }
+            },
+            {
+                "text": "$KratosCombat_SpecialShield_OptionText",
+                "type": "enum",
+                "help": "$KratosCombat_SpecialShield_InfoText",
+                "valueOptions": {
+                    "options": [
+                        "$KratosCombat_SpecialShield_None",
+                        "$KratosCombat_SpecialShield_GuardianShield",
+                        "$KratosCombat_SpecialShield_DauntlessShield",
+                        "$KratosCombat_SpecialShield_StoneWallShield",
+                        "$KratosCombat_SpecialShield_ShatterStarShield",
+                        "$KratosCombat_SpecialShield_OnslaughtShield"
+                    ],
+                    "sourceType": "GlobalValue",
+                    "sourceForm": "KratosCombat.esp|82C"
+                }
+            },
+
+            {
+                "text": "$KratosCombat_GeneralSettings_HeaderText",
+                "type": "header",
+                "position": 1
+            },
+            {
+                "id": "fBarehandedDamageMult:Main",
+                "text": "$KratosCombat_BarehandedDamage_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_BarehandedDamage_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 10,
+                    "step": 0.1,
+                    "formatString": "{1}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "bDontHitWhileArriving:Main",
+                "text": "$KratosCombat_DontHitWhileArriving_OptionText",
+                "type": "toggle",
+                "help": "$KratosCombat_DontHitWhileArriving_InfoText",
+                "valueOptions": {
+                    "sourceType": "ModSettingBool"
+                }
+            },
+
+            {
+                "id": "fThrowRotationSpeed:Main",
+                "text": "$KratosCombat_ThrowRotationSpeed_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ThrowRotationSpeed_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 4096,
+                    "step": 4,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fThrowSpeed:Main",
+                "text": "$KratosCombat_ThrowSpeed_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ThrowSpeed_InfoText",
+                "valueOptions": {
+                    "min": 1000,
+                    "max": 100000,
+                    "step": 20,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fChargeMagnitude:Main",
+                "text": "$KratosCombat_ChargeMagnitude_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ChargeMagnitude_InfoText",
+                "valueOptions": {
+                    "min": 1.1,
+                    "max": 3,
+                    "step": 0.1,
+                    "formatString": "{1}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fArrivalTime:Main",
+                "text": "$KratosCombat_ArrivalTime_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ArrivalTime_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 1,
+                    "step": 0.01,
+                    "formatString": "{2}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fCatchingTreshold:Main",
+                "text": "$KratosCombat_CatchingTreshold_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_CatchingTreshold_InfoText",
+                "valueOptions": {
+                    "min": 3,
+                    "max": 240.0,
+                    "step": 3,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fArrivalRotationSpeed:Main",
+                "text": "$KratosCombat_ArrivalRotationSpeed_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ArrivalRotationSpeed_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 2048.0,
+                    "step": 4,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fArrivalRoadCurveMagnitude:Main",
+                "text": "$KratosCombat_ArrivalRoadCurveMagnitude_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ArrivalRoadCurveMagnitude_InfoText",
+                "valueOptions": {
+                    "min": 0.0,
+                    "max": 90,
+                    "step": 6,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fMaxArrivalSpeed:Main",
+                "text": "$KratosCombat_MaxArrivalSpeed_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_MaxArrivalSpeed_InfoText",
+                "valueOptions": {
+                    "min": 18000,
+                    "max": 100000,
+                    "step": 100,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fMinArrivalSpeed:Main",
+                "text": "$KratosCombat_MinArrivalSpeed_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_MinArrivalSpeed_InfoText",
+                "valueOptions": {
+                    "min": 0.0,
+                    "max": 2400.0,
+                    "step": 20,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fMaxAxeStuckAngle:Main",
+                "text": "$KratosCombat_MaxAxeStuckAngle_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_MaxAxeStuckAngle_InfoText",
+                "valueOptions": {
+                    "min": 0.0,
+                    "max": 360,
+                    "step": 3,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fMinAxeStuckAngle:Main",
+                "text": "$KratosCombat_MinAxeStuckAngle_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_MinAxeStuckAngle_InfoText",
+                "valueOptions": {
+                    "min": 0.0,
+                    "max": 360,
+                    "step": 3,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+
+            {
+                "id": "iChargeHitCount:Main",
+                "text": "$KratosCombat_ChargeHitCount_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ChargeHitCount_InfoText",
+                "valueOptions": {
+                    "min": 1,
+                    "max": 9,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "fDraupnirExplosionsInterval:Main",
+                "text": "$KratosCombat_DraupnirExplosionsInterval_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_DraupnirExplosionsInterval_InfoText",
+                "valueOptions": {
+                    "min": 0.1,
+                    "max": 1.6,
+                    "step": 0.02,
+                    "formatString": "{2}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "iDraupnirExplodableCount:Main",
+                "text": "$KratosCombat_DraupnirExplodableCount_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_DraupnirExplodableCount_InfoText",
+                "valueOptions": {
+                    "min": 1,
+                    "max": 11,
+                    "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            }
+        ]
+    },
+    {
+        "pageDisplayName": "$KratosCombat_MiscPage",
+        "cursorFillMode": "topToBottom",
+        "content": [
+            {
+                "text": "$KratosCombat_Misc_HeaderText",
+                "type": "header"
+            },
+            {
+                "id": "bDebugModeOpen:Misc",
+                "text": "$KratosCombat_DebugModeOpen_OptionText",
+                "type": "toggle",
+                "help": "$KratosCombat_DebugModeOpen_InfoText",
+                "valueOptions": {
+                    "sourceType": "ModSettingBool"
+                }
+            }
+        ]
+    }],
+    "customContent": {
+        "source": "KratosCombat/KratosCombatImage.dds"
+    }
+}
