@@ -126,6 +126,50 @@ namespace PRECISION_API
 		std::optional<std::string> meshOverride;
 	};
 
+	struct CollisionDefinition
+	{
+		CollisionDefinition() = default;
+	
+		CollisionDefinition(std::string_view a_nodeName,
+			std::optional<uint8_t> a_ID = std::nullopt,
+			bool a_bNoRecoil = false,
+			bool a_bNoTrail = false,
+			bool a_bTrailUseTrueLength = false,
+			bool a_bWeaponTip = false,
+			float a_damageMult = 1.f,
+			std::optional<float> a_duration = std::nullopt,
+			std::optional<float> a_durationMult = std::nullopt,
+			std::optional<float> a_delay = std::nullopt,
+			std::optional<float> a_capsuleRadius = std::nullopt,
+			std::optional<float> a_radiusMult = std::nullopt,
+			std::optional<float> a_capsuleLength = std::nullopt,
+			std::optional<float> a_lengthMult = std::nullopt,
+			std::optional<RE::NiTransform> a_transform = std::nullopt,
+			std::optional<RE::NiPoint3> a_groundShake = std::nullopt,
+			std::optional<TrailOverride> a_trailOverride = std::nullopt) :
+			nodeName(a_nodeName),
+			ID(a_ID), bNoRecoil(a_bNoRecoil), bNoTrail(a_bNoTrail), bTrailUseTrueLength(a_bTrailUseTrueLength), bWeaponTip(a_bWeaponTip), damageMult(a_damageMult), duration(a_duration), durationMult(a_durationMult), delay(a_delay), capsuleRadius(a_capsuleRadius), radiusMult(a_radiusMult), capsuleLength(a_capsuleLength), lengthMult(a_lengthMult), transform(a_transform), groundShake(a_groundShake), trailOverride(a_trailOverride)
+		{}
+	
+		std::string nodeName;
+		std::optional<uint8_t> ID;
+		bool bNoRecoil = false;
+		bool bNoTrail = false;
+		bool bTrailUseTrueLength = false;
+		bool bWeaponTip = false;
+		float damageMult = 1.f;
+		std::optional<float> duration;
+		std::optional<float> durationMult;
+		std::optional<float> delay;
+		std::optional<float> capsuleRadius;
+		std::optional<float> radiusMult;
+		std::optional<float> capsuleLength;
+		std::optional<float> lengthMult;
+		std::optional<RE::NiTransform> transform;
+		std::optional<RE::NiPoint3> groundShake;
+		std::optional<TrailOverride> trailOverride;
+	};
+	
 	enum class CollisionFilterComparisonResult : uint8_t
 	{
 		Continue,  // Do not affect whether the two objects should collide
@@ -384,11 +428,29 @@ namespace PRECISION_API
 		/// <summary>
 		/// Adds a trail to the node.
 		/// </summary>
-		/// <param name="a_trailParentNode">Your assigned plugin handle</param>
-		/// <param name="a_sourceActorHandle">The callback function</param>
+		/// <param name="a_trailParentNode">Node that trail will follow</param>
+		/// <param name="a_sourceActorHandle">Source actor</param>
+		/// <param name="a_sourceActorParentCell">Source actor cell</param>
+		/// <param name="a_weaponItem">Weapon</param>
+		/// <param name="a_bIsLeftHand">Is left hand object?</param>
+		/// <param name="a_bTrailUseTrueLength">Is trail use true lenght?</param>
+		/// <param name="a_trailOverride">Trail override</param>
 		virtual void AddAttackTrail(RE::NiNode* a_trailParentNode, RE::ActorHandle a_sourceActorHandle, RE::TESObjectCELL* a_sourceActorParentCell, RE::InventoryEntryData* a_weaponItem, bool a_bIsLeftHand, bool a_bTrailUseTrueLength, std::optional<TrailOverride> a_trailOverride) noexcept = 0;
 
+		/// <summary>
+		/// Adds a trail to the node.
+		/// </summary>
+		/// <param name="a_trailParentNode">Node that trail will follow</param>
+		/// <param name="a_sourceActorHandle">Source actor</param>
+		/// <param name="a_sourceActorParentCell">Source actor cell</param>
+		/// <param name="a_projectile">Projectile</param>
+		/// <param name="a_trailOverride">Trail override</param>
 		virtual void AddAttackTrail(RE::NiNode* a_trailParentNode, RE::ActorHandle a_sourceActorHandle, RE::TESObjectCELL* a_sourceActorParentCell, RE::Projectile* a_projectile, std::optional<TrailOverride> a_trailOverride) noexcept = 0;
+
+		virtual void AddAttackCollision(RE::ActorHandle a_actorHandle, const RE::BSAnimationGraphEvent a_event) noexcept = 0;
+		virtual void AddAttackCollision(RE::ActorHandle a_actorHandle, CollisionDefinition& a_collisionDefinition, RE::Projectile* a_projectile) noexcept = 0;
+		virtual bool RemoveAttackCollision(RE::ActorHandle a_actorHandle, const CollisionDefinition& a_collisionDefinition) noexcept = 0;
+		virtual bool RemoveProjectileCollision(RE::ActorHandle a_actorHandle, const CollisionDefinition& a_collisionDefinition) noexcept = 0;
 	};
 
 	typedef void* (*_RequestPluginAPI)(const InterfaceVersion interfaceVersion);
@@ -402,7 +464,7 @@ namespace PRECISION_API
 	[[nodiscard]] inline void* RequestPluginAPI(const InterfaceVersion a_interfaceVersion = InterfaceVersion::V4)
 	{
 		auto pluginHandle = GetModuleHandleA("Precision.dll");
-		_RequestPluginAPI requestAPIFunction = (_RequestPluginAPI)SKSE::WinAPI::GetProcAddress(pluginHandle, "RequestPluginAPI");
+		_RequestPluginAPI requestAPIFunction = (_RequestPluginAPI)GetProcAddress(pluginHandle, "RequestPluginAPI");
 		if (requestAPIFunction) {
 			return requestAPIFunction(a_interfaceVersion);
 		}

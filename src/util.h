@@ -11,6 +11,10 @@
 
 #define downVec {0.f, 0.f, -1.f}
 #define upVec   {0.f, 0.f, 1.f}
+#define frontVec    {0.f, 1.f, 0.f}
+#define backVec     {0.f, -1.f, 0.f}
+#define rightVec    {1.f, 0.f, 0.f}
+#define leftVec     {-1.f, 0.f, 0.f}
 
 static float* g_deltaTime = (float*)RELOCATION_ID(523660, 410199).address();            //  sensitive to slow time spell
 static float* g_deltaTimeRealTime = (float*)RELOCATION_ID(523661, 410200).address();    //  const
@@ -18,6 +22,22 @@ static float* g_engineTime = (float*)RELOCATION_ID(517597, 404125).address();   
 
 using namespace RE;
 
+namespace FenixUtils {  //credits to master fenix https://github.com/fenix31415/UselessFenixUtils
+    static void stagger(float val, RE::Actor* victim, RE::Actor* attacker = nullptr)
+    {
+        if (victim) {
+            float stagDir = 0.0f;
+            if (attacker && victim->GetHandle() != attacker->GetHandle()) {
+                auto heading = victim->GetHeadingAngle(attacker->GetPosition(), false);
+                stagDir = (heading >= 0.0f) ? heading / 360.0f : (360.0f + heading) / 360.0f;
+            }
+
+            victim->SetGraphVariableFloat("staggerDirection", stagDir);
+            victim->SetGraphVariableFloat("staggerMagnitude", val);
+            victim->NotifyAnimationGraph("staggerStart");
+        }
+    }
+}
 namespace PointerUtil //yoinked po3's code
 {
 template <class T, class U>
@@ -42,13 +62,15 @@ namespace AsyncUtil
     public:
         GameTime() = default;
         static float GetEngineTime() {return *g_engineTime;}
-        void RegisterForUpdate(const float a_delaySeconds) {_done = false; _registerTime = GetEngineTime(); _updateTime = _registerTime + a_delaySeconds;}
+        void RegisterForUpdate(const float a_delaySeconds, const bool a_single = true) {_done = false; _single = a_single; _registerTime = GetEngineTime(); _updateTime = _registerTime + a_delaySeconds;}
         float GetUpdateTime() {return _updateTime;}
-        bool IsTimeToUpdate() {if (!_done && GetEngineTime() >= _updateTime) {_done = true; return true;} else return false;}
+        bool IsTimeToUpdate() {if (!_done && GetEngineTime() >= _updateTime) {if (_single) _done = true; return true;} else return false;}
+        void Done() {_done = true;}
     private:
         float _registerTime;
         float _updateTime;
-        bool _done;
+        bool _single;
+        bool _done = true;
     };
 }
 namespace SystemUtil
@@ -292,25 +314,217 @@ namespace MathUtil
 
     struct Algebra
     {
-        [[nodiscard]] static RE::Projectile::ProjectileRot ConvertDirectionToAngles(const float x, const float y, const float z) noexcept
+        [[nodiscard]] inline static RE::NiPoint3 RotateVectorRodrigues(const RE::NiPoint3& v, const RE::NiPoint3& rotatingAxis, float theta)
+        {
+            float cosTheta = std::cos(theta);
+            float sinTheta = std::sin(theta);
+
+            return v * cosTheta +
+                rotatingAxis.Cross(v) * sinTheta +
+                rotatingAxis * (rotatingAxis.Dot(v)) * (1.f - cosTheta);
+        }
+        [[nodiscard]] inline static RE::NiQuaternion QuaternionWithAngleAxis(float angleRadians, const RE::NiPoint3& axis)
+        {
+            RE::NiPoint3 normalizedAxis = axis;
+            normalizedAxis.Unitize();
+
+            float halfAngle = angleRadians * 0.5f;
+            float sinHalf = std::sin(halfAngle);
+            float cosHalf = std::cos(halfAngle);
+
+            return RE::NiQuaternion{
+                cosHalf,                    // w
+                normalizedAxis.x * sinHalf, // x
+                normalizedAxis.y * sinHalf, // y
+                normalizedAxis.z * sinHalf  // z
+            };
+        }
+        [[nodiscard]] inline static RE::NiQuaternion QuaternionWithAngleAxis(float angleRadians, float x, float y, float z)
+        {
+            return QuaternionWithAngleAxis(angleRadians, RE::NiPoint3{ x, y, z });
+        }
+        [[nodiscard]] inline static RE::NiMatrix3 QuaternionToMatrix(const RE::NiQuaternion& q)
+        {
+            RE::NiQuaternion normQ = q;
+            Unitize(normQ); // normalize etmek şart — dönüş matrisinin düzgün olması için
+
+            float x = normQ.x, y = normQ.y, z = normQ.z, w = normQ.w;
+            
+            float xx = x * x, yy = y * y, zz = z * z;
+            float xy = x * y, xz = x * z, yz = y * z;
+            float wx = w * x, wy = w * y, wz = w * z;
+
+            RE::NiMatrix3 m;
+            m.entry[0][0] = 1.f - 2.f * (yy + zz);
+            m.entry[0][1] = 2.f * (xy - wz);
+            m.entry[0][2] = 2.f * (xz + wy);
+
+            m.entry[1][0] = 2.f * (xy + wz);
+            m.entry[1][1] = 1.f - 2.f * (xx + zz);
+            m.entry[1][2] = 2.f * (yz - wx);
+
+            m.entry[2][0] = 2.f * (xz - wy);
+            m.entry[2][1] = 2.f * (yz + wx);
+            m.entry[2][2] = 1.f - 2.f * (xx + yy);
+
+            return m;
+        }
+        [[nodiscard]] inline static void QuaternionToAngleAxis(const RE::NiQuaternion& q, float& outAngle, RE::NiPoint3& outAxis)
+        {
+            RE::NiQuaternion normQ = q;
+            Unitize(normQ);
+
+            outAngle = 2.0f * std::acos(normQ.w);
+
+            float s = std::sqrt(1.0f - normQ.w * normQ.w);
+            if (s < 1e-6f) {
+                // Sıfıra çok yakınsa yön rastgele olabilir
+                outAxis = RE::NiPoint3{1.f, 0.f, 0.f}; // default
+            } else {
+                outAxis = RE::NiPoint3{
+                    normQ.x / s,
+                    normQ.y / s,
+                    normQ.z / s
+                };
+            }
+        }
+        inline static void Unitize(RE::NiQuaternion& q)
+        {
+            float lenSqr = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
+
+            if (lenSqr > 1e-6f) {
+                float invLen = 1.0f / std::sqrt(lenSqr);
+                q.w *= invLen;
+                q.x *= invLen;
+                q.y *= invLen;
+                q.z *= invLen;
+            } else {
+                // Geçersiz dönüş, identity quaternion’a sıfırla
+                q.w = 1.f;
+                q.x = q.y = q.z = 0.f;
+            }
+        }
+        [[nodiscard]] inline static RE::NiQuaternion MultiplyQuaternions(const RE::NiQuaternion& a, const RE::NiQuaternion& b)
+        {
+            return {
+                a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,                 // w
+                a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,                 // x
+                a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,                 // y
+                a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w                  // z
+            };
+        }
+
+        [[nodiscard]] inline static float ParabolicClamp(float t, float minVal, float maxVal) {
+            float factor = 4.0f * t * (1.0f - t); // 0 ve 1'de min, 0.5'te max
+            return minVal + (maxVal - minVal) * factor;
+        }
+
+        [[nodiscard]] inline static RE::NiPoint3 BezierPoint(float t, const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3) {
+            // t is expected to be in [0, 1]
+            t = std::clamp(t, 0.0f, 1.0f);
+            const float u = 1.0f - t;
+            const float uu = u * u;
+            const float uuu = uu * u;
+            const float tt = t * t;
+            const float ttt = tt * t;
+
+            return  P0 * uuu + 
+                    P1 * (3.f * uu * t) + 
+                    P2 * (3.f * u * tt) + 
+                    P3 * ttt;
+        }
+
+        [[nodiscard]] static float BezierCurveLength(const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3, int subdivisions) {
+            if (subdivisions <= 0)
+                return 0.0f;
+
+            float length = 0.0f;
+            RE::NiPoint3 prevPoint = P0;
+            const float invSubdiv = 1.0f / static_cast<float>(subdivisions);
+
+            for (int i = 1; i <= subdivisions; ++i) {
+                const float t = static_cast<float>(i) * invSubdiv;
+                const RE::NiPoint3 currentPoint = BezierPoint(t, P0, P1, P2, P3);
+                length += (currentPoint - prevPoint).Length();
+                prevPoint = currentPoint;
+            }
+
+            return length;
+        }
+
+        [[nodiscard]] static std::pair<std::vector<RE::NiPoint3>, float>
+        DrawAndMeasureBezier(const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3, int subdivisions)
+        {
+            std::vector<RE::NiPoint3> points;
+            points.reserve(subdivisions + 1);
+
+            float length = 0.0f;
+            RE::NiPoint3 prevPoint = P0;
+            points.push_back(P0);
+
+            const float invSubdiv = 1.0f / static_cast<float>(subdivisions);
+
+            for (int i = 1; i <= subdivisions; ++i) {
+                float t = static_cast<float>(i) * invSubdiv;
+                RE::NiPoint3 currentPoint = MathUtil::Algebra::BezierPoint(t, P0, P1, P2, P3);
+                length += (currentPoint - prevPoint).Length();
+                points.push_back(currentPoint);
+                prevPoint = currentPoint;
+            }
+
+            return {points, length};
+        }
+
+        [[nodiscard]] static float AttractToNearest(const float value, const std::vector<float>& targets, const float strength)
+        {
+            if (targets.empty()) return value;
+
+            float closest = targets[0];
+            float minDist = std::abs(value - closest);
+
+            for (float target : targets) {
+                float dist = std::abs(value - target);
+                if (dist < minDist) {
+                    closest = target;
+                    minDist = dist;
+                }
+            }
+
+            const float t = std::clamp(strength, 0.f, 1.f);
+            return value * (1.f - t) + closest * t;
+        }
+
+        [[nodiscard]] static RE::Projectile::ProjectileRot VectorToPitchYaw(const float x, const float y, const float z) noexcept
         {
             RE::Projectile::ProjectileRot angles;
 
             // Calculate yaw (rotation around Z-axis in the XY plane)
-        //    angles.z = std::atan2(y, x);
-        //    angles.z = std::atan2(x, z);
-            angles.z = std::atan2(-y, x);
+            angles.z = std::atan2(x, y);
 
-            // Calculate pitch (rotation up/down along the XZ plane)
-            angles.x = std::atan2(z, std::sqrt(x * x + y * y));
+            // Calculate pitch (rotation up/down along the YZ plane)
+            angles.x = std::atan2(-z, std::sqrt(x * x + y * y));
         //    angles.x = std::asin(-y);
 
             return angles;
         }
 
-        [[nodiscard]] static RE::Projectile::ProjectileRot ConvertDirectionToAngles(const RE::NiPoint3 a_oriention) noexcept
+        [[nodiscard]] static RE::Projectile::ProjectileRot VectorToPitchYaw(const RE::NiPoint3 a_oriention) noexcept
         {
-            return ConvertDirectionToAngles(a_oriention.x, a_oriention.y, a_oriention.z);
+            return VectorToPitchYaw(a_oriention.x, a_oriention.y, a_oriention.z);
+        }
+
+        [[nodiscard]] static RE::NiPoint3 PitchYawToVector(const float a_pitch, const float a_yaw) {
+            float cp = std::cos(a_pitch);
+            float sp = std::sin(a_pitch);
+            float cy = std::cos(a_yaw);
+            float sy = std::sin(a_yaw);
+
+            return RE::NiPoint3(cp * sy, cp * cy, -sp);
+        }
+
+        [[nodiscard]] static RE::NiPoint3 PitchYawToVector(const RE::Projectile::ProjectileRot a_rotation) noexcept
+        {
+            return PitchYawToVector(a_rotation.x, a_rotation.z);
         }
 
         static inline RE::NiPoint3 GetForwardVector(RE::Actor* a_actor)
@@ -435,6 +649,27 @@ namespace MathUtil
 }
 namespace ObjectUtil
 {
+    struct Node
+    {
+        static float GetLength(RE::NiAVObject* a_node)
+        {
+            float length = 0.f;
+            if (a_node) {
+                length = a_node->worldBound.radius;
+            } return length;
+        }
+
+	    static RE::NiTransform GetLocalTransform(RE::NiAVObject* a_node, const RE::NiTransform& a_worldTransform, bool a_bUseOldParentTransform = false)    //  from ersh precision
+	    {
+	    	RE::NiPointer<RE::NiNode> parent(a_node->parent);
+	    	if (parent) {
+	    		RE::NiTransform inverseParent = (a_bUseOldParentTransform ? parent->previousWorld : parent->world).Invert();
+	    		return inverseParent * a_worldTransform;
+	    	}
+	    	return a_worldTransform;
+	    }
+    };
+
     struct Projectile
     {
         static bool DeleteAnExtraArrow(RE::TESObjectREFR* a_victim, RE::NiAVObject* a_arrow3D)
@@ -474,19 +709,19 @@ namespace ObjectUtil
     struct Actor
     {
         static void PushActorAway(RE::Actor* a_target, float a_force, RE::NiPoint3 a_direction = RE::NiPoint3()) {
-	    	if (a_target && !a_target->IsDead() && a_target->Is3DLoaded()) {
-	    		auto process = a_target->GetActorRuntimeData().currentProcess;
-	    		if (process && process->InHighProcess()) {
-	    			return PushActorAwayImpl(process, a_target, a_direction, a_force);
-	    		}
-	    	}
-	    }
+            if (a_target && !a_target->IsDead() && a_target->Is3DLoaded()) {
+                auto process = a_target->GetActorRuntimeData().currentProcess;
+                if (process && process->InHighProcess()) {
+                    return PushActorAwayImpl(process, a_target, a_direction, a_force);
+                }
+            }
+        }
         static void PushActorAwayImpl(RE::AIProcess* a_AIprocess, RE::Actor* a_target, RE::NiPoint3 a_direction, float a_force) 
         {
-	    	using func_t = decltype(&PushActorAwayImpl);
+            using func_t = decltype(&PushActorAwayImpl);
             REL::Relocation<func_t> func{ RELOCATION_ID(38858, 39895) };
             return func(a_AIprocess, a_target, a_direction, a_force);
-	    }
+        }
         /*
         *  Requires my modder utility for this function: https://github.com/PhiloSocio/SkipEquipAnimation
         */
@@ -521,33 +756,31 @@ namespace ObjectUtil
         {
             if (auto taskInterface = SKSE::GetTaskInterface(); taskInterface && a_action && a_actor) {
                 taskInterface->AddTask([a_action, a_actor]() {
-		            std::unique_ptr<TESActionData> data(TESActionData::Create());
+                    std::unique_ptr<TESActionData> data(TESActionData::Create());
                     if (data) {
                         //data->source = a_actor->As<TESObjectREFR>()->GetHandle().get();   //  alternate
-		                data->source = NiPointer<TESObjectREFR>(a_actor);
-		                data->action = a_action;
-		                typedef bool func_t(TESActionData*);
-		                REL::Relocation<func_t> func{ RELOCATION_ID(40551, 41557) };        //  credits to https://github.com/jarari
-		                return func(data.get());
+                        data->source = NiPointer<TESObjectREFR>(a_actor);
+                        data->action = a_action;
+                        typedef bool func_t(TESActionData*);
+                        REL::Relocation<func_t> func{ RELOCATION_ID(40551, 41557) };        //  credits to https://github.com/jarari
+                        return func(data.get());
                     } return false;
                 });
             } return false;
         }
-        static RE::InventoryEntryData* GetInventoryEntryDataForWeapon(RE::Actor* a_actor, RE::FormID a_weapID)
+        static RE::InventoryEntryData* GetInventoryEntryDataForBoundObject(RE::Actor* a_actor, RE::TESBoundObject* a_boundObj)
         {
             if (a_actor) {
                 const auto invChanges = a_actor->GetInventoryChanges();
                 RE::BSSimpleList<RE::InventoryEntryData *> *entries = nullptr;
                 if (invChanges) entries = invChanges->entryList;
-                spdlog::debug("before crash 1");
                 if (entries && !entries->empty())
                     for (auto entry : *entries) {
-                        if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
-                            spdlog::debug("before crash 2");
+                        if (entry && entry->object && entry->object->IsBoundObject() && entry->object == a_boundObj) {
                             return entry;
                         }
                     }
-            } spdlog::warn("can't get the weapon's entry data"); return nullptr;
+            } return nullptr;
         }
         static void EquipInventoryItem(RE::Actor* a_actor, RE::FormID a_formID, const bool a_skipAnim = false,
          uint32_t a_count = 1U, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false,
@@ -576,19 +809,19 @@ namespace ObjectUtil
             if (a_actor) {
                 SkipEquipAnimation(a_actor, a_skipAnim, 0, a_skip3D);
                 auto eqManager = RE::ActorEquipManager::GetSingleton();
-                auto invChanges = a_actor->GetInventoryChanges();
-                auto entries = invChanges ? invChanges->entryList : nullptr;
-                RE::ExtraDataList* xList = nullptr;
-                if (entries)
-                    for (auto entry : *entries) {
-                        if (entry && eqManager && entry->extraLists) {
-                            if (entry->extraLists->empty()) spdlog::warn("your bound object's extralist is empty!");
-                            else xList = entry->extraLists->front();
-                                break;
-                        }
-                    }
-                else spdlog::warn("there is no inventory changes!");
-                eqManager->EquipObject(a_actor, a_boundObject, xList, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow);
+            //    auto invChanges = a_actor->GetInventoryChanges();
+            //    auto entries = invChanges ? invChanges->entryList : nullptr;
+            //    RE::ExtraDataList* xList = nullptr;
+            //    if (entries)
+            //        for (auto entry : *entries) {
+            //            if (entry && eqManager && entry->extraLists) {
+            //                if (entry->extraLists->empty()) spdlog::warn("your bound object's extralist is empty!");
+            //                else xList = entry->extraLists->front();
+            //                    break;
+            //            }
+            //        }
+            //    else spdlog::warn("there is no inventory changes!");
+                eqManager->EquipObject(a_actor, a_boundObject, nullptr, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow);
             }
         }
         static void UnEquipItem(RE::Actor* a_actor, const bool a_isLeft, const bool a_soundPlay, const bool a_forced = false, const bool a_immediately = false,
@@ -629,7 +862,7 @@ namespace ObjectUtil
         {
             float damage = 0.f;
             if (a_attacker && a_target && a_weapon) {
-                if (auto weaponIE = GetInventoryEntryDataForWeapon(a_attacker, a_weapon->formID); weaponIE) {
+                if (auto weaponIE = GetInventoryEntryDataForBoundObject(a_attacker, a_weapon); weaponIE) {
                     spdlog::debug("before crash 3");
                     RE::HitData hitData;
                     hitData.Populate(a_attacker, a_target, weaponIE);
@@ -752,36 +985,37 @@ namespace ObjectUtil
                 a_actor->AsActorValueOwner()->ModActorValue(av, charge);
             }
         }
-        static void ChargeInventoryWeapon(RE::Actor* a_actor, RE::TESBoundObject* a_weapID, const float a_charge)
+        static void ChargeInventoryWeapon(RE::Actor* a_actor, RE::TESBoundObject* a_weap, const uint16_t  a_charge)
         {
             if (a_actor) {
                 auto invChanges = a_actor->GetInventoryChanges();
                 if (auto entries = invChanges ? invChanges->entryList : nullptr; entries && !entries->empty())
                     for (auto entry : *entries) {
-                        if (entry && entry->object && entry->object->IsWeapon() && entry->object == a_weapID) {
+                        if (entry && entry->object && entry->object->IsWeapon() && entry->object == a_weap) {
                             ChargeWeapon(entry, a_charge);
                         }
                     }
             }
         }
-        static void ChargeWeapon(RE::InventoryEntryData* a_eData, const float a_charge)
+        static void ChargeWeapon(RE::InventoryEntryData* a_eData, const uint16_t  a_charge)
         {
             if (a_eData && a_eData->extraLists && !a_eData->extraLists->empty()) {
-                float maxCharge = 0.f;
+                uint16_t maxCharge = 0u;
                 auto xList = a_eData->extraLists;
                 if (a_eData->object && a_eData->object->As<RE::TESObjectWEAP>()) {
                     maxCharge = a_eData->object->As<RE::TESObjectWEAP>()->amountofEnchantment;
                 } for (auto xData : *xList) {
-                    if (xData)
+                    if (xData) {
                         if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch) {
-                            maxCharge = (float)xEnch->charge - 1.f;
+                            maxCharge = xEnch->charge;
                         }
                         if (auto xCharge = xData->GetByType<RE::ExtraCharge>(); xCharge) {
                             float sum = xCharge->charge + a_charge;
                             if (sum < 0.f) sum = 0.f;
-                            xCharge->charge = sum >= maxCharge ? maxCharge : sum;
+                            xCharge->charge = sum > maxCharge ? maxCharge : sum;
                                 break;
                         }
+                    }
                 }
             }
         }
@@ -827,16 +1061,20 @@ namespace ObjectUtil
                     newEnch->removeOnUnequip = a_removeOnUnequip;
                 //    RE::ExtraEnchantment* newEnch = new RE::ExtraEnchantment(a_ench, a_charge, a_removeOnUnequip);
                 //    RE::ExtraEnchantment newEnch(a_ench, a_charge, a_removeOnUnequip);    //  causing crashes
-                    if (xData) xData->Add(newEnch);
+                    if (xData) {
+                        xData->Add(newEnch);
                         break;
+                    }
                 }
             if (!isCharged)
                 for (auto xData : *a_xList) {
                 //    RE::ExtraCharge* newCharge = new RE::ExtraCharge();
                     RE::ExtraCharge* newCharge = RE::BSExtraData::Create<RE::ExtraCharge>();
                     newCharge->charge = a_charge;
-                    if (xData) xData->Add(newCharge);
+                    if (xData) {
+                        xData->Add(newCharge);
                         break;
+                    }
                 }
         }
         static void DisEnchantInventoryWeapon(RE::Actor* a_actor, RE::TESBoundObject* a_boundObj)
@@ -911,7 +1149,8 @@ namespace ObjectUtil
             if (a_xList && !a_xList->empty()) {
                 for (auto xData : *a_xList) {
                     if (xData)
-                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch) return xEnch->enchantment;
+                        if (auto xEnch = xData->GetByType<RE::ExtraEnchantment>(); xEnch)
+                            return xEnch->enchantment;
                 }
             } return nullptr;
         }
@@ -1134,14 +1373,14 @@ namespace NifUtil
     struct Collision
     {
         
-	    [[nodiscard]] static RE::bhkRigidBody* GetRigidBody(RE::NiAVObject* a_object)
-	    {
-	    	auto collisionObject = a_object->GetCollisionObject();
-	    	if (collisionObject) {
-	    		return collisionObject->GetRigidBody();
-	    	}
-	    	return nullptr;
-	    }
+        [[nodiscard]] static RE::bhkRigidBody* GetRigidBody(RE::NiAVObject* a_object)
+        {
+            auto collisionObject = a_object->GetCollisionObject();
+            if (collisionObject) {
+                return collisionObject->GetRigidBody();
+            }
+            return nullptr;
+        }
         static bool ToggleMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
         {
             constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flag::kNoCollision);

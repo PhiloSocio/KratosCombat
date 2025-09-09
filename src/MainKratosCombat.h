@@ -57,6 +57,7 @@ public:
         RE::SpellItem* lightningCloak = nullptr;
         RE::SpellItem* lightningBolt = nullptr;
         RE::SpellItem* thunderbolt = nullptr;
+        RE::SpellItem* sparks = nullptr;
     };
 
     struct KittyTailSpells {
@@ -88,6 +89,7 @@ public:
         RE::BGSSoundDescriptorForm* chargeLeviEnd = nullptr;//  MAGIcicleFire2DSD [SNDR:0003EAC6]
         RE::BGSSoundDescriptorForm* catchMjolnir = nullptr; //  WPNImpactBladeVsIceSD [SNDR:0002398A]
         RE::BGSSoundDescriptorForm* callMjolnir = nullptr;  //  telekinesis,0x7D013
+        RE::BGSSoundDescriptorForm* fingerSnap = nullptr;   //  recorded by me with whatsapp voice message
         RE::BGSSoundDescriptorForm* chargeMjolnirEnd = nullptr;//  MAGIcicleFire2DSD [SNDR:0003EAC6]
     };
 
@@ -140,7 +142,7 @@ public:
     SpellID spellID;
     KratosValues values;
 //-------------------------- Functions
-    void Update(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void Update(RE::Actor* a_actor, const float a_delta);
 
     float CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult = 1.f);
 
@@ -151,6 +153,7 @@ public:
     bool IsInRage(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     bool IsWantFinishRage() const {return _isWantFinishRage;}
     bool IsCanCharge(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), Relic a_relic = Relic::kLeviathanAxe) const;
+    bool IsChargingThrow() const {return _isChargingThrow;}
     bool IsShieldOpened() const;
     bool IsAiming() const {return _isAiming;}
 
@@ -158,6 +161,7 @@ public:
     Kratos::Relic GetLastEquippedRelic() const;
     Kratos::Rage GetRageType() const;
     Kratos::Rage GetLastTriggeredRageType() const;
+    Kratos::Relic GetNextWeaponToCall() const;
 
     void RestoreRage(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const float a_value = 0.f, const bool a_justRestore = false);
 
@@ -165,6 +169,14 @@ public:
     void SetIsCanCallMjolnir(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const bool a_isCan = true);
     void SetIsCanRage(const bool a_isCan = true, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void SetIsCanCharge(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const bool a_isCan = true, Relic a_relic = Relic::kLeviathanAxe); // 1: levi, 2: blade of chaos, 3: draupnir, 5: mjolnir
+    void SetIsChargingThrow(const bool a_isCharging = true) {
+        _isChargingThrow = a_isCharging;
+        if (_isChargingThrow) {
+            spdlog::debug("Charging throw is started");
+        } else {
+            spdlog::debug("Charging throw is ended");
+        }
+    }
     void Aim(const bool a_startAim) {_isAiming = a_startAim;}
 
     void OpenShield(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
@@ -210,6 +222,7 @@ friend class AttackHook;
     bool _isShieldOpened;
     bool _isInRage;
     bool _isWantFinishRage;
+    bool _isChargingThrow;
     bool _isAiming;
     Rage _lastTriggeredRage;
     bool _gettingHittedInValor;
@@ -267,7 +280,6 @@ private:
     static void WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_RHandWeapon, RE::TESObjectWEAP* a_LHandWeapon, RE::TESObjectARMO* a_shield);
 };
 
-
 class LeviathanAxe
 {
 public:
@@ -282,24 +294,118 @@ public:
         kArriving = 4,
         kArrived = 5
     };
+    enum class ProjectileState : std::uint_fast8_t {
+        kNone = 0,
+        kLaunched = 1,
+        kStucked = 2,
+        kHavok = 3
+    };
 
     struct Data {
+        RE::Projectile* proj;
         RE::TESObjectWEAP* weap     = nullptr;
         RE::EnchantmentItem* ench   = nullptr;
         RE::AlchemyItem* poison     = nullptr;
         RE::NiPoint3 position       = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastVelocity   = {0.f, 0.f, 0.f};
+        RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
         RE::NiAVObject* model       = nullptr;
+        RE::NiAVObject* weaponModel = nullptr;
+        std::vector<RE::NiPointer<RE::BSTempEffectParticle>> projTrails;
+        RE::NiTransform trailTransform;
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
         RE::NiNode* stuckedBone     = nullptr;
         RE::Actor* stuckedActor     = nullptr;
+        ProjectileState projState   = ProjectileState::kNone;
         float* enchMag              = nullptr;
         float defaultEnchMag;
         float damage            = 0.f;
         float yAngle            = 0.35f;
         float throwedTime       = 0.f;
-        float arrivalSpeed      = Config::MinArrivalSpeed;
+        float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
+        float gravity           = 1.f;
+        float throwingChargeDuration = 0.f;
+    };
+
+    struct ArrivingLeviathan {
+        const LeviathanAxe* parent;
+        RE::Projectile* proj;
+        RE::Actor* caller;
+        RE::NiAVObject* callerBone;
+        RE::NiPoint3 startPosition;
+        RE::NiPoint3 currentDir;
+        RE::NiPoint3 desiredDir;
+        RE::NiPoint3 linearArrivingDir;
+        std::pair<std::vector<RE::NiPoint3>, float> arrivingRoute;
+        std::vector<RE::Actor *> targets;
+        float throwedTime;
+        float timeToArrive;
+        float linearDistance = 0.f;
+        float linearDistanceFromStart = 0.f;
+        float linearDistanceFromLastCallPos = 0.f;
+        float arrivingRelativeAngleZ = 0.f;
+        float speed = 2400.f;
+
+        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
+        std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
+            targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller, linearDistance, true);
+            CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
+            return targets;
+        }
+        void CheckTargets(RE::NiPoint3& a_origin) {
+            if (!targets.empty()) {
+                std::erase_if(targets, [=](const RE::Actor* actor) {
+                    bool result = false;
+                    if (!actor || actor->IsDead() || !parent || std::find(parent->data.lastHitActors.begin(), parent->data.lastHitActors.end(), actor) != parent->data.lastHitActors.end()) {
+                        result = true;
+                    } else {
+                        auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;
+                        auto targetDir = targetPos - a_origin;
+                        targetDir.Unitize();
+                        float distance = actor->GetPosition().GetDistance(a_origin);
+                        result = distance < 100.f || 
+                            distance > linearDistance || 
+                            currentDir.Dot(targetDir) > std::cos(PI8) || 
+                            currentDir.Dot(linearArrivingDir) > std::cos(PI8);
+                    }
+                    return result;
+                });
+                std::sort(targets.begin(), targets.end(), 
+                    [&](const auto& a, const auto& b) {
+                        return a->GetPosition().GetDistance(a_origin) < 
+                            b->GetPosition().GetDistance(a_origin);
+                    }
+                );
+            };
+        }
+
+        RE::Actor* GetNextTarget(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
+            if (a_origin) {
+                GetTargets(a_origin);
+            }
+            return !targets.empty() ? targets.front() : nullptr;
+        }
+
+        virtual ~ArrivingLeviathan() = default;
+        ArrivingLeviathan() = default;
+        ArrivingLeviathan(const LeviathanAxe* a_parent, RE::Projectile* a_proj, 
+            RE::Actor* a_caller, 
+            RE::NiAVObject* a_callerBone, 
+            RE::NiPoint3& a_startPosition) : parent(a_parent), proj(a_proj),
+            caller(a_caller), callerBone(a_callerBone), startPosition(a_startPosition)
+        {
+            throwedTime = AsyncUtil::GameTime::GetEngineTime();
+            auto callerPosition = callerBone ? callerBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerPosition - startPosition);
+            linearArrivingDir.Unitize();
+            linearDistanceFromStart = startPosition.GetDistance(callerPosition);
+            linearDistanceFromLastCallPos = linearDistanceFromStart;
+            speed = linearDistanceFromStart / Config::ArrivalTime;
+            speed = std::clamp(speed, Config::MinArrivalSpeed, Config::MaxArrivalSpeed);
+            timeToArrive = linearDistanceFromStart / speed;
+            targets = GetTargets();
+        }
     };
 
     struct HomingLeviathan {
@@ -311,14 +417,14 @@ public:
         float speed;
         float throwedTime;
         float angularVelocity;
-        float waveAmplitude = 600.f;
+        float waveAmplitude = 400.f;
         float waveFrequency = 20.f;
 
         float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
         //  give an origin point if you want to get nearest target
         RE::Actor* GetNextTarget(RE::NiPoint3 a_origin = RE::NiPoint3()) {
             std::erase_if(targets, [](const RE::Actor* actor) {
-                return !actor || actor->IsDead();
+                return !actor || (actor && actor->IsDead());
             });
     //        if (targets.size() > 2u) {
     //            if (a_origin != RE::NiPoint3()) {
@@ -389,13 +495,15 @@ public:
     };
 
     Data data;
+    ArrivingLeviathan arrivingLevi;
     HomingLeviathan homingLevi;
 
+    void Update(const float a_delta);
     void SetThrowState(const ThrowState a_throwState);
     ThrowState GetThrowState() const;
-    void SetStartPos(RE::NiPoint3& a_point, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
-    void Call(const bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void Call(const bool a_justDestroy = false, const bool a_justContinue = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Catch(bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     //  experimental:
     void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_coolDown = 15u);
@@ -403,13 +511,17 @@ public:
     void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical);
     void SetHitRotation(RE::NiPoint3& a_angles, const RE::NiPoint3& a_direction, const bool a_vertical);
     void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical);
+    bool IsArriving(RE::Projectile* a_proj) const;
     bool IsHoming(RE::Projectile* a_proj) const;
+    bool IsCharged() const {return _isCharged;}
 
     bool isAxeCalled;
     bool isAxeThrowed;
     bool isAxeStucked;
 //  RE::Projectile::LaunchData* LeviThrowData   = nullptr;
 
+    AsyncUtil::GameTime projectileUpdate;
+    AsyncUtil::GameTime trailUpdate;
 private:
 friend class WeaponIdentify;
 friend class AnimationEventTracker;
@@ -433,8 +545,10 @@ friend class ProjectileHook;
     RE::EffectSetting* EffCatchLevi = nullptr;
     RE::EnchantmentItem* EnchCharge = nullptr;
 
+    bool _isCharged = false;
     uint8_t chargeHitCount = 0;
     ThrowState throwState;
+    PRECISION_API::CollisionDefinition collisionDefinition;
 
     LeviathanAxe()  = default;
     ~LeviathanAxe() = default;
@@ -444,7 +558,7 @@ class BladeOfChaos
 public:
     static  BladeOfChaos* GetSingleton() {static BladeOfChaos singleton; return &singleton;}
 
-    void    Update() {_lastChargeTime = AsyncUtil::GameTime::GetEngineTime();}
+    void    Update(const float a_delta) {_lastChargeTime = AsyncUtil::GameTime::GetEngineTime();}
     bool    IsScorching() const {return _isScorching;}
     void    SetIsScorching(const bool a_isScorching = true) {_isScorching = a_isScorching;}
     float   GetScorchingSpeed();
@@ -477,7 +591,7 @@ public:
     static inline RE::BGSExplosion* DraupnirExplosion   = nullptr;
     static inline RE::BGSArtObject* DraupnirStuckedFX   = nullptr;
 
-    static void Update();
+    static void Update(const float a_delta);
     static void Throw();
     static void MeleeThrow();
     static void ArtilleryOfTheAncients(const float a_delay, const float a_duration);
@@ -486,12 +600,14 @@ public:
     static void AddSpearHit(RE::Projectile* a_proj);
     static void Call(const float a_damage, const float a_force);
     static void StartExplosions(const float a_delay);
+    static void SetExplosionMagnitude(const float a_magnitude) {explosionMagnitude = a_magnitude;}
 
     /* forced detonation?
     forced detonation needed for living targets, because timing projectile explosions not working after hitting to actors.
     */
 private:
 friend class ProjectileHook;
+    static inline float explosionMagnitude = 1.f;
     static inline float nextExplosionTime = 0.f;
     static inline float timeToDoneExplosions = 0.f;
     static inline float explosionDelay = 0.f;
@@ -504,7 +620,7 @@ friend class ProjectileHook;
     static void TriggerExplosions(float a_delay, float a_force, RE::ProjectileHandle* a_pHandle);
     static void TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::ProjectileHandle* a_pHandle, RE::Actor* a_target);
     static void TriggerExplosionAtLocation(RE::Projectile* a_proj, RE::ProjectileHandle* a_pHandle);
-    
+
     static inline float nextLaunchTime = 0.0f;
     static inline float nextLaunchDelay = 0.0f;
     static inline float lastLaunchTime = 0.0f;
@@ -524,22 +640,168 @@ public:
         kArriving = 4,
         kArrived = 5
     };
+    enum class ProjectileState : std::uint_fast8_t {
+        kNone = 0,
+        kLaunched = 1,
+        kStucked = 2,
+        kHavok = 3
+    };
 
     struct Data {
         RE::TESObjectWEAP* weap     = nullptr;
         RE::EnchantmentItem* ench   = nullptr;
         RE::AlchemyItem* poison     = nullptr;
         RE::NiPoint3 position       = {0.f, 0.f, 0.f};
+        RE::NiPoint3 lastEulerAngles= {0.f, 0.f, 0.f};
         RE::NiPoint3 lastVelocity   = {0.f, 0.f, 0.f};
+        RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
         RE::NiAVObject* model       = nullptr;
+        std::vector<RE::NiPointer<RE::BSTempEffectParticle>> projTrails;
+        RE::NiTransform trailTransform;
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
+        ProjectileState projState   = ProjectileState::kNone;
         float* enchMag              = nullptr;
         float defaultEnchMag;
         float damage            = 0.f;
         float yAngle            = 0.35f;
         float throwedTime       = 0.f;
-        float arrivalSpeed      = Config::MinArrivalSpeed;
+        float gravity           = 2.5f;
+        float throwingChargeDuration = 0.f;
+    };
+
+    struct ArrivingMjolnir {
+        const Mjolnir* parent;
+        RE::Projectile* proj;
+        RE::Actor* caller;
+        RE::NiAVObject* callerBone;
+        RE::NiPoint3 startPosition;
+        RE::NiPoint3 startVelocity = {0.f, 0.f, 0.f};
+        RE::NiPoint3 lastVelocity  = {0.f, 0.f, 0.f};
+        RE::NiPoint3 currentDir;
+        RE::NiPoint3 desiredDir;
+        RE::NiPoint3 desiredVelocity;
+        RE::NiPoint3 linearArrivingDir;
+        std::pair<std::vector<RE::NiPoint3>, float> arrivingRoute;
+        std::vector<RE::Actor *> targets;
+        float callTime      = 0.f;
+        float launchTime    = 0.f;
+        float timeToArrive  = 0.f;
+        float linearDistance = 0.f;
+        float linearDistanceFromStart = 0.f;
+        float linearDistanceFromLastCallPos = 0.f;
+        float arrivingRelativeAngleZ = 0.f;
+        float speed = 2400.f;
+        uint16_t routeResolution;
+
+        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - (launchTime > callTime ? launchTime : callTime);}
+        std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
+            targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller, linearDistance, true);
+            CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
+            return targets;
+        }
+        void CheckTargets(RE::NiPoint3& a_origin) {
+            if (!targets.empty()) {
+                std::erase_if(targets, [=](const RE::Actor* actor) {
+                    bool result = false;
+                    if (!actor || actor->IsDead() || !parent || std::find(parent->data.lastHitActors.begin(), parent->data.lastHitActors.end(), actor) != parent->data.lastHitActors.end()) {
+                        result = true;
+                    } else {
+                        auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;
+                        auto targetDir = targetPos - a_origin;
+                        targetDir.Unitize();
+                        float distance = actor->GetPosition().GetDistance(a_origin);
+                        result = distance < 100.f || 
+                            distance > linearDistance || 
+                            currentDir.Dot(targetDir) > std::cos(PI8) || 
+                            currentDir.Dot(linearArrivingDir) > std::cos(PI8);
+                    }
+                    return result;
+                });
+                std::sort(targets.begin(), targets.end(), 
+                    [&](const auto& a, const auto& b) {
+                        return a->GetPosition().GetDistance(a_origin) < 
+                            b->GetPosition().GetDistance(a_origin);
+                    }
+                );
+            };
+        }
+
+        RE::Actor* GetNextTarget(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
+            if (a_origin) {
+                GetTargets(a_origin);
+            }
+            return !targets.empty() ? targets.front() : nullptr;
+        }
+
+        virtual ~ArrivingMjolnir() = default;
+        ArrivingMjolnir() = default;
+        ArrivingMjolnir(RE::Actor* a_caller, 
+            RE::NiAVObject* a_callerBone, 
+            RE::NiPoint3& a_startPosition) : caller(a_caller), callerBone(a_callerBone), startPosition(a_startPosition)
+        {
+            callTime = AsyncUtil::GameTime::GetEngineTime();
+            auto callerPosition = callerBone ? callerBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerPosition - startPosition);
+            linearArrivingDir.Unitize();
+            linearDistanceFromLastCallPos = startPosition.GetDistance(callerPosition);
+            linearDistanceFromStart = linearDistanceFromLastCallPos;
+            float blendTime = (Config::MjolnirArrivingDelay.has_value() ? *Config::MjolnirArrivingDelay : 0.f);
+            speed = (linearDistanceFromStart - Config::CatchingTreshold - 100.f) / (Config::ArrivalTime + blendTime);
+            if (speed < Config::MinArrivalSpeed) speed = Config::MinArrivalSpeed;
+            if (speed > Config::MaxArrivalSpeed) speed = Config::MaxArrivalSpeed;
+            timeToArrive = linearDistanceFromStart / speed;
+
+            if (auto spineNode = a_caller->GetNodeByName("NPC Spine2 [Spn2]"); spineNode && arrivingRelativeAngleZ != 0.5f) {
+                auto spineForwardDir = spineNode->world.rotate * RE::NiPoint3(frontVec);
+                spineForwardDir.z = 0.f;  //  ignore vertical direction
+                spineForwardDir.Unitize();
+                RE::NiPoint3 linearDir2D(linearArrivingDir.x, linearArrivingDir.y, 0.f);
+                float dot = spineForwardDir.Dot(linearDir2D);
+                float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
+
+                float arrivingRelativeAngle = atan2(det, dot);  //  angle between spine forward direction and axe direction
+                arrivingRelativeAngle = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngle);  //  normalize angle to [0, PI]
+                arrivingRelativeAngle = MathUtil::Angle::RadianToDegree(arrivingRelativeAngle) / 360.f;  //  normalize angle to [0, 1]
+                std::vector<float> targets = {0.f, 0.25f, 0.5f, 0.75f, 1.f};
+                float snapStrength = Config::ArrivalAngleSnap;
+                if ((arrivingRelativeAngle < 0.124f || arrivingRelativeAngle > 0.876f) && snapStrength < 0.8f) snapStrength += 0.3f;
+                arrivingRelativeAngle = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngle, targets, snapStrength);
+                arrivingRelativeAngleZ = arrivingRelativeAngle;
+                a_caller->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
+            }
+        }
+        ArrivingMjolnir(const Mjolnir* a_parent, RE::Projectile* a_proj, 
+            RE::Actor* a_caller, 
+            RE::NiAVObject* a_callerBone, 
+            RE::NiPoint3& a_startPosition) : parent(a_parent), proj(a_proj),
+            caller(a_caller), callerBone(a_callerBone), startPosition(a_startPosition)
+        {
+            launchTime = AsyncUtil::GameTime::GetEngineTime();
+            auto callerPosition = callerBone ? callerBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerPosition - startPosition);
+            linearArrivingDir.Unitize();
+            linearDistanceFromLastCallPos = linearDistanceFromStart = startPosition.GetDistance(callerPosition);
+            RE::NiMatrix3 handRot   = callerBone ? callerBone->world.rotate : RE::NiMatrix3();
+            RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec);
+            RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec);
+            const float handSideOffsetMult = 0.3f;
+
+            RE::NiPoint3 p0 = startPosition;
+            RE::NiPoint3 p3 = callerPosition;
+            RE::NiPoint3 p1 = p0 + linearArrivingDir * linearDistanceFromStart / 3.f;
+            RE::NiPoint3 p2 = p3 + palmDir * (linearDistanceFromLastCallPos / 3.f + 20.f) + handForward * (linearDistanceFromLastCallPos * handSideOffsetMult + 10.f);
+            routeResolution = static_cast<uint16_t>(Config::ArrivalTime / *g_deltaTime);
+            arrivingRoute = MathUtil::Algebra::DrawAndMeasureBezier(p0, p1, p2, p3, routeResolution);
+            auto resolutionDistance = arrivingRoute.first[0].GetDistance(arrivingRoute.first[1]);
+            auto speedLimit = resolutionDistance / *g_deltaTime;
+            speedLimit -= 1.f;
+            spdlog::debug("arrival route resolution is {}, speed limit is {}", routeResolution, speedLimit);
+            speed = arrivingRoute.second / Config::ArrivalTime;
+            speed = std::clamp(speed, Config::MinArrivalSpeed, Config::MaxArrivalSpeed);//(Config::MaxArrivalSpeed < speedLimit) ? Config::MaxArrivalSpeed : speedLimit);
+            timeToArrive = arrivingRoute.second / speed;
+            targets = GetTargets();
+        }
     };
 
     struct HomingMjolnir {
@@ -551,7 +813,7 @@ public:
         float speed;
         float throwedTime;
         float angularVelocity;
-        float waveAmplitude = 600.f;
+        float waveAmplitude = 400.f;
         float waveFrequency = 20.f;
 
         float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
@@ -629,23 +891,29 @@ public:
     };
 
     Data data;
+    ArrivingMjolnir arrivingMjolnir;
     HomingMjolnir homingMjolnir;
 
-    void Update();
+    void Update(const float a_delta);
     void SetThrowState(const ThrowState a_throwState);
     ThrowState GetThrowState() const;
-    void SetStartPos(RE::NiPoint3& a_point, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Throw(const bool justContinue, const bool isVertical = false, const bool isHoming = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
-    void Call(const bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void Call(const bool a_justDestroy = false, const bool a_justContinue = false, std::optional<float> a_delay = std::nullopt, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Catch(bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_stage = 3u, const uint8_t a_coolDown = 15u);
     void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false);
+    bool IsArriving(RE::Projectile* a_proj) const;
     bool IsHoming(RE::Projectile* a_proj) const;
+    bool IsCharged() const {return _isCharged;}
 
     bool isMjolnirCalled;
+    bool isMjolnirArriving;
     bool isMjolnirThrowed;
 //  RE::Projectile::LaunchData* LeviThrowData   = nullptr;
 
+    AsyncUtil::GameTime trailUpdate;
+    AsyncUtil::GameTime callUpdate;
 private:
 friend class WeaponIdentify;
 friend class AnimationEventTracker;
@@ -666,8 +934,10 @@ friend class ProjectileHook;
     RE::EffectSetting* EffCatchMjolnir  = nullptr;
     RE::EnchantmentItem* EnchCharge     = nullptr;
 
+    bool _isCharged = false;
     uint8_t chargeHitCount = 0;
     ThrowState throwState;
+    PRECISION_API::CollisionDefinition collisionDefinition;
 
     Mjolnir()  = default;
     ~Mjolnir() = default;
@@ -701,7 +971,7 @@ public:
 
     Data data;
 
-    void Update();
+    void Update(const float a_delta);
     void Throw(const bool justContinue = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Call(const float a_damage, const float a_force, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const bool a_justEquip = false);
 
@@ -768,14 +1038,15 @@ private:
         kMouseOffset = 256,
         kGamepadOffset = 266,
     };
+    static std::uint32_t GetGamepadIndex(RE::BSWin32GamepadDevice::Key a_key);
     std::uint32_t GetOffsettedKeyCode(std::uint32_t a_keyCode, RE::INPUT_DEVICE a_inputDevice) const;
+
     InputEventTracker() = default;
     InputEventTracker(const InputEventTracker&) = delete;
     InputEventTracker(InputEventTracker&&) = delete;
     virtual ~InputEventTracker() = default;
     InputEventTracker& operator=(const InputEventTracker&) = delete;
     InputEventTracker& operator=(InputEventTracker&&) = delete;
-    std::uint32_t GetGamepadIndex(RE::BSWin32GamepadDevice::Key a_key);
 };
 class HitEventTracker : public RE::BSTEventSink<RE::TESHitEvent>
 {

@@ -99,15 +99,27 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     ReadFloatSetting(ini, "Main", "fArrivalRotationZ", ArrivalRotationZ);
     ReadFloatSetting(ini, "Main", "fArrivalRoadCurveMagnitude", ArrivalRoadCurveMagnitude);
     ReadFloatSetting(ini, "Main", "fCatchingTreshold", CatchingTreshold);
+    ReadFloatSetting(ini, "Main", "fArrivalAngleSnap", ArrivalAngleSnap);
+    float _MjolnirArrivingDelay; ReadFloatSetting(ini, "Main", "fMjolnirArrivingDelay", _MjolnirArrivingDelay);
+    if (_MjolnirArrivingDelay > 0.005f) {
+        MjolnirArrivingDelay = _MjolnirArrivingDelay;
+        if (_MjolnirArrivingDelay > 3.f)
+            MjolnirArrivingDelay = 3.f;
+    } else {
+        MjolnirArrivingDelay = std::nullopt;
+    }
 
     ReadFloatSetting(ini, "Main", "fMaxArrivalSpeed", MaxArrivalSpeed);
     ReadFloatSetting(ini, "Main", "fMinArrivalSpeed", MinArrivalSpeed);
     ReadFloatSetting(ini, "Main", "fMaxAxeStuckAngle", MaxAxeStuckAngle);
     ReadFloatSetting(ini, "Main", "fMinAxeStuckAngle", MinAxeStuckAngle);
 
+    ReadBoolSetting(ini, "Main", "bDrawTrails", DrawTrails);
+    ReadBoolSetting(ini, "Main", "bReturnHProjectileAfterLoops", ReturnHProjectileAfterLoops);
+
     ReadIntSetting(ini, "Main", "iDraupnirExplodableCount", DraupnirSpearCount);
     ReadFloatSetting(ini, "Main", "fDraupnirExplosionsInterval", DraupnirExplosionsInterval);
-    
+
     ReadIntSetting(ini, "Main", "iChargeHitCount", ChargeHitCount);
     ReadFloatSetting(ini, "Main", "fChargeMagnitude", ChargeMagnitude);
 
@@ -215,6 +227,11 @@ void Config::CheckConfig(const bool a_writeChanges)
     constexpr auto UserConfigPath = L"Data/MCM/Settings/KratosCombat.ini";
     ReadConfig(DefaultConfigPath);
     ReadConfig(UserConfigPath, a_writeChanges);
+
+    HMODULE hMod = GetModuleHandleA("WeaponThrowing.dll");
+    IsAdvancedThrowingInstalled = hMod != nullptr;
+    spdlog::debug("Advanced Weapon Throwing is {}!", IsAdvancedThrowingInstalled ? "installed" : "not installed");
+
     PrepareValues();
         spdlog::info("Kratos Combat's configurations checked.");
 }
@@ -287,6 +304,7 @@ std::optional<bool> APIs::Request()
 //      if (tdm) spdlog::debug("TDM API loaded");
 //      else spdlog::error("TDM API failed to load");
 //  }
+#ifdef PRECISION
     if (!precision) {
         precision = reinterpret_cast<PRECISION_API::IVPrecision4*>(PRECISION_API::RequestPluginAPI(PRECISION_API::InterfaceVersion::V4));
         if (precision) {
@@ -299,5 +317,6 @@ std::optional<bool> APIs::Request()
         result = true;
         spdlog::debug("Precision API already loaded");
     }
+#endif
     return result;
 }

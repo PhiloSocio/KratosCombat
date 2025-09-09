@@ -288,6 +288,24 @@
                     "sourceType": "ModSettingBool"
                 }
             },
+            {
+                "id": "bDrawTrails:Main",
+                "text": "$KratosCombat_DrawTrails_OptionText",
+                "type": "toggle",
+                "help": "$KratosCombat_DrawTrails_InfoText",
+                "valueOptions": {
+                    "sourceType": "ModSettingBool"
+                }
+            },
+            {
+                "id": "bReturnHProjectileAfterLoops:Main",
+                "text": "$KratosCombat_ReturnHProjectileAfterLoops_OptionText",
+                "type": "toggle",
+                "help": "$KratosCombat_ReturnHProjectileAfterLoops_InfoText",
+                "valueOptions": {
+                    "sourceType": "ModSettingBool"
+                }
+            },
 
             {
                 "id": "fThrowRotationSpeed:Main",
@@ -352,6 +370,32 @@
                 }
             },
             {
+                "id": "fArrivalAngleSnap:Main",
+                "text": "$KratosCombat_ArrivalAngleSnap_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ArrivalAngleSnap_InfoText",
+                "valueOptions": {
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.02,
+                    "formatString": "{2}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fMjolnirArrivingDelay:Main",
+                "text": "$KratosCombat_MjolnirArrivingDelay_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_MjolnirArrivingDelay_InfoText",
+                "valueOptions": {
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.01,
+                    "formatString": "{2}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
                 "id": "fArrivalRotationSpeed:Main",
                 "text": "$KratosCombat_ArrivalRotationSpeed_OptionText",
                 "type": "slider",
@@ -381,7 +425,7 @@
                 "type": "slider",
                 "help": "$KratosCombat_MaxArrivalSpeed_InfoText",
                 "valueOptions": {
-                    "min": 18000,
+                    "min": 3200,
                     "max": 100000,
                     "step": 100,
                     "sourceType": "ModSettingFloat"

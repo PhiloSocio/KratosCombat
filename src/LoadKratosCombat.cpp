@@ -32,6 +32,8 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
             Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, false, true);
             mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag, false, true);
             spdlog::info("charged weapons reset because loading the game!");
+            Levi->trailUpdate.Done();
+            mjolnir->trailUpdate.Done();
         }
         break;
     case SKSE::MessagingInterface::kPostLoadGame:
@@ -45,9 +47,11 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
             mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag, false, true);
             spdlog::info("charged weapons reset because saving the game!");
         }
-        RE::PlayerCharacter::GetSingleton()->SetGraphVariableBool("SkipEquipAnimation", _skipEquipAnim);    //  Reset to default values
-        RE::PlayerCharacter::GetSingleton()->SetGraphVariableInt("LoadBoundObjectDelay", _load3Ddelay);     //  Reset to default values
-        RE::PlayerCharacter::GetSingleton()->SetGraphVariableBool("Skip3DLoading", _skipLoad3D);            //  Reset to default values
+        if (auto playerCharacter = RE::PlayerCharacter::GetSingleton(); playerCharacter) {
+            playerCharacter->SetGraphVariableBool("SkipEquipAnimation", _skipEquipAnim);    //  Reset to default values
+            playerCharacter->SetGraphVariableInt("LoadBoundObjectDelay", _load3Ddelay);     //  Reset to default values
+            playerCharacter->SetGraphVariableBool("Skip3DLoading", _skipLoad3D);            //  Reset to default values
+        }
         break;
     }
 }
@@ -71,9 +75,9 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 
     return true;
 }
-/*
+/**/
 SKSEPluginInfo(
-    .Version = REL::Version{ 1, 9, 1, 0 },
+    .Version = REL::Version{ 2, 0, 8, 0 },
     .Name = "KratosCombat"sv,
     .Author = "AnArchos"sv,
     .SupportEmail = "patreon.com/AnArchos"sv,
@@ -81,4 +85,3 @@ SKSEPluginInfo(
     .RuntimeCompatibility = SKSE::VersionIndependence::AddressLibrary,
     .MinimumSKSEVersion = REL::Version{ 2, 0, 0, 2 }
 )
-*/

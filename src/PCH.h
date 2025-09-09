@@ -19,7 +19,6 @@ using namespace std::literals;
 
 // for experimental draupnir spear detonating features:
 //#define EXPERIMENTAL
-//#undef EXPERIMENTAL
 #define EXPERIMENTAL_CHARGE_LEVI
 #define EXPERIMENTAL_SKIP_EQUIP_ANIM
 //#define EXPERIMENTAL_EXTRAARROW
@@ -28,4 +27,10 @@ using namespace std::literals;
 #define NEW_DRAUPNIR_EXPLOSION_METHOD
 #define EXPERIMENTAL_UNEQUIP_AFTER_THROW
 //#define NEW_WEAPON_REGISTER_METHOD
-#define TRIDENT
+//#define TRIDENT
+//#define PRECISION
+#define NEW_ARRIVING_METHOD
+#define SMART_ARRIVING_METHOD
+//#define OVERPOWERED
+//#define EXPERIMENTAL_LEVIATHAN_MODEL
+//#define EXPERIMENTAL_PROJECTILE_HIT_EXPLOSION

@@ -11,8 +11,8 @@ public:
     //Axe-Mace throw
     static inline float ThrowSpeed                  = 3700.f;       //  cm/s
     static inline float ThrowRotationSpeed          = 2160.f;       //  deg/s
-    static inline float NoGravityDurationLeviathan  = 1.f;
-    static inline float NoGravityDurationMjolnir    = 1.f;
+    static inline float NoGravityDurationLeviathan  = 0.5f;
+    static inline float NoGravityDurationMjolnir    = 0.5f;
     static inline std::string ThrowEvent            = "ThrowWeapon";
     static inline std::string ThrowEventV           = "ThrowWeaponV";
     static inline std::string ThrowEndEvent         = "ThrowAttackEnd";
@@ -21,8 +21,19 @@ public:
     static inline float HProjectileSpeed            = 2000.f;       //  cm/s
     static inline uint32_t HProjectileLoopCount     = 2u;           //  how many times it will hit each combat target.
     static inline bool ReturnHProjectileAfterLoops  = true;
+    //Trails
+    static inline bool DrawTrails                   = true;         //  draw trails for thrown weapons
+    static inline uint8_t TrailParticleCount        = 6u;           //  how many particles will be used for the trail
+    static inline std::string TrailModelPathLevi    = "effects/WeaponTrails/AttackTrailMagic_Frost.nif";
+    static inline std::string TrailModelPathMjolnir = "effects/WeaponTrails/AttackTrailMagic_Shock.nif";
+    
+    //Requirements
+    static inline bool IsSkipEquipAnimationInstalled = false;
+    static inline bool IsAdvancedThrowingInstalled = false;
+    static inline bool IsPrecisionInstalled = false;
+    static inline bool IsTrueDirectionalMovementInstalled = false;
 
-    //Axe call
+    //Axe/Mace call
     static inline float ArrivalTime                 = 0.52f;        //  s
     static inline float ArrivalRotationSpeed        = 1440.f;       //  deg/s
     static inline float ArrivalRotationX            = 90.f;         //  deg/s
@@ -30,6 +41,8 @@ public:
     static inline float ArrivalRotationZ            = 180.f;        //  deg/s
     static inline float ArrivalRoadCurveMagnitude   = 18.f;         //  deg
     static inline float CatchingTreshold            = 69.f;         //  cm
+    static inline float ArrivalAngleSnap            = 0.1f;         //  snap to nearest angle in radians
+    static inline std::optional<float> MjolnirArrivingDelay = std::nullopt;
     static inline std::string CallEvent             = "CallWeapon";
     static inline std::string CallAttackEvent       = "LeviCallAttack";
     static inline std::string ChargeLeviEvent       = "LeviCharge";

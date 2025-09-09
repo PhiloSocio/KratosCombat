@@ -61,37 +61,37 @@ void WeaponIdentify::Initialize(RE::Actor* a_actor)
                 if (entry->object->IsWeapon()) {
 #ifdef NEW_WEAPON_REGISTER_METHOD
 #else
-                    if (entry->object->GetLocalFormID() == kratos->gLeviathanAxeFormID->value && entry->object->GetFile()->fileName == Config::registeredLeviathanFileName) {
+                    if (kratos->gLeviathanAxeFormID && entry->object->GetLocalFormID() == kratos->gLeviathanAxeFormID->value && entry->object->GetFile()->fileName == Config::registeredLeviathanFileName) {
                         if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
                             weap->RemoveKeywords(Config::SpecialKWDs);
                             weap->AddKeyword(Config::LeviathanAxeKWD);
                             spdlog::info("{} is your Leviathan Axe", weap->GetName());
                         }
-                    } else if (entry->object->GetLocalFormID() == kratos->gBladeOfChaosFormID->value && entry->object->GetFile()->fileName == Config::registeredBladeOfChaosFileName) {
+                    } else if (kratos->gBladeOfChaosFormID && entry->object->GetLocalFormID() == kratos->gBladeOfChaosFormID->value && entry->object->GetFile()->fileName == Config::registeredBladeOfChaosFileName) {
                         if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
                             weap->RemoveKeywords(Config::SpecialKWDs);
                             weap->AddKeyword(Config::BladeOfChaosKWD);
                             spdlog::info("{} is your Blade of Chaos", weap->GetName());
                         }
-                    } else if (entry->object->GetLocalFormID() == kratos->gBladeOfChaosFormID->value+1 && entry->object->GetFile()->fileName == Config::registeredLBladeOfChaosFileName) {
+                    } else if (kratos->gBladeOfChaosFormID && entry->object->GetLocalFormID() == kratos->gBladeOfChaosFormID->value+1 && entry->object->GetFile()->fileName == Config::registeredLBladeOfChaosFileName) {
                         if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
                             weap->RemoveKeywords(Config::SpecialKWDs);
                             weap->AddKeyword(Config::BladeOfChaosKWD);
                             spdlog::info("{} is your left Blade of Chaos", weap->GetName());
                         }
-                    } else if (entry->object->GetLocalFormID() == kratos->gDraupnirSpearFormID->value && entry->object->GetFile()->fileName == Config::registeredDraupnirFileName) {
+                    } else if (kratos->gDraupnirSpearFormID && entry->object->GetLocalFormID() == kratos->gDraupnirSpearFormID->value && entry->object->GetFile()->fileName == Config::registeredDraupnirFileName) {
                         if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
                             weap->RemoveKeywords(Config::SpecialKWDs);
                             weap->AddKeyword(Config::DraupnirSpearKWD);
                             spdlog::info("{} is your Draupnir Spear", weap->GetName());
                         }
-                    } else if (entry->object->GetLocalFormID() == kratos->gBladeOfOlympusFormID->value && entry->object->GetFile()->fileName == Config::registeredBladeOfOlympusFileName) {
+                    } else if (kratos->gBladeOfOlympusFormID && entry->object->GetLocalFormID() == kratos->gBladeOfOlympusFormID->value && entry->object->GetFile()->fileName == Config::registeredBladeOfOlympusFileName) {
                         if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
                             weap->RemoveKeywords(Config::SpecialKWDs);
                             weap->AddKeyword(Config::BladeOfOlympusKWD);
                             spdlog::info("{} is your Blade of Olympus", weap->GetName());
                         }
-                    } else if (entry->object->GetLocalFormID() == kratos->gMjolnirFormID->value && entry->object->GetFile()->fileName == Config::registeredMjolnirFileName) {
+                    } else if (kratos->gMjolnirFormID && entry->object->GetLocalFormID() == kratos->gMjolnirFormID->value && entry->object->GetFile()->fileName == Config::registeredMjolnirFileName) {
                         if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
                             weap->RemoveKeywords(Config::SpecialKWDs);
                             weap->AddKeyword(Config::MjolnirKWD);
@@ -99,7 +99,7 @@ void WeaponIdentify::Initialize(RE::Actor* a_actor)
                         }
                     }
 #ifdef TRIDENT
-                    else if (entry->object->GetLocalFormID() == kratos->gTridentFormID->value && entry->object->GetFile()->fileName == Config::registeredTridentFileName) {
+                    else if (kratos->gTridentFormID && entry->object->GetLocalFormID() == kratos->gTridentFormID->value && entry->object->GetFile()->fileName == Config::registeredTridentFileName) {
                         if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
                             weap->RemoveKeywords(Config::SpecialKWDs);
                             weap->AddKeyword(Config::TridentKWD);
@@ -175,11 +175,18 @@ void WeaponIdentify::WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_R
             Levi->data.poison   = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
 #endif
             Levi->data.damage   = static_cast<float>(LeviathanAxe->attackDamage);
-        //  Levi->LeviProjBaseL->model = LeviathanAxe->model;
-        //  Levi->LeviProjBaseH->model = LeviathanAxe->model;
-        //  Levi->LeviProjBaseA->model = LeviathanAxe->model;
+#ifdef EXPERIMENTAL_LEVIATHAN_MODEL
+            Levi->LeviProjBaseL->model = LeviathanAxe->model;
+            Levi->LeviProjBaseH->model = LeviathanAxe->model;
+            Levi->LeviProjBaseA->model = LeviathanAxe->model;
+#endif
             if (WeaponIdentify::LeviathanAxe->HasWorldModel()) {
                 spdlog::debug("Levi is throwable");
+				const auto root = a_actor->Get3D();
+                auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
+                Levi->data.weaponModel = weapon3D ? weapon3D->Clone() : nullptr;
+                Levi->data.weaponModel->local = RE::NiTransform();
+                Levi->data.weaponModel->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
                 Levi->SetThrowState(tState::kThrowable);
                 Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, true);
                 kratos->SetIsCanCallAxe(a_actor, false);
@@ -537,14 +544,15 @@ bool WeaponIdentify::IsRelic(RE::BGSProjectile *a_baseProj, Kratos::Relic a_reli
 }
 #pragma endregion
 #pragma region Kratos
-void Kratos::Update(RE::Actor* a_actor)
+void Kratos::Update(RE::Actor* a_actor, const float a_delta)
 {
     if (IsInRage()) RestoreRage(a_actor, -(*values.rageDamageAmount * (*g_deltaTimeRealTime)));
 
-    Draupnir::Update();
-//    Mjolnir::GetSingleton()->Update();
+    LeviathanAxe::GetSingleton()->Update(a_delta);
+    Draupnir::Update(a_delta);
+    Mjolnir::GetSingleton()->Update(a_delta);
 #ifdef TRIDENT
-    Trident::GetSingleton()->Update();
+    Trident::GetSingleton()->Update(a_delta);
 #endif
 }
 bool Kratos::Initialize()
@@ -579,12 +587,14 @@ bool Kratos::Initialize()
     soundEffect.chargeLeviEnd   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3EAC6, "Skyrim.esm");
     soundEffect.catchMjolnir    = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x2398A, "Skyrim.esm");
     soundEffect.callMjolnir     = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x7D013, "Skyrim.esm");
+    soundEffect.fingerSnap      = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x84A, Config::KratosCombatESP);
     soundEffect.chargeMjolnirEnd= dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3EAC6, "Skyrim.esm");
     vanillaSpell.frostCloak     = dataHandler->LookupForm<RE::SpellItem>(0x3AEA2, "Skyrim.esm");
     vanillaSpell.fireCloak      = dataHandler->LookupForm<RE::SpellItem>(0x3AE9F, "Skyrim.esm");
     vanillaSpell.lightningBolt  = dataHandler->LookupForm<RE::SpellItem>(0x2DD29, "Skyrim.esm");
     vanillaSpell.lightningCloak = dataHandler->LookupForm<RE::SpellItem>(0x3AEA3, "Skyrim.esm");
     vanillaSpell.thunderbolt    = dataHandler->LookupForm<RE::SpellItem>(0x10F7EE, "Skyrim.esm");
+    vanillaSpell.sparks         = dataHandler->LookupForm<RE::SpellItem>(0x2DD2A, "Skyrim.esm");
     kittyTailSpell.magesFury    = dataHandler->LookupForm<RE::SpellItem>(0x809, "StormCalling.esl");
     kittyTailSpell.streak       = dataHandler->LookupForm<RE::SpellItem>(0x80A, "StormCalling.esl");
     kittyTailSpell.teslaSphere  = dataHandler->LookupForm<RE::SpellItem>(0x833, "StormCalling.esl");
@@ -728,6 +738,33 @@ Kratos::Relic Kratos::GetLastEquippedRelic() const
     else if (WeaponIdentify::isBladeOfOlympus) return Relic::kBladeOfOlympus;
     return Relic::kNone;
 }
+Kratos::Relic Kratos::GetNextWeaponToCall() const
+{
+    Kratos::Relic ret = Kratos::Relic::kNone;
+    if (WeaponIdentify::lastThrownRelic == Kratos::Relic::kLeviathanAxe) {
+        if ((uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::Mjolnir && (uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() > 1U) ret = Kratos::Relic::kMjolnir;
+#ifdef TRIDENT
+        else if ((uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::Trident && !Trident::GetSingleton()->isTridentThrowable) ret = Kratos::Relic::kTrident;
+#endif
+        else ret = Kratos::Relic::kLeviathanAxe;
+    }
+    else if (WeaponIdentify::lastThrownRelic == Kratos::Relic::kMjolnir) {
+        if ((uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::LeviathanAxe && (uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() > 1U) ret = Kratos::Relic::kLeviathanAxe;
+#ifdef TRIDENT
+        else if ((uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::Trident && !Trident::GetSingleton()->isTridentThrowable) ret = Kratos::Relic::kTrident;
+#endif
+        else ret = Kratos::Relic::kMjolnir;
+    }
+#ifdef TRIDENT
+    else if (WeaponIdentify::lastThrownRelic == Kratos::Relic::kTrident) {
+        if (Trident::GetSingleton()->isTridentThrowable && WeaponIdentify::LeviathanAxe && (uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() > 1U) ret = Kratos::Relic::kLeviathanAxe;
+        else if (Trident::GetSingleton()->isTridentThrowable && WeaponIdentify::Mjolnir && (uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() > 1U) ret = Kratos::Relic::kMjolnir;
+        else ret = Kratos::Relic::kTrident;
+    }
+#endif
+    else {spdlog::warn("Can't found any weapon for ready to calling! Trying to call Levi"); ret = Kratos::Relic::kLeviathanAxe;}
+    return ret;
+}
 Kratos::Rage Kratos::GetRageType() const
 {
     switch ((Kratos::Rage)Config::RageType)
@@ -748,16 +785,20 @@ void Kratos::DoKratosAction(const Kratos::Action a_action, RE::Actor* a_actor)
         switch (a_action)
         {
         case Kratos::Action::kRage:
-            if (!IsInRage()) StartRage((Rage)Config::RageType, true, a_actor);
+            if (!IsInRage(a_actor)) StartRage((Rage)Config::RageType, true, a_actor);
             else EndRage(GetLastTriggeredRageType());
             break;
         case Kratos::Action::kWeaponCharge:
-            a_actor->SetGraphVariableInt("iKratosActionType", (uint8_t)Kratos::Action::kWeaponCharge);
-            a_actor->NotifyAnimationGraph("DoKratosAction");
+            if (!IsInRage(a_actor)) {
+                a_actor->SetGraphVariableInt("iKratosActionType", (uint8_t)Kratos::Action::kWeaponCharge);
+                a_actor->NotifyAnimationGraph("DoKratosAction");
+            }
             break;
         case Kratos::Action::kSpecialIdle:
-            a_actor->SetGraphVariableInt("iKratosActionType", (uint8_t)Kratos::Action::kSpecialIdle);
-            a_actor->NotifyAnimationGraph("DoKratosAction");
+            if (!IsInRage(a_actor)) {
+                a_actor->SetGraphVariableInt("iKratosActionType", (uint8_t)Kratos::Action::kSpecialIdle);
+                a_actor->NotifyAnimationGraph("DoKratosAction");
+            }
             break;
 
         default:
@@ -785,6 +826,7 @@ void Kratos::SetIsCanRage(const bool a_isCan, RE::Actor* a_actor)
 void Kratos::SetIsCanCharge(RE::Actor* a_actor, const bool a_isCan, Kratos::Relic a_relic)
 {
     auto magicTarget = a_actor->GetMagicTarget();
+    auto magicCaster = a_actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant);
     if (a_isCan && !IsCanCharge(a_actor, a_relic) && magicTarget) {
         auto casterHandle = a_actor->GetHandle();
 
@@ -803,17 +845,17 @@ void Kratos::SetIsCanCharge(RE::Actor* a_actor, const bool a_isCan, Kratos::Reli
             break;
         }
     }
-    else if (!a_isCan && IsCanCharge(a_actor, a_relic) && magicTarget) {
+    else if (!a_isCan && IsCanCharge(a_actor, a_relic) && magicCaster) {
         switch (a_relic) {
         case Relic::kLeviathanAxe:
-            a_actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(SpellLeviChargeCD, false, nullptr, 1.f, false, 1.f, a_actor);
+            magicCaster->CastSpellImmediate(SpellLeviChargeCD, false, nullptr, 1.f, false, 1.f, a_actor);
             break;
         case Relic::kBladeOfChaos:
             break;
         case Relic::kDraupnirSpear:
             break;
         case Relic::kMjolnir:
-            a_actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(SpellMjolnirChargeCD, false, nullptr, 1.f, false, 1.f, a_actor);
+            magicCaster->CastSpellImmediate(SpellMjolnirChargeCD, false, nullptr, 1.f, false, 1.f, a_actor);
             break;
         default:
             break;
@@ -883,8 +925,8 @@ void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Act
             if (VFXeffect.fury) a_actor->ApplyArtObject(VFXeffect.fury, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
             if (WeaponIdentify::EquippedObjR)
                 ObjectUtil::Actor::UnEquipItem(a_actor, false, false, false, false, true, true);
-            if (WeaponIdentify::EquippedObjL)
-                ObjectUtil::Actor::UnEquipItem(a_actor, false, false, false, false, true, true);
+            if (WeaponIdentify::EquippedObjL && WeaponIdentify::EquippedObjL != WeaponIdentify::GuardianShield)
+                ObjectUtil::Actor::UnEquipItem(a_actor, true, false, false, false, true, true);
             if (WeaponIdentify::GuardianShield && !WeaponIdentify::isGuardianShield)
                 ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::GuardianShield, true);
 
@@ -916,7 +958,7 @@ void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Act
             break;
         }
         ObjectUtil::Actor::SendAnimationEvent(a_actor, "weaponSwing");
-        a_actor->SetGraphVariableInt("IsInRage", true);
+        a_actor->SetGraphVariableBool("IsInRage", true);
     }
 }
 void Kratos::EndRage(const Kratos::Rage a_rage, const bool a_fromAnnotation, const bool a_playAnim, const bool a_justAnim, RE::Actor* a_actor)
@@ -972,7 +1014,7 @@ void Kratos::EndRage(const Kratos::Rage a_rage, const bool a_fromAnnotation, con
         default:
             break;
         }
-        a_actor->SetGraphVariableInt("IsInRage", false);
+        a_actor->SetGraphVariableBool("IsInRage", false);
         _isWantFinishRage = false;
         _LastEquippedObjectR = nullptr;
         _LastEquippedObjectL = nullptr;
@@ -992,7 +1034,7 @@ bool LeviathanAxe::Initialize()
     SpellLeviProjH      = dataHandler->LookupForm<RE::SpellItem>       (0x813, Config::KratosCombatESP);
     SpellCatchLevi      = dataHandler->LookupForm<RE::SpellItem>       (0x81D, Config::KratosCombatESP);
     SpellLeviProjA      = dataHandler->LookupForm<RE::SpellItem>       (0x823, Config::KratosCombatESP);
-    EnchCharge          = dataHandler->LookupForm<RE::EnchantmentItem> (0x45D58, "Skyrim.esm");     // EnchWeaponFrostDamage06, +30 frost damage, ff, touch
+    EnchCharge          = dataHandler->LookupForm<RE::EnchantmentItem> (0x84B, Config::KratosCombatESP);    // +30 frost damage, ff, touch
     if (LeviProjBaseL && LeviProjBaseH && LeviProjBaseA)
             spdlog::debug("Leviathan Axe projectiles are {}, {} and {}", LeviProjBaseL->GetName(), LeviProjBaseH->GetName(), LeviProjBaseA->GetName());
     else     {spdlog::error("Can't find Leviathan Axe projectiles"); found = false;}
@@ -1012,16 +1054,111 @@ bool LeviathanAxe::Initialize()
 
     return found;
 }
+void LeviathanAxe::Update(const float a_delta) {
+    if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsEquipped(Kratos::Relic::kLeviathanAxe)) {
+        if (kratos->IsChargingThrow()) {
+            data.throwingChargeDuration += a_delta;
+        }
+    }
+    if (projectileUpdate.IsTimeToUpdate()) {
+        if (data.model && data.proj &&/* data.proj->Is3DLoaded() &&*/ data.proj->Get3D2() && data.model == data.proj->Get3D2()) {
+            auto& rtData = data.proj->GetProjectileRuntimeData();
+            const RE::BSFixedString rotatingBoneName = "Cylinder02";
+            auto animatedBone = data.model->GetObjectByName(rotatingBoneName);
+            auto leviModel = data.weaponModel;
+            if (animatedBone && leviModel) {
+                auto animatedNode = animatedBone->AsNode();
+                auto leviNode = leviModel->AsNode();
+                if (animatedNode && leviNode && rtData.livingTime > 0.f) {
+                //    animatedNode->AttachChild(leviNode, false);
+                    projectileUpdate.Done();
+                    spdlog::debug("levi model changed! living time: {}", rtData.livingTime);
+                } else spdlog::warn("animated node or levinode null");
+            } else spdlog::warn("animated bone or leviModel null");
+        } else spdlog::warn("proj or proj->Get3D2() null");
+    }
+    if (Config::DrawTrails) {
+        if (auto rootBone = data.model; rootBone) {
+            if (trailUpdate.IsTimeToUpdate()) {
+                const RE::BSFixedString rotatingBoneName = "Cylinder02";
+                auto rotatingBone = rootBone->GetObjectByName(rotatingBoneName);
+                auto bone = rotatingBone ? rotatingBone : rootBone;
+#ifdef PRECISION
+                if (bone && (APIs::precision || APIs::Request())) {
+                    trailUpdate.Done();
+                    auto trailNode = RE::NiNode::Create(0);
+                    float length = bone->worldBound.radius;
+                    float tipOffset = length;
+		            trailNode->local.translate += RE::NiPoint3(0.f, tipOffset, 0.f);
+                    trailNode->local.rotate = bone->local.rotate;
+                    if (auto node = bone->AsNode(); node) node->AttachChild(trailNode, true);
+                    PRECISION_API::TrailOverride trailOverride(2.f, RE::NiColorA(), 2.f, Config::TrailModelPathLevi.data());
+                    APIs::precision->AddAttackTrail(trailNode, RE::PlayerCharacter::GetSingleton()->GetHandle(), RE::PlayerCharacter::GetSingleton()->GetParentCell(), LastLeviProjectile, std::nullopt);
+                //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastMjolnirProjectile);
+                }
+#else
+                float particleMult = _isCharged ? 2.f : 1.f;
+                float length = bone->worldBound.radius;//60.f;
+            //    spdlog::debug("Leviathan Axe projectile length is {}", length);
+                float tipOffset = length;// / 3.f;
+                data.trailTransform = bone->world * bone->local;
+                data.trailTransform.translate = data.trailTransform * RE::NiPoint3(0.f, 0.f, tipOffset);
+
+                auto projTrail = RE::NiPointer<RE::BSTempEffectParticle>(RE::BSTempEffectParticle::Spawn(RE::PlayerCharacter::GetSingleton()->GetParentCell(), 10.f, Config::TrailModelPathLevi.data(), data.trailTransform.rotate, data.trailTransform.translate, 0.01f * length, 7, nullptr));
+                if (data.projTrails.size() < particleMult * Config::TrailParticleCount) {
+                    data.projTrails.insert(data.projTrails.begin(), projTrail);
+                }
+            //    if (data.projTrails.size() > particleMult * Config::TrailParticleCount) {
+            //    //    data.projTrails.pop_back();
+            //        trailUpdate.Done();
+            //    }
+            }
+        }
+        if (!data.projTrails.empty()) {
+            uint8_t trailIndex(1);
+            data.projTrails.erase(
+                std::remove_if(data.projTrails.begin(), data.projTrails.end(),
+                    [a_delta, &trailIndex, this](RE::NiPointer<RE::BSTempEffectParticle> projTrail) {
+                        if (projTrail) {
+                            if (projTrail->age >= projTrail->lifetime) {
+                                projTrail->~BSTempEffectParticle();
+                                projTrail.~NiPointer();
+                            //    spdlog::debug("{}. projectile trail removed! age: {} lifetime: {}", trailIndex, projTrail->age, projTrail->lifetime);
+                                return true; // Mark for removal
+                            } else {
+                                if (projTrail->age > 1.f) projTrail->age += a_delta;    //  projTrail->lifetime can't be changed, it is always 1.f;
+                            //    spdlog::debug("{}. projectile trail age is {}", trailIndex, projTrail->age);
+                            }
+                        //    trailIndex++;
+                        }
+                        return false; // Keep in the vector
+                    }),
+                data.projTrails.end());
+            for (auto& projTrail : data.projTrails) {
+                auto particleObject = projTrail ? projTrail->particleObject : nullptr;
+                auto fadeNode = particleObject ? particleObject->AsFadeNode() : nullptr;
+                auto trailRoot = fadeNode ? fadeNode->GetObjectByName("TrailRoot"sv) : nullptr;
+                auto trailRootNode = trailRoot ? trailRoot->AsNode() : nullptr;
+                if (trailRootNode && !trailRootNode->GetChildren().empty()) {
+                    trailRootNode->world = data.trailTransform;
+                //    trailRootNode->local = ObjectUtil::Node::GetLocalTransform(trailRootNode, data.trailTransform);
+                //    spdlog::debug("{}. projectile trail transform updated! age: {} lifetime: {}", trailIndex, projTrail->age, projTrail->lifetime);
+                } trailIndex++;
+#endif
+            }
+        }
+    }
+}
 tState LeviathanAxe::GetThrowState()     const          {return throwState;}
 void LeviathanAxe::SetThrowState(ThrowState a_state)    {throwState = a_state;}
-void LeviathanAxe::SetStartPos(RE::NiPoint3& a_point, RE::Actor* a_actor)
+void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 {
     if (!a_actor) return;
     auto stuckedLevi =  LastLeviProjectile;
     if (!stuckedLevi) stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : LeviathanAxeProjectileH);
-    if (stuckedLevi) {
-        a_point = stuckedLevi->data.location; 
-    } else spdlog::debug("we cant get leviathan's stucked proj!");
+    if (stuckedLevi) {// && !(stuckedLevi->GetProjectileRuntimeData().flags & (1 << 25))) {
+        a_point = stuckedLevi->data.location;
+    } else spdlog::debug("we can't get leviathan's proj!");
 
     if (data.stuckedBone) {
         a_point = data.stuckedBone->world.translate;
@@ -1038,21 +1175,23 @@ void LeviathanAxe::SetStartPos(RE::NiPoint3& a_point, RE::Actor* a_actor)
         } else spdlog::debug("levi not stucked anybody");
     } else spdlog::debug("levi not stucked any bone");
 
-    auto pcCell = a_actor->parentCell;
-    auto bound = pcCell->GetRuntimeData().cellData.exterior->worldX;
-    auto pcPos = a_actor->GetPosition();
-    float dist = pcPos.GetDistance(a_point);
-    if (dist > 36000.f) {   // ~42000 is limit
-        spdlog::info("levi too far from you! ({} m)", (int)dist / 100);
-        auto dir = a_point - pcPos;
-        dir.Unitize();
-        a_point = pcPos + dir * 36000.f;
-    }
     if (GetThrowState() == tState::kThrowable) {
         if (auto backWeaponSheathe = a_actor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
             a_point = backWeaponSheathe->world.translate;
         }
+    } else {
+        auto pcCell = a_actor->parentCell;
+        auto bound = pcCell->GetRuntimeData().cellData.exterior->worldX;
+        auto pcPos = a_actor->GetPosition();
+        float dist = pcPos.GetDistance(a_point);
+        if (dist > 36000.f) {   // ~42000 is limit
+            spdlog::info("levi too far from you! ({} m)", (int)dist / 100);
+            auto dir = a_point - pcPos;
+            dir.Unitize();
+            a_point = pcPos + dir * 36000.f;
+        }
     }
+    data.projState = ProjectileState::kNone;
 }
 void LeviathanAxe::Throw(const bool isVertical, const bool justContinue, const bool isHoming, RE::Actor* a_actor)
 {
@@ -1060,28 +1199,28 @@ void LeviathanAxe::Throw(const bool isVertical, const bool justContinue, const b
 //  auto leviBaseProj = (isVertical ? LeviProjBaseH : LeviProjBaseL);
     if (a_actor && leviThrowSpell && (WeaponIdentify::isLeviathanAxe || justContinue)) 
     {   //  calculate damage
-        const auto leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
-        float mag = leviDamage * WeaponIdentify::DamageMult;
-        if (isVertical) {mag *= 1.5f; data.yAngle = 1.57f;}
-        else data.yAngle = 0.35f;
         const auto leviProjEff = leviThrowSpell->effects[0];
         auto& leviProjEffSetting = leviProjEff->effectItem;
-        leviProjEffSetting.magnitude = mag;
+        auto& mag = leviProjEffSetting.magnitude;
+        const auto leviDamage = static_cast<float>(WeaponIdentify::LeviathanAxe->attackDamage);
+        mag = leviDamage * WeaponIdentify::DamageMult;
+        bool isPowerThrow; a_actor->GetGraphVariableBool("IsPowerThrowing", isPowerThrow);
+        if (isVertical || isPowerThrow) {mag *= 1.5f; data.yAngle = 1.57f;}
+        else data.yAngle = 0.35f;
+        float throwChargeDamageMult = std::sqrtf(data.throwingChargeDuration + 1.f);
+        if (throwChargeDamageMult > 2.f) throwChargeDamageMult = 2.f;
+        mag *= throwChargeDamageMult;
 
-    //  if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff) {
+    if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff) {
     //      leviProjBaseEff->data.projectileBase->SetModel(WeaponIdentify::LeviathanAxe->GetModel());
     //  //  leviProjBaseEff->data.projectileBase->data.defaultWeaponSource = WeaponIdentify::LeviathanAxe;
     //  //  leviProjBaseEff->data.associatedForm = WeaponIdentify::LeviathanAxe;
-    //  } else spdlog::warn("not found throwing effect!");
-//
-//      auto extraData = AnArchos->extraList;
-//      extraData.SetInventoryChanges(RE::InventoryChanges)
-    //  RE::ActorEquipManager::GetSingleton()->UnequipObject(AnArchos, WeaponIdentify::LeviathanAxe);//, nullptr, 1U, nullptr, false, false, false, true, nullptr);
-    //  AnArchos->RemoveWeapon(RE::BIPED_OBJECT::kOneHandAxe);
-    //  AnArchos->NotifyAnimationGraph("UnequipNoAnim");
-//
-    //  AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(leviThrowSpell, false, nullptr, 1.f, false, mag, AnArchos);
-    //  auto origin = AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->GetMagicNode()->world.translate;
+        leviProjBaseEff->data.projectileBase->data.force = mag;
+    } else spdlog::warn("not found Levi throwing effect!");
+
+        if (!justContinue) {
+            data.gravity = 2.f / (std::powf(data.throwingChargeDuration + 1.f, 3.f));
+        }
 
         auto kratos = Kratos::GetSingleton();
         //  set the launch data
@@ -1099,43 +1238,37 @@ void LeviathanAxe::Throw(const bool isVertical, const bool justContinue, const b
             lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(a_actor);
         //  throw the projectile
         RE::Projectile::Launch(&pHandle, lData);
+        data.proj = pHandle.get().get();
 
-        if (APIs::Request()) {
-            std::jthread DrawProjectileTrail([=]() {
-                AsyncUtil::GameTime gameTime;
-                gameTime.RegisterForUpdate(0.1f);
-                while (!gameTime.IsTimeToUpdate() || !(pHandle.get() && pHandle.get()->Get3D2())) {
-                    std::this_thread::sleep_for(std::chrono::seconds((long)(*g_deltaTime)));
-                }
-                if (pHandle.get() && pHandle.get()->Get3D2()) {
-                    PRECISION_API::TrailOverride trailOverride;
-                    trailOverride.baseColorOverride = RE::NiColorA(0.5f, 0.5f, 1.f, 1.f);
-                    trailOverride.baseColorScaleMult = 3.f;
-                //    trailOverride.lifetimeMult = 3.f;
-                    APIs::precision->AddAttackTrail(pHandle.get()->Get3D2()->AsNode(), a_actor->GetHandle(), a_actor->parentCell, pHandle.get().get(), trailOverride);
-                } else spdlog::warn("can't draw mjolnir trail!");
-            });
-            DrawProjectileTrail.detach();
-        }
+    //    projectileUpdate.RegisterForUpdate(1.01, false);
+        trailUpdate.RegisterForUpdate(0.01, false);
 
         if (isHoming) {
             if (justContinue) {
-                homingLevi.proj = homingLevi.isBoomerang || !homingLevi.targets.empty() ? pHandle.get().get() : nullptr;
+                homingLevi.proj = homingLevi.isBoomerang || !homingLevi.targets.empty() ? data.proj : nullptr;
             } else {
                 std::vector<RE::Actor *> nearCombatTargets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(a_actor, Config::HProjectileTargetRange, true);
-                homingLevi = HomingLeviathan(pHandle.get().get(), nearCombatTargets, a_actor, Config::HProjectileLoopCount, Config::ReturnHProjectileAfterLoops);
+                homingLevi = HomingLeviathan(data.proj, nearCombatTargets, a_actor, Config::HProjectileLoopCount, Config::ReturnHProjectileAfterLoops);
             }
         }
         if (justContinue) return;
-#ifdef EXPERIMENTAL_UNEQUIP_AFTER_THROW
-        WeaponIdentify::isLeviathanAxe = false;
-        Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
-        a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
-        WeaponIdentify::skipEquipAnim = true;
-        WeaponIdentify::unequipWhenAnimEnds = true;
-#endif
+
+        if (Config::IsAdvancedThrowingInstalled && !a_actor->IsAttacking()) {
+            WeaponIdentify::skipEquipAnim = true;
+            ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
+            ResetEquipAnimationAfter(100, a_actor);
+        } else {
+            WeaponIdentify::isLeviathanAxe = false;
+            WeaponIdentify::isRelic = false;
+            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
+            a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
+            WeaponIdentify::skipEquipAnim = true;
+            WeaponIdentify::unequipWhenAnimEnds = true;
+        }
+
         a_actor->SetGraphVariableBool("bLeviInCatchRange", false);
 
+        kratos->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false, Kratos::Relic::kLeviathanAxe);
         kratos->SetIsCanCallAxe(a_actor);
         isAxeCalled = false;
         isAxeThrowed = true;
@@ -1151,14 +1284,16 @@ void LeviathanAxe::Throw(const bool isVertical, const bool justContinue, const b
         if (a_actor->HasSpell(SpellCatchLevi)) a_actor->RemoveSpell(SpellCatchLevi);
     } else spdlog::info("Leviathan Axe is not equipped for throwing!");
 }
-void LeviathanAxe::Call(const bool a_justDestroy, RE::Actor* a_actor)
+void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE::Actor* a_actor)
 {
     if (a_actor && data.weap) {
         spdlog::debug("Levi is calling...");
+        trailUpdate.Done();
+        data.model = nullptr;
         auto stuckedLevi =  LastLeviProjectile ? LastLeviProjectile : nullptr;
         if (!stuckedLevi)   stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : (LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
         if (stuckedLevi) {
-            data.position = stuckedLevi->data.location;
+            if (!a_justContinue) data.position = stuckedLevi->data.location;
             auto& runtimeData = stuckedLevi->GetProjectileRuntimeData();
             auto& pFlags = runtimeData.flags;
             if (!(pFlags & (1 << 25))) {
@@ -1191,10 +1326,32 @@ void LeviathanAxe::Call(const bool a_justDestroy, RE::Actor* a_actor)
             auto& leviProjEffSetting = leviProjEff->effectItem;
             leviProjEffSetting.magnitude = mag * 0.25f;
 
+
             RE::NiPoint3 startPoint = data.position;
-            SetStartPos(startPoint, AnArchos);
+            RE::NiPoint3  targetPoint = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
+            if (!a_justContinue) {
+                GetPosition(startPoint, AnArchos);
+                arrivingLevi.arrivingRelativeAngleZ = 0.5f;
+                a_actor->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingLevi.arrivingRelativeAngleZ);
+            //    RE::NiMatrix3 handRot = WeaponIdentify::RHandBone->world.rotate;
+            //    RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec);
+            //    RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec);
+            //    palmDir.Unitize();
+            //    handForward.Unitize();
+                RE::NiPoint3 p0 = arrivingLevi.startPosition;
+                RE::NiPoint3 p3 = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
+                RE::NiPoint3 linearArrivingDir = p3 - p0;
+                linearArrivingDir.Unitize();
+                const float distanceFromStart = p0.GetDistance(p3);
+            //    RE::NiPoint3 p1 = p0 + linearArrivingDir * distanceFromStart / 3.f;
+            //    RE::NiPoint3 p2 = p3 + palmDir * (distanceFromStart / 3.f + 50.f) + handForward * (distanceFromStart / 3.f + 50.f);
+            //    float charZ = AnArchos->GetPosition().z;
+            //    if (p2.z < charZ) p2.z = charZ;
+            //    float segmentCount = Config::ArrivalTime / *g_deltaTimeRealTime;
+            //    data.arrivingRoute = MathUtil::Algebra::DrawAndMeasureBezier(p0, p1, p2, p3, (int)segmentCount);
+            }
             RE::ProjectileHandle pHandle;
-            RE::Projectile::ProjectileRot pRot = {-AnArchos->GetAimAngle(), -AnArchos->GetAimHeading()};
+            RE::Projectile::ProjectileRot pRot(MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation));
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellLeviProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
@@ -1211,23 +1368,16 @@ void LeviathanAxe::Call(const bool a_justDestroy, RE::Actor* a_actor)
             auto kratos = Kratos::GetSingleton();
             if (GetThrowState() == tState::kThrowable) kratos->SetIsCanCallAxe(a_actor, false);
 
-            if (APIs::Request()) {
-                std::jthread DrawProjectileTrail([=]() {
-                    AsyncUtil::GameTime gameTime;
-                    gameTime.RegisterForUpdate(0.1f);
-                    while (!gameTime.IsTimeToUpdate() || !(pHandle.get() && pHandle.get()->Get3D2())) {
-                        std::this_thread::sleep_for(std::chrono::seconds((long)(*g_deltaTime)));
-                    }
-                    if (pHandle.get() && pHandle.get()->Get3D2()) {
-                        PRECISION_API::TrailOverride trailOverride;
-                        trailOverride.baseColorOverride = RE::NiColorA(0.5f, 0.5f, 1.f, 1.f);
-                        trailOverride.baseColorScaleMult = 3.f;
-                    //    trailOverride.lifetimeMult = 3.f;
-                        APIs::precision->AddAttackTrail(pHandle.get()->Get3D2()->AsNode(), a_actor->GetHandle(), a_actor->parentCell, pHandle.get().get(), trailOverride);
-                    } else spdlog::warn("can't draw mjolnir trail!");
-                });
-                DrawProjectileTrail.detach();
+            trailUpdate.RegisterForUpdate(0.01, false);
+            
+            if (a_justContinue) {
+                arrivingLevi.proj = pHandle.get().get();
+                arrivingLevi.linearDistanceFromLastCallPos = startPoint.GetDistance(targetPoint);
+            //    arrivingLevi.timeToArrive = arrivingLevi.linearDistanceFromLastCallPos / arrivingLevi.speed;
+            } else {
+                arrivingLevi = ArrivingLeviathan(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
             }
+
             spdlog::info("Levi is arriving...");
         } else {spdlog::warn("WEIRD SpellLeviProjA is nullptr!");}
     } else {spdlog::warn("WEIRD you don't have the axe for calling!!");}
@@ -1235,6 +1385,12 @@ void LeviathanAxe::Call(const bool a_justDestroy, RE::Actor* a_actor)
 void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
 {
     if (LeviathanAxeProjectileA) {
+        if (APIs::precision || APIs::Request()) {
+            APIs::precision->RemoveProjectileCollision(a_actor->GetHandle(), collisionDefinition);
+        }
+
+        trailUpdate.Done();
+        data.model = nullptr;
         auto& runtimeData = LeviathanAxeProjectileA->GetProjectileRuntimeData();
         runtimeData.flags |= (1 << 25);                                     //  set as destroyed, RE::Projectile::Flags::kDestroyed
         if (a_justDestroy) return;
@@ -1302,6 +1458,7 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
                 ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 300.f);
                 kratos->chargeData.lastBuffedLevi = data.weap->formID;
                 kratos->SetIsCanCharge(AnArchos, false);
+                _isCharged = true;
                 spdlog::debug("magnitude buffing from {} to: {}", mag / a_magnitude, mag);
 
                 auto weapBone = WeaponIdentify::WeaponBone;
@@ -1322,6 +1479,7 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
                     ObjectUtil::Enchantment::EnchantEquippedWeapon(AnArchos, ench, 300.f, false, false);
                     ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 300.f);
                     kratos->chargeData.lastChargedLevi = data.weap->formID;
+                    _isCharged = true;
 
                 //  AnArchos->GetActorRuntimeData().emotionType = RE::EmotionType::kAnger;
                 //  AnArchos->GetActorRuntimeData().emotionValue = 100;
@@ -1353,8 +1511,10 @@ void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, c
 {
     auto kratos = Kratos::GetSingleton();
     if (a_justReset) {
-        if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), data.weap) == EnchCharge)
+        if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), data.weap) == EnchCharge) {
             ObjectUtil::Enchantment::DisEnchantInventoryWeapon(RE::PlayerCharacter::GetSingleton(), data.weap);
+            _isCharged = false;
+        }
     } else if (kratos->IsEquipped(Kratos::Relic::kLeviathanAxe)) {
         if (chargeHitCount <= 0) {
             if (a_magnitude) *a_magnitude = a_defMagnitude;
@@ -1363,6 +1523,7 @@ void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, c
                     ObjectUtil::Enchantment::DisEnchantInventoryWeapon(RE::PlayerCharacter::GetSingleton(), data.weap);
             }
             kratos->SetIsCanCharge(RE::PlayerCharacter::GetSingleton());
+            _isCharged = false;
         } else if (!a_justCheck) {chargeHitCount -= 1;}
     }
 }
@@ -1428,6 +1589,7 @@ void LeviathanAxe::TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3
         a_position += (leftDir * a_offset);
     }
 }
+bool LeviathanAxe::IsArriving(RE::Projectile* a_proj) const {return a_proj == arrivingLevi.proj;}
 bool LeviathanAxe::IsHoming(RE::Projectile* a_proj) const {return a_proj == homingLevi.proj;}
 #pragma endregion
 #pragma region Blades_of_Chaos
@@ -1494,7 +1656,7 @@ bool Draupnir::Initialize()
 
     return found;
 }
-void Draupnir::Update()
+void Draupnir::Update(const float a_delta)
 {
     if (explosionsStarted) {
         if (AsyncUtil::GameTime::GetEngineTime() >= nextExplosionTime) {
@@ -1606,7 +1768,7 @@ void Draupnir::RainOfDraupnir()
 void Draupnir::Call(const float a_damage, const float a_force)  //detonate throwed draupnir spears like ragnarok
 {
     if (WeaponIdentify::DraupnirSpear && SpellDraupnirsCallProjL && DraupnirExplosion) {
-        DraupnirExplosion->data.force = a_force;
+        DraupnirExplosion->data.force = a_force * explosionMagnitude;
         StartExplosions(Config::DraupnirExplosionsInterval);
     }
 }
@@ -1648,6 +1810,7 @@ inline void Draupnir::TriggerExplosions(float a_delay, float a_force, RE::Projec
         if (AsyncUtil::GameTime::GetEngineTime() > timeToDoneExplosions) {
             explosionsStarted = false;
             currentHitIndex = 0;
+            SetExplosionMagnitude(1.f);
             spdlog::info("draupnir explosion chain finished");
         } spdlog::info("all draupnir explosions done");
     } else {
@@ -1680,6 +1843,8 @@ inline void Draupnir::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::Project
     RE::Projectile::Launch(a_pHandle, lData);
     auto damage = ObjectUtil::Actor::GetWeaponAttackDamage(RE::PlayerCharacter::GetSingleton(), a_target, WeaponIdentify::DraupnirSpear);
     damage /= ((1.f + (float)(RE::PlayerCharacter::GetSingleton()->GetGameStatsData().difficulty)) / 5.f);
+    damage *= explosionMagnitude;
+    FenixUtils::stagger(std::clamp(damage/10.f, 0.1f, 100.f), a_target, RE::PlayerCharacter::GetSingleton());
     if (auto targetAVO = a_target->AsActorValueOwner(); targetAVO)
         targetAVO->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
 }
@@ -1695,7 +1860,7 @@ bool Mjolnir::Initialize()
     SpellMjolnirProjT   = dataHandler->LookupForm<RE::SpellItem>        (0x842, Config::KratosCombatESP);
     SpellMjolnirProjA   = dataHandler->LookupForm<RE::SpellItem>        (0x846, Config::KratosCombatESP);
     SpellCatchMjolnir   = dataHandler->LookupForm<RE::SpellItem>        (0x81D, Config::KratosCombatESP);
-    EnchCharge          = dataHandler->LookupForm<RE::EnchantmentItem>  (0x45F9E, "Skyrim.esm");     // EnchWeaponShockDamage06, +30 shock damage, ff, touch
+    EnchCharge          = dataHandler->LookupForm<RE::EnchantmentItem>  (0x84C, Config::KratosCombatESP);   // +30 shock damage, ff, touch
     if (MjolnirProjBaseT && MjolnirProjBaseA)
             spdlog::debug("Mjolnir projectiles are {} and {}", MjolnirProjBaseT->GetName(), MjolnirProjBaseA->GetName());
     else     {spdlog::error("Can't find Mjolnir projectiles"); found = false;}
@@ -1715,31 +1880,108 @@ bool Mjolnir::Initialize()
 
     return found;
 }
-void Mjolnir::Update() {}
+void Mjolnir::Update(const float a_delta) {
+    if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsEquipped(Kratos::Relic::kMjolnir)) {
+        if (kratos->IsChargingThrow()) {
+            data.throwingChargeDuration += a_delta;
+        }
+    }
+    if (callUpdate.IsTimeToUpdate()) {
+        Call();
+    }
+    if (false && Config::DrawTrails) {
+        if (auto rootBone = data.model; rootBone) {
+            if (trailUpdate.IsTimeToUpdate()) {
+                auto bone = rootBone;
+#ifdef PRECISION
+                if (bone && (APIs::precision || APIs::Request())) {
+                    trailUpdate.Done();
+                    auto trailNode = RE::NiNode::Create(0);
+                    if (auto node = bone->AsNode(); node) node->AttachChild(trailNode, true);
+                //    PRECISION_API::TrailOverride trailOverride;//(2.f, RE::NiColorA(), 2.f, Config::TrailModelPathLevi.data());
+                //    trailOverride.meshOverride = Config::TrailModelPathLevi.data();
+                    APIs::precision->AddAttackTrail(trailNode, RE::PlayerCharacter::GetSingleton()->GetHandle(), RE::PlayerCharacter::GetSingleton()->GetParentCell(), LastMjolnirProjectile, std::nullopt);
+                //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastLeviProjectile);
+                }
+            }
+#else
+                float particleMult = _isCharged ? 2.f : 1.f;
+                float length = bone->worldBound.radius;//60.f;
+            //    spdlog::debug("Mjolnir projectile length is {}", length);
+                float tipOffset = length;// / 3.f;
+                data.trailTransform = bone->world * bone->local;
+                data.trailTransform.translate = data.trailTransform * RE::NiPoint3(0.f, 0.f, tipOffset);
+
+                auto projTrail = RE::NiPointer<RE::BSTempEffectParticle>(RE::BSTempEffectParticle::Spawn(RE::PlayerCharacter::GetSingleton()->GetParentCell(), 10.f, Config::TrailModelPathMjolnir.data(), data.trailTransform.rotate, data.trailTransform.translate, 0.01f * length, 7, nullptr));
+                if (data.projTrails.size() < particleMult * Config::TrailParticleCount) {
+                    data.projTrails.insert(data.projTrails.begin(), projTrail);
+                }
+            //    if (data.projTrails.size() > particleMult * Config::TrailParticleCount) {
+            //    //    data.projTrails.pop_back();
+            //        trailUpdate.Done();
+            //    }
+            }
+        }
+        if (!data.projTrails.empty()) {
+            uint8_t trailIndex(1);
+            data.projTrails.erase(
+                std::remove_if(data.projTrails.begin(), data.projTrails.end(),
+                    [a_delta, &trailIndex, this](RE::NiPointer<RE::BSTempEffectParticle> projTrail) {
+                        if (projTrail) {
+                            if (projTrail->age >= projTrail->lifetime) {
+                                projTrail->~BSTempEffectParticle();
+                                projTrail.~NiPointer();
+                            //    spdlog::debug("{}. projectile trail removed! age: {} lifetime: {}", trailIndex, projTrail->age, projTrail->lifetime);
+                                return true; // Mark for removal
+                            } else {
+                                if (projTrail->age > 1.f) projTrail->age += a_delta;    //  projTrail->lifetime can't be changed, it is always 1.f;
+                            //    spdlog::debug("{}. projectile trail age is {}", trailIndex, projTrail->age);
+                            }
+                        //    trailIndex++;
+                        }
+                        return false; // Keep in the vector
+                    }),
+                data.projTrails.end());
+            for (auto& projTrail : data.projTrails) {
+                auto particleObject = projTrail ? projTrail->particleObject : nullptr;
+                auto fadeNode = particleObject ? particleObject->AsFadeNode() : nullptr;
+                auto trailRoot = fadeNode ? fadeNode->GetObjectByName("TrailRoot"sv) : nullptr;
+                auto trailRootNode = trailRoot ? trailRoot->AsNode() : nullptr;
+                if (trailRootNode && !trailRootNode->GetChildren().empty()) {
+                    trailRootNode->world = data.trailTransform;
+                //    trailRootNode->local = ObjectUtil::Node::GetLocalTransform(trailRootNode, data.trailTransform);
+                //    spdlog::debug("{}. projectile trail transform updated! age: {} lifetime: {}", trailIndex, projTrail->age, projTrail->lifetime);
+                } trailIndex++;
+#endif
+            }
+        }
+    }
+}
 tStateM Mjolnir::GetThrowState()     const      {return throwState;}
 void Mjolnir::SetThrowState(ThrowState a_state) {throwState = a_state;}
-void Mjolnir::SetStartPos(RE::NiPoint3& a_point, RE::Actor* a_actor)
+void Mjolnir::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 {
     if (!a_actor) return;
     auto thrownMjolnir =  LastMjolnirProjectile;
-//    if (!thrownMjolnir) thrownMjolnir = MjolnirProjectileT;
+    if (!thrownMjolnir) thrownMjolnir = MjolnirProjectileT;
     if (thrownMjolnir) {
-        a_point = thrownMjolnir->data.location; 
+        a_point = thrownMjolnir->data.location;
     } else spdlog::debug("we can't get thrown Mjolnir proj!");
 
-    auto pcCell = a_actor->parentCell;
-    auto bound = pcCell->GetRuntimeData().cellData.exterior->worldX;
-    auto pcPos = a_actor->GetPosition();
-    float dist = pcPos.GetDistance(a_point);
-    if (dist > 36000.f) {   // ~42000 is limit
-        spdlog::info("Mjolnir too far from you! ({} m)", (int)dist / 100);
-        auto dir = a_point - pcPos;
-        dir.Unitize();
-        a_point = pcPos + dir * 36000.f;
-    }
     if (GetThrowState() == tStateM::kThrowable) {
-        if (auto backWeaponSheathe = a_actor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
+        if (auto backWeaponSheathe = a_actor->GetNodeByName("WeaponMace"); backWeaponSheathe) {
             a_point = backWeaponSheathe->world.translate;
+        }
+    } else {
+        auto pcCell = a_actor->parentCell;
+        auto bound = pcCell->GetRuntimeData().cellData.exterior->worldX;
+        auto pcPos = a_actor->GetPosition();
+        float dist = pcPos.GetDistance(a_point);
+        if (dist > 36000.f) {   // ~42000 is limit
+            spdlog::info("Mjolnir too far from you! ({} m)", (int)dist / 100);
+            auto dir = a_point - pcPos;
+            dir.Unitize();
+            a_point = pcPos + dir * 36000.f;
         }
     }
 }
@@ -1748,28 +1990,34 @@ void Mjolnir::Throw(const bool justContinue, const bool isVertical, const bool i
     const auto MjolnirThrowSpell = (isVertical ? SpellMjolnirProjT : SpellMjolnirProjT);
     if (a_actor && MjolnirThrowSpell && (WeaponIdentify::isMjolnir || justContinue)) 
     {   //  calculate damage
-        const auto MjolnirDamage = static_cast<float>(data.weap->attackDamage);
-        float mag = MjolnirDamage * WeaponIdentify::DamageMult;
-        if (isVertical) {mag *= 1.5f; data.yAngle = 1.57f;}
-        else data.yAngle = 0.35f;
         const auto MjolnirProjEff = MjolnirThrowSpell->effects[0];
         auto& MjolnirProjEffSetting = MjolnirProjEff->effectItem;
-        MjolnirProjEffSetting.magnitude = mag;
+        auto& mag = MjolnirProjEffSetting.magnitude;
+        const auto MjolnirDamage = static_cast<float>(data.weap->attackDamage);
+        mag = MjolnirDamage * WeaponIdentify::DamageMult;
+        bool isPowerThrow; a_actor->GetGraphVariableBool("IsPowerThrowing", isPowerThrow);
+        if (isVertical || isPowerThrow) {mag *= 1.5f; data.yAngle = 1.57f;}
+        else data.yAngle = 0.f;
+        float throwChargeDamageMult = std::sqrtf(data.throwingChargeDuration + 1.f);
+        if (throwChargeDamageMult > 2.f) throwChargeDamageMult = 2.f;
+        mag *= throwChargeDamageMult;
 
-      if (const auto MjolnirProjBaseEff = MjolnirProjEff->baseEffect; MjolnirProjBaseEff) {
-          MjolnirProjBaseEff->data.projectileBase->SetModel(data.weap->GetModel());
-          MjolnirProjBaseEff->data.projectileBase->data.speed = justContinue ? MjolnirProjBaseEff->data.projectileBase->data.speed * 0.8f : Config::ThrowSpeed * 0.7f;
-      } else spdlog::warn("not found throwing effect!");
+        if (const auto MjolnirProjBaseEff = MjolnirProjEff->baseEffect; MjolnirProjBaseEff) {
+            MjolnirProjBaseEff->data.projectileBase->SetModel(data.weap->GetModel());
+            MjolnirProjBaseEff->data.projectileBase->data.speed = justContinue ? MjolnirProjBaseEff->data.projectileBase->data.speed * 0.8f : Config::ThrowSpeed * 0.7f;
+            MjolnirProjBaseEff->data.projectileBase->data.force = mag * 1.5f;
+        } else spdlog::warn("not found mjolnir throwing effect!");
 
-    //  AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(MjolnirThrowSpell, false, nullptr, 1.f, false, mag, AnArchos);
-    //  auto origin = AnArchos->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->GetMagicNode()->world.translate;
+        if (!justContinue) {
+            data.gravity = 3.f / (std::powf(data.throwingChargeDuration + 1.f, 3.f));
+        }
 
         auto kratos = Kratos::GetSingleton();
         //  set the launch data
         auto origin = justContinue ? data.position : WeaponIdentify::RHandBone->world.translate;
         RE::ProjectileHandle pHandle;
         RE::Projectile::ProjectileRot pRot = RE::Projectile::ProjectileRot(a_actor->GetAimAngle(), a_actor->GetAimHeading());
-        if (data.model && (justContinue/* || isHoming*/)) a_actor->Unk_A0(data.model, pRot.x, pRot.z, origin);
+        if (data.model && (justContinue/* || isHoming*/)) pRot = MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation);//a_actor->Unk_A0(data.model, pRot.x, pRot.z, origin);
         RE::Projectile::LaunchData lData(a_actor, origin, pRot, MjolnirThrowSpell);
 
         lData.weaponSource = data.weap;
@@ -1781,23 +2029,7 @@ void Mjolnir::Throw(const bool justContinue, const bool isVertical, const bool i
         //  throw the projectile
         RE::Projectile::Launch(&pHandle, lData);
 
-        if (APIs::Request()) {
-            std::jthread DrawProjectileTrail([=]() {
-                AsyncUtil::GameTime gameTime;
-                gameTime.RegisterForUpdate(0.1f);
-                while (!gameTime.IsTimeToUpdate() || !(pHandle.get() && pHandle.get()->Get3D2())) {
-                    std::this_thread::sleep_for(std::chrono::seconds((long)(*g_deltaTime)));
-                }
-                if (pHandle.get() && pHandle.get()->Get3D2()) {
-                    PRECISION_API::TrailOverride trailOverride;
-                    trailOverride.baseColorOverride = RE::NiColorA(0.5f, 0.5f, 1.f, 1.f);
-                    trailOverride.baseColorScaleMult = 3.f;
-                //    trailOverride.lifetimeMult = 3.f;
-                    APIs::precision->AddAttackTrail(pHandle.get()->Get3D2()->AsNode(), a_actor->GetHandle(), a_actor->parentCell, pHandle.get().get(), trailOverride);
-                } else spdlog::warn("can't draw mjolnir trail!");
-            });
-            DrawProjectileTrail.detach();
-        }
+        trailUpdate.RegisterForUpdate(0.01f, false);
 
         if (isHoming) {
             if (justContinue) {
@@ -1808,17 +2040,26 @@ void Mjolnir::Throw(const bool justContinue, const bool isVertical, const bool i
             }
         }
         if (justContinue) return;
-#ifdef EXPERIMENTAL_UNEQUIP_AFTER_THROW
-        WeaponIdentify::isMjolnir = false;
-        Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
-        a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
-        WeaponIdentify::skipEquipAnim = true;
-        WeaponIdentify::unequipWhenAnimEnds = true;
-#endif
+        if (Config::IsAdvancedThrowingInstalled && !a_actor->IsAttacking()) {
+            WeaponIdentify::skipEquipAnim = true;
+            ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
+            ResetEquipAnimationAfter(100, a_actor);
+        } else {
+            WeaponIdentify::isMjolnir = false;
+            WeaponIdentify::isRelic = false;
+            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
+            a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
+            WeaponIdentify::skipEquipAnim = true;
+            WeaponIdentify::unequipWhenAnimEnds = true;
+        }
+
         a_actor->SetGraphVariableBool("bLeviInCatchRange", false);
 
+
+    //    kratos->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false, Kratos::Relic::kMjolnir);
         kratos->SetIsCanCallMjolnir(a_actor);
         isMjolnirCalled = false;
+        isMjolnirArriving = false;
         isMjolnirThrowed = true;
         SetThrowState(ThrowState::kThrown);
         WeaponIdentify::EquippedObjR = nullptr;
@@ -1830,12 +2071,29 @@ void Mjolnir::Throw(const bool justContinue, const bool isVertical, const bool i
         if (a_actor->HasSpell(SpellCatchMjolnir)) a_actor->RemoveSpell(SpellCatchMjolnir);
     } else spdlog::info("Mjolnir is not equipped for throwing!");
 }
-void Mjolnir::Call(const bool a_justDestroy, RE::Actor* a_actor)
+void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::optional<float> a_delay, RE::Actor* a_actor)
 {
-    if (a_actor && data.weap) {
+    auto kratos = Kratos::GetSingleton();
+    const bool isDelayed = a_delay.has_value() && a_delay != 0.f;
+    const bool isDelayedConfig = Config::MjolnirArrivingDelay.has_value() && Config::MjolnirArrivingDelay != 0.f;
+    if (!a_justContinue && (isDelayed || (!isDelayed && !isDelayedConfig))) {
+        if (isDelayed) callUpdate.RegisterForUpdate(*a_delay, true);
+        ObjectUtil::Sound::PlaySound(kratos->soundEffect.fingerSnap, WeaponIdentify::RHandBone, 5.f);
+        isMjolnirCalled = true;
+        isMjolnirArriving = false;
+        RE::NiPoint3 pos;
+        GetPosition(pos, a_actor);
+        arrivingMjolnir = ArrivingMjolnir(a_actor, WeaponIdentify::RHandBone, pos);
+
         spdlog::debug("Mjolnir is calling...");
+    }
+    if ((isDelayed || isDelayedConfig)) {
+        spdlog::debug("waiting the delay {} seconds...", a_delay.has_value() ? *a_delay : 0.f);
+    } else if (a_actor && data.weap) {
+        trailUpdate.Done();
+        data.model = nullptr;
         auto thrownMjolnir =  LastMjolnirProjectile;
-//        if (!thrownMjolnir)   thrownMjolnir = MjolnirProjectileT;
+        if (!thrownMjolnir)   thrownMjolnir = MjolnirProjectileT;
         if (thrownMjolnir) {
             data.position = thrownMjolnir->data.location;
             auto& runtimeData = thrownMjolnir->GetProjectileRuntimeData();
@@ -1845,14 +2103,14 @@ void Mjolnir::Call(const bool a_justDestroy, RE::Actor* a_actor)
             } else  spdlog::debug("Mjolnir is already destroyed");
 
             if (a_justDestroy) {
-                isMjolnirCalled = false;
+                isMjolnirArriving = false;
                 isMjolnirThrowed = false;
                     return;
             }
         } else {spdlog::debug("thrown Mjolnir is nullptr!");}
 
         if (auto AnArchos = PlayerCharacter::GetSingleton(); !a_justDestroy && AnArchos && SpellMjolnirProjA) {
-            isMjolnirCalled = true;
+            isMjolnirArriving = true;
             isMjolnirThrowed = false;
 
             const auto MjolnirDamage = (float)(data.weap->attackDamage);
@@ -1865,9 +2123,11 @@ void Mjolnir::Call(const bool a_justDestroy, RE::Actor* a_actor)
             } else spdlog::warn("not found Mjolnir throwing effect!");
 
             RE::NiPoint3 startPoint = data.position;
-            SetStartPos(startPoint, AnArchos);
+            GetPosition(startPoint, AnArchos);
+            RE::NiPoint3  targetPoint = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
+
             RE::ProjectileHandle pHandle;
-            RE::Projectile::ProjectileRot pRot = {AnArchos->GetAimAngle(), AnArchos->GetAimHeading()};
+            RE::Projectile::ProjectileRot pRot(MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation));
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellMjolnirProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
@@ -1879,9 +2139,19 @@ void Mjolnir::Call(const bool a_justDestroy, RE::Actor* a_actor)
                 lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
 
             WeaponIdentify::isBarehanded = false;
+            data.model = nullptr;
             RE::Projectile::Launch(&pHandle, lData);
+            trailUpdate.RegisterForUpdate(0.01f, false);
+
+            if (a_justContinue) {
+                arrivingMjolnir.proj = pHandle.get().get();
+                arrivingMjolnir.linearDistanceFromLastCallPos = startPoint.GetDistance(targetPoint);
+            //    arrivingMjolnir.timeToArrive = arrivingLevi.linearDistanceFromLastCallPos / arrivingLevi.speed;
+            } else {
+                arrivingMjolnir = ArrivingMjolnir(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
+            }
+
             SetThrowState(ThrowState::kArriving);
-            auto kratos = Kratos::GetSingleton();
             if (GetThrowState() == tStateM::kThrowable) kratos->SetIsCanCallMjolnir(a_actor, false);
             spdlog::info("Mjolnir is arriving...");
         } else {spdlog::warn("WEIRD SpellMjolnirProjA is nullptr!");}
@@ -1890,6 +2160,8 @@ void Mjolnir::Call(const bool a_justDestroy, RE::Actor* a_actor)
 void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
 {
     if (MjolnirProjectileA) {
+        trailUpdate.Done();
+        data.model = nullptr;
         auto& runtimeData = MjolnirProjectileA->GetProjectileRuntimeData();
         runtimeData.flags |= (1 << 25);                                     //  set as destroyed, RE::Projectile::Flags::kDestroyed
         if (a_justDestroy) return;
@@ -1940,7 +2212,7 @@ void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, co
     auto enchBase   = enchEffect ? enchEffect->baseEffect : nullptr;
     const auto mjolnirDam  = data.damage;
 
-    if (data.weap && chargeHitCount <= 0) {
+    if (data.weap) {
         if (auto handEffect = kratos->VFXeffect.handShock; handEffect) AnArchos->ApplyArtObject(handEffect, a_chargeHitCount * 2, nullptr, false, false, WeaponIdentify::WeaponBone);
         if (auto soundEffect = kratos->soundEffect.chargeMjolnirEnd; soundEffect) ObjectUtil::Sound::PlaySound(soundEffect, WeaponIdentify::WeaponBone, 5.f);
         if (kratos && (kratos->vanillaSpell.thunderbolt || kratos->kittyTailSpell.lightningFlood)) {
@@ -1949,45 +2221,107 @@ void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, co
             auto origin2 = WeaponIdentify::WeaponBone->world.translate;
             auto pRot = RE::Projectile::ProjectileRot(PI2, 0.f);
             auto pRot2 = RE::Projectile::ProjectileRot(-PI2, 0.f);
+#ifdef OVERPOWERED
+            RE::Projectile::LaunchData lData(AnArchos, origin, pRot, kratos->kittyTailSpell.lightningFlood ? kratos->kittyTailSpell.lightningFlood : kratos->vanillaSpell.thunderbolt);
+#else
             RE::Projectile::LaunchData lData(AnArchos, origin, pRot, kratos->kittyTailSpell.lightningFlood && a_stage == 3u ? kratos->kittyTailSpell.lightningFlood : kratos->vanillaSpell.thunderbolt);
-            RE::Projectile::LaunchData lData2(AnArchos, origin2, pRot2, kratos->kittyTailSpell.lightningFlood && a_stage == 3u ? kratos->kittyTailSpell.lightningFlood : kratos->vanillaSpell.thunderbolt);
-            lData.noDamageOutsideCombat = true;
-            lData2.noDamageOutsideCombat = true;
+#endif
+            RE::Projectile::LaunchData lData2(AnArchos, origin2, pRot2, kratos->vanillaSpell.lightningBolt);
+            lData.noDamageOutsideCombat, lData2.noDamageOutsideCombat = true;
+#ifdef OVERPOWERED
             RE::Projectile::Launch(&pHandle, lData);
+#else
+            if (a_stage == 3u) RE::Projectile::Launch(&pHandle, lData);
+#endif
             RE::Projectile::Launch(&pHandle2, lData2);
             ObjectUtil::Actor::SendAnimationEvent(AnArchos, "weaponSwing");
+            if (a_stage >= 2u) {
+                auto combatTargets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(AnArchos, 333.f, true);
+                uint8_t launchedProjectileCount = 0;
+                const uint8_t projectileCount = a_stage * 2u;
+                const float angleStep = TWO_PI / projectileCount;
+                for (auto& target : combatTargets) {
+                    RE::ProjectileHandle pHandle3;
+                    auto targetPos = target->GetNodeByName("NPC Spine2 [Spn2]") ? target->GetNodeByName("NPC Spine2 [Spn2]")->world.translate : (target->GetPosition() + (target->GetBoundMax() + target->GetBoundMin()) / 2.f);
+                    auto direction = targetPos - origin2;
+                    direction.Unitize();
+                    RE::Projectile::ProjectileRot pRot3(MathUtil::Algebra::VectorToPitchYaw(direction));
+                    RE::Projectile::LaunchData lData3(AnArchos, origin2, pRot3, kratos->vanillaSpell.lightningBolt);
+                    lData3.autoAim = false;
+                    lData3.alwaysHit = true;
+                    lData3.desiredTarget = target;
+                    RE::Projectile::Launch(&pHandle3, lData3);
+                    launchedProjectileCount++;
+                    if (launchedProjectileCount >= projectileCount) break; //  limit the projectiles count
+                }
+                for (float i = launchedProjectileCount * angleStep; launchedProjectileCount < projectileCount && i < 6.28f; i += angleStep) {
+                    RE::ProjectileHandle pHandle3;
+                    auto origin3 = WeaponIdentify::WeaponBone->world.translate;
+                    RE::Projectile::ProjectileRot pRot3(PI8, i);
+                    RE::Projectile::LaunchData lData3(AnArchos, origin3, pRot3, kratos->vanillaSpell.lightningBolt);
+                    lData3.autoAim = false;
+                    lData3.alwaysHit = true;    //  otherwise it will not hit even colliding with a target
+                    RE::Projectile::Launch(&pHandle3, lData3);
+                    launchedProjectileCount++;
+                    if (launchedProjectileCount >= projectileCount) break; //  limit the projectiles count
+                }
+            }
         }
 
-        if (enchBase) {
-            spdlog::debug("mjolnir's enchantment is: {}", ench->GetName());
-            if (enchBase->HasArchetype(RE::EffectSetting::Archetype::kDualValueModifier)
-             || enchBase->HasArchetype(RE::EffectSetting::Archetype::kValueModifier)) {
+        if (enchBase && (enchBase->HasArchetype(RE::EffectSetting::Archetype::kDualValueModifier) || enchBase->HasArchetype(RE::EffectSetting::Archetype::kValueModifier))) {
+            if (ench == EnchCharge) {
+                spdlog::debug("mjolnir is already charged with {}, buffing now...", ench->GetName());
+                ResetCharge(data.enchMag, data.defaultEnchMag, false, true);
+                ObjectUtil::Enchantment::EnchantEquippedWeapon(AnArchos, ench, 100.f * (float)a_stage, false, false);
+                ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 100.f * (float)a_stage);
+                auto& enchCost = ench->data.costOverride;
+                auto& enchAmount = ench->data.chargeOverride;
+                auto& mag = enchEffect->effectItem.magnitude;
+                const float defMag = mag;
+                enchAmount = 200.f * (float)a_stage;
+                mag = a_magnitude * ((float)a_stage / 3.f) * (mjolnirDam / 2.f);
+                enchCost = mag;
+                data.enchMag = nullptr;
+                if (mag > WeaponIdentify::DamageMult * data.weap->attackDamage) {
+                    mag = WeaponIdentify::DamageMult * data.weap->attackDamage;
+                    spdlog::warn("mjolnir's charge damage is too high, capped to: {}", mag);
+                } else spdlog::debug("magnitude buffed from {} to: {}", defMag, mag);
+                kratos->chargeData.lastBuffedMjolnir = data.weap->formID;
+                _isCharged = true;
+            //    if (a_stage == 3u) {
+                    chargeHitCount = a_chargeHitCount;
+                //    kratos->SetIsCanCharge(AnArchos, false, Kratos::Relic::kMjolnir);
+            //    }
+            } else {
+                spdlog::debug("mjolnir's enchantment is: {}", ench->GetName());
                 ResetCharge(data.enchMag, data.defaultEnchMag, false, true);
                 auto& mag = enchEffect->effectItem.magnitude;
+                const float defMag = mag;
                 data.enchMag = &mag;
                 data.defaultEnchMag = mag;
-                mag *= a_magnitude * a_stage / 3.f;
-                ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 100.f * a_stage);
+                mag = a_magnitude * ((float)a_stage / 3.f) * (mjolnirDam / 2.f);
+                ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 100.f * (float)a_stage);
                 kratos->chargeData.lastBuffedMjolnir = data.weap->formID;
-                if (a_stage == 3u) {
+                _isCharged = true;
+            //    if (a_stage == 3u) {
                     chargeHitCount = a_chargeHitCount;
-                    kratos->SetIsCanCharge(AnArchos, false, Kratos::Relic::kMjolnir);
-                }
-                spdlog::debug("magnitude buffing from {} to: {}", mag / a_magnitude, mag);
-
-            } else spdlog::debug("mjolnir's enchantment is not expected archetype.");
+                //    kratos->SetIsCanCharge(AnArchos, false, Kratos::Relic::kMjolnir);
+            //    }
+                spdlog::debug("magnitude buffed from {} to: {}", defMag, mag);
+            }
 #ifdef EXPERIMENTAL_CHARGE_LEVI
         } else {
-            spdlog::debug("mjolnir not has any enchantment, mjolnir is enchanting...");
+            spdlog::debug("mjolnir not has any damage enchantment, mjolnir is enchanting...");
             if (EnchCharge) {
                 ench = EnchCharge;
                 enchEffect  = ench ? ench->effects[0] : nullptr;
                 enchBase    = enchEffect ? enchEffect->baseEffect : nullptr;
                 if (enchBase) {
                     ResetCharge(data.enchMag, data.defaultEnchMag, false, true);
-                    ObjectUtil::Enchantment::EnchantEquippedWeapon(AnArchos, ench, 100.f * a_stage, false, false);
-                    ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 100.f * a_stage);
+                    ObjectUtil::Enchantment::EnchantEquippedWeapon(AnArchos, ench, 100.f * (float)a_stage, false, false);
+                    ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 100.f * (float)a_stage);
                     kratos->chargeData.lastChargedMjolnir = data.weap->formID;
+                    _isCharged = true;
 
                 //  AnArchos->GetActorRuntimeData().emotionType = RE::EmotionType::kAnger;
                 //  AnArchos->GetActorRuntimeData().emotionValue = 100;
@@ -1995,15 +2329,15 @@ void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, co
                     auto& enchCost = ench->data.costOverride;
                     auto& enchAmount = ench->data.chargeOverride;
                     auto& mag = enchEffect->effectItem.magnitude;
-                    enchAmount = 200.f * a_stage;
-                    mag = a_magnitude * (a_stage / 3.f) * (mjolnirDam / 2.f);
+                    enchAmount = 200.f * (float)a_stage;
+                    mag = a_magnitude * ((float)a_stage / 3.f) * (mjolnirDam / 2.f);
                     enchCost = mag;
                     data.enchMag = nullptr;
 
-                    if (a_stage == 3u) {
+                //    if (a_stage == 3u) {
                         chargeHitCount = a_chargeHitCount;
-                        kratos->SetIsCanCharge(AnArchos, false, Kratos::Relic::kMjolnir);
-                    }
+                    //    kratos->SetIsCanCharge(AnArchos, false, Kratos::Relic::kMjolnir);
+                //    }
                     spdlog::info("mjolnir charge shock damage buff is: {}", mag);
                 } else spdlog::error("can't find shock enchantment's base!!");
             } else spdlog::error("can't find shock enchantment!!");
@@ -2015,8 +2349,10 @@ void Mjolnir::ResetCharge(float* a_magnitude, const float a_defMagnitude, const 
 {
     auto kratos = Kratos::GetSingleton();
     if (a_justReset) {
-        if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), data.weap) == EnchCharge)
+        if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), data.weap) == EnchCharge) {
             ObjectUtil::Enchantment::DisEnchantInventoryWeapon(RE::PlayerCharacter::GetSingleton(), data.weap);
+            _isCharged = false;
+        }
     } else if (kratos->IsEquipped(Kratos::Relic::kMjolnir)) {
         if (chargeHitCount <= 0) {
             if (a_magnitude) *a_magnitude = a_defMagnitude;
@@ -2025,9 +2361,11 @@ void Mjolnir::ResetCharge(float* a_magnitude, const float a_defMagnitude, const 
                     ObjectUtil::Enchantment::DisEnchantInventoryWeapon(RE::PlayerCharacter::GetSingleton(), data.weap);
             }
             kratos->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), true, Kratos::Relic::kMjolnir);
+            _isCharged = false;
         } else if (!a_justCheck) {chargeHitCount -= 1;}
     }
 }
+bool Mjolnir::IsArriving(RE::Projectile* a_proj) const {return a_proj == arrivingMjolnir.proj;}
 bool Mjolnir::IsHoming(RE::Projectile* a_proj) const {return a_proj == homingMjolnir.proj;}
 #pragma endregion
 #ifdef TRIDENT
@@ -2066,7 +2404,7 @@ bool Trident::Initialize()
 
     return found;
 }
-void Trident::Update()
+void Trident::Update(const float a_delta)
 {
     if (tridentRainStarted) {
         if (AsyncUtil::GameTime::GetEngineTime() >= nextLaunchTime) {
@@ -2285,6 +2623,25 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 //            }
 //            break;
         case "CallWeapon"_h:
+            if (auto kratos = Kratos::GetSingleton(); kratos) {
+                switch (kratos->GetNextWeaponToCall())
+                {
+                case Kratos::Relic::kLeviathanAxe:
+                    LeviathanAxe::GetSingleton()->Call();
+                    break;
+                case Kratos::Relic::kMjolnir:
+                    Mjolnir::GetSingleton()->Call(false, false, Config::MjolnirArrivingDelay);
+                    break;
+#ifdef TRIDENT
+                case Kratos::Relic::kTrident:
+                    Trident::GetSingleton()->Call(10.f, 100.f, RE::PlayerCharacter::GetSingleton(), true);
+                    break;
+#endif
+                default:
+                    break;
+                }
+            }
+/*
             if (WeaponIdentify::lastThrownRelic == Kratos::Relic::kLeviathanAxe) {
                 if ((uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::Mjolnir && (uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() > 1U) Mjolnir::GetSingleton()->Call();
 #ifdef TRIDENT
@@ -2306,22 +2663,22 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
                 else Trident::GetSingleton()->Call(10.f, 100.f, RE::PlayerCharacter::GetSingleton(), true);
             }
 #endif
-            else spdlog::warn("Can't found any weapon for ready to calling!");
-            break;
+            else {spdlog::warn("Can't found any weapon for ready to calling! Trying to call Levi"); LeviathanAxe::GetSingleton()->Call();}
+*/            break;
         case "CatchLevi"_h:
             break;
         case "LeviCallAttack"_h:     //event: attackPowerStartInPlace, attackStart, PowerAttack [IDLE:000E8456], NormalAttack [IDLE:00013215]
-            if (auto Levi = LeviathanAxe::GetSingleton(); Levi->GetThrowState() == tState::kCanArrive && WeaponIdentify::LeviathanAxe) {
+            if (auto Levi = LeviathanAxe::GetSingleton(); !WeaponIdentify::isLeviathanAxe && WeaponIdentify::LeviathanAxe) {
                 Levi->Call(true);
                 auto AnArchos = PlayerCharacter::GetSingleton();
                 ObjectUtil::Actor::EquipItem(AnArchos, WeaponIdentify::LeviathanAxe, true, 1u, true, false, false, false);
                 ResetEquipAnimationAfter(100, AnArchos);
             } else spdlog::info("Levi is not callable");
         case "ThrowAttackStart"_h:
-            if (WeaponIdentify::isLeviathanAxe)
-                Kratos::GetSingleton()->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false);
-            if (WeaponIdentify::isMjolnir)
-                Kratos::GetSingleton()->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false, Kratos::Relic::kMjolnir);
+        //    if (WeaponIdentify::isLeviathanAxe)
+        //        Kratos::GetSingleton()->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false);
+        //    if (WeaponIdentify::isMjolnir)
+        //        Kratos::GetSingleton()->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false, Kratos::Relic::kMjolnir);
             break;
         case "ThrowWeapon"_h:
             if (WeaponIdentify::isLeviathanAxe) {
@@ -2353,14 +2710,8 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
                 } else spdlog::warn("Mjolnir is not throwable");
             }
             break;
-#ifndef EXPERIMENTAL_UNEQUIP_AFTER_THROW
         case "ThrowAttackEnd"_h:
-            if (auto AnArchos = PlayerCharacter::GetSingleton()) {
-                ObjectUtil::Actor::UnEquipItem(AnArchos, false, false, true, true, true, true);
-                ResetEquipAnimationAfter(100, AnArchos);
-            }
             break;
-#endif
         case "LeviChargeStart"_h:
             if (auto kratos = Kratos::GetSingleton(); auto AnArchos = RE::PlayerCharacter::GetSingleton()) {
                 if (kratos && AnArchos) {
@@ -2396,16 +2747,27 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
                 if (auto mjolnir = Mjolnir::GetSingleton())
                     mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 2u, -1);
             break;
-        case "MjolnirChargeEnd"_h:
+        case "MjolnirCharge3"_h:
             if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsCanCharge(PlayerCharacter::GetSingleton(), Kratos::Relic::kMjolnir))
                 if (auto mjolnir = Mjolnir::GetSingleton())
                     mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 3u, -1);
             break;
+    //    case "MjolnirChargeEnd"_h:
+    //        if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsCanCharge(PlayerCharacter::GetSingleton(), Kratos::Relic::kMjolnir))
+    //            if (auto mjolnir = Mjolnir::GetSingleton())
+    //                mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 3u, -1);
+    //        break;
         case "ThrowSpear"_h:
             if (WeaponIdentify::isDraupnirSpear) Draupnir::Throw();
 #ifdef TRIDENT
             else if(WeaponIdentify::isTrident) Trident::GetSingleton()->Throw();
 #endif
+            break;
+        case "DraupnirsCallStage1"_h:
+            if (WeaponIdentify::isDraupnirSpear) Draupnir::SetExplosionMagnitude(1.2f);
+            break;
+        case "DraupnirsCallStage2"_h:
+            if (WeaponIdentify::isDraupnirSpear) Draupnir::SetExplosionMagnitude(1.5f);
             break;
         case "DraupnirsCall"_h:
             if (WeaponIdentify::isDraupnirSpear) Draupnir::Call(10.f, 100.f);
@@ -2433,12 +2795,6 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             break;
         case "weaponDraw"_h:
             WeaponIdentify::WeaponCheck();
-        //    if (WeaponIdentify::isLeviathanAxe) {
-        //        if (auto Levi = LeviathanAxe::GetSingleton()) {
-        //            Levi->SetThrowState(tState::kThrowable);
-        //            Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, true);
-        //        }
-        //    }
             break;
         case "weaponSwing"_h:
             if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsInRage())
@@ -2489,6 +2845,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             break;
         case "FlameWhiplashStart"_h:
             if (auto BoC = BladeOfChaos::GetSingleton()) {
+            //    if (!BoC->IsScorching()) RE::PlayerCharacter::GetSingleton()->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kSpeedMult, 0.8f);
                 BoC->SetIsScorching();
                 BoC->SetScorchingSpeed(0.5f);
             }
@@ -2503,6 +2860,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             break;
         case "FlameWhiplashEnd"_h:
             if (auto BoC = BladeOfChaos::GetSingleton()) {
+            //    if (!BoC->IsScorching()) RE::PlayerCharacter::GetSingleton()->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kSpeedMult, -0.8f);
                 BoC->SetIsScorching(false);
             }
             break;
@@ -2512,19 +2870,47 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "tailCombatState"_h:
         case "tailCombatIdle"_h:
         case "attackStop"_h:
+        case "IdleStop"_h:
         case "CastOKStop"_h:
-#ifdef EXPERIMENTAL_UNEQUIP_AFTER_THROW
             if (WeaponIdentify::unequipWhenAnimEnds) {
                 if (auto AnArchos = PlayerCharacter::GetSingleton(); AnArchos) {
                     ObjectUtil::Actor::UnEquipItem(AnArchos, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
                     ResetEquipAnimationAfter(100, AnArchos);
                 } WeaponIdentify::unequipWhenAnimEnds = false;
             }
-#endif
 #ifdef EXPERIMENTAL_SHIELD
             //  animated shield
             ObjectUtil::Actor::SendAnimationEvent(PlayerCharacter::GetSingleton(), "shieldClose");
 #endif
+            break;
+        case "throwAttackReady"_h:
+        case "throwPowerAttackReady"_h:
+            if (Config::IsAdvancedThrowingInstalled) {
+                if (auto AnArchos = PlayerCharacter::GetSingleton(); AnArchos && WeaponIdentify::isRelic) {
+                    bool isThrowing; AnArchos->GetGraphVariableBool("bIsThrowing", isThrowing);
+                    if (isThrowing) {
+                        bool isChargingThrow; AnArchos->GetGraphVariableBool("bIsPressingAttackButton", isChargingThrow);
+                        if (!isChargingThrow) AnArchos->GetGraphVariableBool("bIsPressingPowerAttackButton", isChargingThrow);
+                        if (auto kratos = Kratos::GetSingleton(); kratos) {
+                            if (auto Levi = LeviathanAxe::GetSingleton(); WeaponIdentify::isLeviathanAxe && Levi->GetThrowState() == tState::kThrowable) {
+                                Levi->data.throwingChargeDuration = 0.f;
+                                if (isChargingThrow) kratos->SetIsChargingThrow(true);
+                            } else if (auto mjolnir = Mjolnir::GetSingleton(); WeaponIdentify::isMjolnir && mjolnir->GetThrowState() == tStateM::kThrowable) {
+                                mjolnir->data.throwingChargeDuration = 0.f;
+                                if (isChargingThrow) kratos->SetIsChargingThrow(true);
+                            } else if (WeaponIdentify::isDraupnirSpear || WeaponIdentify::isTrident) {
+                                if (isChargingThrow) kratos->SetIsChargingThrow(true);
+                            }
+                        }
+                    }
+                }
+            }
+            break;
+        case "throwAttackEndStart"_h:
+        case "throwPowerAttackEndStart"_h:
+            if (Config::IsAdvancedThrowingInstalled) {
+                if (auto kratos = Kratos::GetSingleton(); kratos) kratos->SetIsChargingThrow(false);
+            }
             break;
         }
     }
@@ -2561,13 +2947,16 @@ EventChecker MagicEffectApplyTracker::ProcessEvent(const RE::TESMagicEffectApply
                 if (!WeaponIdentify::isRelic) {
                     if (levi->data.weap || mjolnir->data.weap || WeaponIdentify::Trident) {
                         if ((uint_fast8_t)levi->GetThrowState() <= 3U && (uint_fast8_t)levi->GetThrowState() != 0U) {
+                            caster->SetGraphVariableInt("iNextWeaponToCall", (uint32_t)kratos->GetNextWeaponToCall());
                             caster->SetGraphVariableBool("bLeviInCatchRange", false);
                             kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
                         } else if ((uint_fast8_t)mjolnir->GetThrowState() <= 3U && (uint_fast8_t)mjolnir->GetThrowState() != 0U) {
+                            caster->SetGraphVariableInt("iNextWeaponToCall", (uint32_t)kratos->GetNextWeaponToCall());
                             caster->SetGraphVariableBool("bLeviInCatchRange", false);
                             kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
 #ifdef TRIDENT
                         } else if (!Trident::GetSingleton()->isTridentThrowable) {
+                            caster->SetGraphVariableInt("iNextWeaponToCall", (uint32_t)kratos->GetNextWeaponToCall());
                             caster->SetGraphVariableBool("bLeviInCatchRange", false);
                             kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
 #endif
@@ -2578,7 +2967,7 @@ EventChecker MagicEffectApplyTracker::ProcessEvent(const RE::TESMagicEffectApply
                         kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
                     }
                 } else if (WeaponIdentify::isBladeOfChaos) {
-                    BladeOfChaos::GetSingleton()->Update();
+                    BladeOfChaos::GetSingleton()->Update(*g_engineTime);
                     BladeOfChaos::GetSingleton()->BuffScorchingSpeed();
                     kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
                 } else if (WeaponIdentify::isDraupnirSpear || WeaponIdentify::isTrident) {
@@ -2613,51 +3002,6 @@ bool InputEventTracker::Register()
     } else  spdlog::warn("input event sink not registered!");
     return false;
 };
-EventChecker InputEventTracker::ProcessEvent(RE::InputEvent* const *a_event, RE::BSTEventSource<RE::InputEvent*> *a_eventSource)
-{
-    if (!a_event || RE::UI::GetSingleton()->GameIsPaused()) return EventChecker::kContinue;
-
-    for (auto event = *a_event; event; event = event->next) {
-        if (!event->HasIDCode() || event->GetEventType() != RE::INPUT_EVENT_TYPE::kButton) continue;
-
-        auto keyCode = event->AsIDEvent()->GetIDCode();
-        if (keyCode <= 0u) return EventChecker::kContinue;
-
-        auto player = RE::PlayerCharacter::GetSingleton();
-        if (!player) return EventChecker::kContinue;
-
-        auto kratos = Kratos::GetSingleton();
-        if (!kratos) return EventChecker::kContinue;
-
-        if (auto button = static_cast<RE::ButtonEvent*>(event); button) {
-            auto device = event->device.get();
-            if (keyCode == GetOffsettedKeyCode(Config::AxeCallKey, device)) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", true);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", false);}
-            }
-            else if (keyCode == GetOffsettedKeyCode(Config::AimKey, device)) {
-                if (button->IsDown()) {kratos->Aim(true); player->AddSpell(kratos->SpellAimButton); player->SetGraphVariableBool("bPressingAimButton", true);}
-                else if (button->IsUp()) {kratos->Aim(false); player->RemoveSpell(kratos->SpellAimButton); player->SetGraphVariableBool("bPressingAimButton", true);}
-            }
-            else if (keyCode == GetOffsettedKeyCode(Config::RunicKey, device)) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellRunicButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellRunicButton);}
-            }
-            else if (keyCode == GetOffsettedKeyCode(Config::FinisherKey, device)) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellFinisherButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellFinisherButton);}
-            }
-            else if (keyCode == GetOffsettedKeyCode(Config::MediumDistanceKey, device)) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellMidDistButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellMidDistButton);}
-            }
-            else if (keyCode == GetOffsettedKeyCode(Config::LongDistanceKey, device)) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellLongDistButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellLongDistButton);}
-            }
-        }
-    } return EventChecker::kContinue;
-}
 std::uint32_t InputEventTracker::GetGamepadIndex(RE::BSWin32GamepadDevice::Key a_key)
 {
     using Key = RE::BSWin32GamepadDevice::Key;
@@ -2723,15 +3067,60 @@ std::uint32_t InputEventTracker::GetOffsettedKeyCode(std::uint32_t a_keyCode, RE
     switch (a_inputDevice) {
     case RE::INPUT_DEVICE::kKeyboard:
         break;
-    case RE::INPUT_DEVICE::kGamepad:
-        a_keyCode += kGamepadOffset;
-        break;
     case RE::INPUT_DEVICE::kMouse:
         a_keyCode += kMouseOffset;
+        break;
+    case RE::INPUT_DEVICE::kGamepad:
+        a_keyCode = GetGamepadIndex((RE::BSWin32GamepadDevice::Key)a_keyCode);
         break;
     default:
         break;
     } return a_keyCode;
+}
+EventChecker InputEventTracker::ProcessEvent(RE::InputEvent* const *a_event, RE::BSTEventSource<RE::InputEvent*> *a_eventSource)
+{
+    if (!a_event || RE::UI::GetSingleton()->GameIsPaused()) return EventChecker::kContinue;
+
+    for (auto event = *a_event; event; event = event->next) {
+        if (!event->HasIDCode() || event->GetEventType() != RE::INPUT_EVENT_TYPE::kButton) continue;
+
+        auto keyCode = event->AsIDEvent()->GetIDCode();
+
+        auto player = RE::PlayerCharacter::GetSingleton();
+        if (!player) return EventChecker::kContinue;
+
+        auto kratos = Kratos::GetSingleton();
+        if (!kratos) return EventChecker::kContinue;
+
+        if (auto button = static_cast<RE::ButtonEvent*>(event); button) {
+            auto device = event->device.get();
+            keyCode = GetOffsettedKeyCode(keyCode, device);
+            if (keyCode == Config::AxeCallKey) {
+                if (button->IsDown()) {player->AddSpell(kratos->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", true);}
+                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", false);}
+            }
+            else if (keyCode == Config::AimKey) {
+                if (button->IsDown()) {kratos->Aim(true); player->AddSpell(kratos->SpellAimButton);/* player->SetGraphVariableBool("bIsAiming", true);*/}
+                else if (button->IsUp()) {kratos->Aim(false); player->RemoveSpell(kratos->SpellAimButton);/* player->SetGraphVariableBool("bIsAiming", false);*/}
+            }
+            else if (keyCode == Config::RunicKey) {
+                if (button->IsDown()) {player->AddSpell(kratos->SpellRunicButton);}
+                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellRunicButton);}
+            }
+            else if (keyCode == Config::FinisherKey) {
+                if (button->IsDown()) {player->AddSpell(kratos->SpellFinisherButton);}
+                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellFinisherButton);}
+            }
+            else if (keyCode == Config::MediumDistanceKey) {
+                if (button->IsDown()) {player->AddSpell(kratos->SpellMidDistButton);}
+                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellMidDistButton);}
+            }
+            else if (keyCode == Config::LongDistanceKey) {
+                if (button->IsDown()) {player->AddSpell(kratos->SpellLongDistButton);}
+                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellLongDistButton);}
+            }
+        }
+    } return EventChecker::kContinue;
 }
 
 bool HitEventTracker::Register()
