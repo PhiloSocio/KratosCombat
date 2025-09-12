@@ -1193,11 +1193,21 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
     }
     data.projState = ProjectileState::kNone;
 }
-void LeviathanAxe::Throw(const bool isVertical, const bool justContinue, const bool isHoming, RE::Actor* a_actor)
+void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const bool isHoming, RE::Actor* a_actor)
 {
+    if (!a_actor) {spdlog::warn("LeviathanAxe::Throw - a_actor is null"); return;}
+
+    bool isVertical = a_isVertical;
+    bool isThrowAttack = false;
+    bool isPowerThrowAttack = false;
+    if (Config::IsAdvancedThrowingInstalled) {
+        a_actor->GetGraphVariableBool("bIsThrowing", isThrowAttack);
+        a_actor->GetGraphVariableBool("bIsPowerThrowing", isPowerThrowAttack);
+        isVertical = isPowerThrowAttack;
+    }
     const auto leviThrowSpell = (isVertical ? SpellLeviProjH : SpellLeviProjL);
 //  auto leviBaseProj = (isVertical ? LeviProjBaseH : LeviProjBaseL);
-    if (a_actor && leviThrowSpell && (WeaponIdentify::isLeviathanAxe || justContinue)) 
+    if (leviThrowSpell && (WeaponIdentify::isLeviathanAxe || justContinue)) 
     {   //  calculate damage
         const auto leviProjEff = leviThrowSpell->effects[0];
         auto& leviProjEffSetting = leviProjEff->effectItem;
@@ -1253,10 +1263,11 @@ void LeviathanAxe::Throw(const bool isVertical, const bool justContinue, const b
         }
         if (justContinue) return;
 
-        if (Config::IsAdvancedThrowingInstalled && !a_actor->IsAttacking()) {
+        if (Config::IsAdvancedThrowingInstalled && (isThrowAttack || isPowerThrowAttack)) {
             WeaponIdentify::skipEquipAnim = true;
             ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
             ResetEquipAnimationAfter(100, a_actor);
+            spdlog::debug("Leviathan unequipped after throwing");
         } else {
             WeaponIdentify::isLeviathanAxe = false;
             WeaponIdentify::isRelic = false;
@@ -1985,10 +1996,20 @@ void Mjolnir::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
         }
     }
 }
-void Mjolnir::Throw(const bool justContinue, const bool isVertical, const bool isHoming, RE::Actor* a_actor)
+void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool isHoming, RE::Actor* a_actor)
 {
+    if (!a_actor) {spdlog::warn("Mjolnir::Throw - a_actor is null"); return;}
+
+    bool isVertical = a_isVertical;
+    bool isThrowAttack = false;
+    bool isPowerThrowAttack = false;
+    if (Config::IsAdvancedThrowingInstalled) {
+        a_actor->GetGraphVariableBool("bIsThrowing", isThrowAttack);
+        a_actor->GetGraphVariableBool("bIsPowerThrowing", isPowerThrowAttack);
+        isVertical = isPowerThrowAttack;
+    }
     const auto MjolnirThrowSpell = (isVertical ? SpellMjolnirProjT : SpellMjolnirProjT);
-    if (a_actor && MjolnirThrowSpell && (WeaponIdentify::isMjolnir || justContinue)) 
+    if (MjolnirThrowSpell && (WeaponIdentify::isMjolnir || justContinue)) 
     {   //  calculate damage
         const auto MjolnirProjEff = MjolnirThrowSpell->effects[0];
         auto& MjolnirProjEffSetting = MjolnirProjEff->effectItem;
@@ -2040,10 +2061,11 @@ void Mjolnir::Throw(const bool justContinue, const bool isVertical, const bool i
             }
         }
         if (justContinue) return;
-        if (Config::IsAdvancedThrowingInstalled && !a_actor->IsAttacking()) {
+        if (Config::IsAdvancedThrowingInstalled && (isThrowAttack || isPowerThrowAttack)) {
             WeaponIdentify::skipEquipAnim = true;
             ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
             ResetEquipAnimationAfter(100, a_actor);
+            spdlog::debug("Mjolnir unequipped after throwing");
         } else {
             WeaponIdentify::isMjolnir = false;
             WeaponIdentify::isRelic = false;
@@ -2087,7 +2109,7 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
 
         spdlog::debug("Mjolnir is calling...");
     }
-    if ((isDelayed || isDelayedConfig)) {
+    if (a_delay.has_value() && a_delay != 0.f && (isDelayed || isDelayedConfig)) {
         spdlog::debug("waiting the delay {} seconds...", a_delay.has_value() ? *a_delay : 0.f);
     } else if (a_actor && data.weap) {
         trailUpdate.Done();

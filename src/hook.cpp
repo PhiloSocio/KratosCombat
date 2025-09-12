@@ -823,9 +823,9 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
             //      if (projBase == Levi->LeviProjBaseL) a_this->data.angle.z = Config::MaxAxeStuckAngle;
             //      else a_this->data.angle.y = Config::MaxAxeStuckAngle;
             //  }
-                if (target && victim != shooter && a_this != target->AsProjectile()) {
+                if (target && a_this != target->AsProjectile()) {
                     if (!isTargetActor && !Levi->data.lastHitForms.empty() && std::find(Levi->data.lastHitForms.begin(), Levi->data.lastHitForms.end(), target) != Levi->data.lastHitForms.end()) isSameTarget = true;
-                    else if (victim) {
+                    else if (victim && victim != shooter) {
                         if (a_this->IsMissileProjectile()) {
                             if (!Levi->data.lastHitActors.empty() && std::find(Levi->data.lastHitActors.begin(), Levi->data.lastHitActors.end(), victim) != Levi->data.lastHitActors.end()) isSameTarget = true;
                             if (isHoming && victim == Levi->homingLevi.GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) isSameTarget = false;
@@ -890,7 +890,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                 bool isSameTarget = false;
                 bool isTargetActor = target ? target->formType == RE::FormType::ActorCharacter : false;
                 const auto victim = target ? target->As<RE::Actor>() : nullptr;
-                if (target && victim != shooter && a_this != target->AsProjectile()) {
+                if (target && a_this != target->AsProjectile()) {
 #ifdef EXPERIMENTAL_PROJECTILE_HIT_EXPLOSION
                     auto weaponIE = ObjectUtil::Actor::GetInventoryEntryDataForBoundObject(shooter, mjolnir->data.weap);
                     RE::HitData hitData; hitData.Populate(shooter, nullptr, weaponIE);
@@ -901,7 +901,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
 #endif
 
                     if (!isTargetActor && !mjolnir->data.lastHitForms.empty() && std::find(mjolnir->data.lastHitForms.begin(), mjolnir->data.lastHitForms.end(), target) != mjolnir->data.lastHitForms.end()) isSameTarget = true;
-                    else if (victim) {
+                    else if (victim && victim != shooter) {
                         if (a_this->IsMissileProjectile()) {
                             if (!mjolnir->data.lastHitActors.empty() && std::find(mjolnir->data.lastHitActors.begin(), mjolnir->data.lastHitActors.end(), victim) != mjolnir->data.lastHitActors.end()) isSameTarget = true;
                             if (isHoming && victim == mjolnir->homingMjolnir.GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) isSameTarget = false;

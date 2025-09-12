@@ -75,13 +75,3 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 
     return true;
 }
-/**/
-SKSEPluginInfo(
-    .Version = REL::Version{ 2, 0, 8, 0 },
-    .Name = "KratosCombat"sv,
-    .Author = "AnArchos"sv,
-    .SupportEmail = "patreon.com/AnArchos"sv,
-    .StructCompatibility = SKSE::StructCompatibility::Independent,
-    .RuntimeCompatibility = SKSE::VersionIndependence::AddressLibrary,
-    .MinimumSKSEVersion = REL::Version{ 2, 0, 0, 2 }
-)
