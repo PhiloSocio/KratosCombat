@@ -10,12 +10,13 @@ namespace Papyrus
         WeaponIdentify::WeaponCheck(true);
         Config::CheckConfig(true);
     }
+/*
     void KratosCombatMCM::OnConfigOpen(RE::TESQuest*)
     {
     //    WeaponIdentify::WeaponCheck();
     //    Config::CheckConfig();
     }
-
+*/
     bool KratosCombatMCM::Register(RE::BSScript::IVirtualMachine* a_vm)
     {
         if (a_vm) {

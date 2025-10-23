@@ -173,6 +173,7 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     ReadIntSetting(ini, "Keybindings", "iFinisherKey", FinisherKey);
     ReadIntSetting(ini, "Keybindings", "iMediumDistanceKey", MediumDistanceKey);
     ReadIntSetting(ini, "Keybindings", "iLongDistanceKey", LongDistanceKey);
+    ReadIntSetting(ini, "Keybindings", "iPowerAttackKey", PowerAttackKey);
 
     ReadBoolSetting(ini, "Main", "bDontHitWhileArriving", DontDamageWhileArrive);
     ReadBoolSetting(ini, "Misc", "bDebugModeOpen", DebugModeOpen);

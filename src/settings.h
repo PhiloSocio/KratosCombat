@@ -11,8 +11,8 @@ public:
     //Axe-Mace throw
     static inline float ThrowSpeed                  = 3700.f;       //  cm/s
     static inline float ThrowRotationSpeed          = 2160.f;       //  deg/s
-    static inline float NoGravityDurationLeviathan  = 0.5f;
-    static inline float NoGravityDurationMjolnir    = 0.5f;
+    static inline float NoGravityDurationLeviathan  = 0.36f;
+    static inline float NoGravityDurationMjolnir    = 0.36f;
     static inline std::string ThrowEvent            = "ThrowWeapon";
     static inline std::string ThrowEventV           = "ThrowWeaponV";
     static inline std::string ThrowEndEvent         = "ThrowAttackEnd";
@@ -62,7 +62,7 @@ public:
     //Draupnir spear
     static inline float DraupnirExplosionsInterval  = 0.24f;
     static inline uint32_t DraupnirSpearCount       = 6;            //  count of spear explodable projectiles (max 9)
-    static inline float NoGravityDurationDraupnir   = 1.f;
+    static inline float NoGravityDurationDraupnir   = 0.36f;
     static inline std::string DraupnirsCallEvent    = "DraupnirsCall";
     static inline std::string SpearThrowEvent       = "ThrowSpear";
 

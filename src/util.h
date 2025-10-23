@@ -37,6 +37,20 @@ namespace FenixUtils {  //credits to master fenix https://github.com/fenix31415/
             victim->NotifyAnimationGraph("staggerStart");
         }
     }
+    static void stagger(float val, RE::Actor* victim, RE::Projectile* hitProjectile = nullptr)
+    {
+        if (victim) {
+            float stagDir = 0.0f;
+            if (hitProjectile) {
+                stagDir = hitProjectile->GetHeadingAngle(victim->GetPosition(), false);
+            }
+            stagDir = (stagDir >= 0.0f) ? stagDir / 360.0f : (360.0f + stagDir) / 360.0f;
+
+            victim->SetGraphVariableFloat("staggerDirection", stagDir);
+            victim->SetGraphVariableFloat("staggerMagnitude", val);
+            victim->NotifyAnimationGraph("staggerStart");
+        }
+    }
 }
 namespace PointerUtil //yoinked po3's code
 {
@@ -1158,15 +1172,16 @@ namespace ObjectUtil
 
     struct Sound
     {
-        static void PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::NiAVObject* a_source, const float a_volume = 1.f)
+        static void PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::NiAVObject* a_source, const float a_volume = 1.f, RE::BSSoundHandle* a_handle = nullptr)
         {
             if (a_sound && a_source) {
                 auto audioManager = RE::BSAudioManager::GetSingleton();
-                BSSoundHandle handle;
-                audioManager->BuildSoundDataFromDescriptor(handle, a_sound->soundDescriptor);
-                handle.SetObjectToFollow(a_source);
-                handle.SetVolume(a_volume);
-                handle.Play();
+                RE::BSSoundHandle handle;
+                RE::BSSoundHandle& refHandle = a_handle ? *a_handle : handle;
+                audioManager->BuildSoundDataFromDescriptor(refHandle, a_sound->soundDescriptor);
+                refHandle.SetObjectToFollow(a_source);
+                refHandle.SetVolume(a_volume);
+                refHandle.Play();
             }
         }
     };

@@ -74,6 +74,7 @@ public:
         RE::BGSArtObject* handFrostBright = nullptr;//  FXIceCloakHandEffects [ARTO:00042854],
         RE::BGSArtObject* handFlame = nullptr;      //  Fireball01HandEffects [ARTO:0001B211], FireCloakHandEffects [ARTO:00036342]
         RE::BGSArtObject* handShock = nullptr;      //  FXShockCloakHandEffects [ARTO:0005B1BD]
+        RE::BGSArtObject* handShockCloak = nullptr;
         RE::BGSArtObject* frostCloak = nullptr;       //  FXIceCloak01 [ARTO:0004253F]
         RE::BGSArtObject* fireCloak = nullptr;      //  FXFireCloak01 [ARTO:0002ACD7]
         RE::BGSArtObject* fury = nullptr;
@@ -86,10 +87,13 @@ public:
         RE::BGSSoundDescriptorForm* catchLevi = nullptr;    //  WPNImpactBladeVsIceSD [SNDR:0002398A]
         RE::BGSSoundDescriptorForm* callLevi = nullptr;     //  telekinesis,0x7D013
         RE::BGSSoundDescriptorForm* chargeLevi = nullptr;   //  MAGIcicleChargeSD [SNDR:0003EDD5], MAGIcicleReadyLPSD [SNDR:0003F1F0]
+        RE::BGSSoundDescriptorForm* chargeLeviLoop = nullptr;// MAGFrostBiteFireLPMSD [SNDR:0003E5CB]
+        RE::BGSSoundDescriptorForm* chargeLeviEndT = nullptr;
         RE::BGSSoundDescriptorForm* chargeLeviEnd = nullptr;//  MAGIcicleFire2DSD [SNDR:0003EAC6]
         RE::BGSSoundDescriptorForm* catchMjolnir = nullptr; //  WPNImpactBladeVsIceSD [SNDR:0002398A]
         RE::BGSSoundDescriptorForm* callMjolnir = nullptr;  //  telekinesis,0x7D013
         RE::BGSSoundDescriptorForm* fingerSnap = nullptr;   //  recorded by me with whatsapp voice message
+        RE::BGSSoundDescriptorForm* chargeMjolnir = nullptr;//  MAGIcicleFire2DSD [SNDR:0003EAC6]
         RE::BGSSoundDescriptorForm* chargeMjolnirEnd = nullptr;//  MAGIcicleFire2DSD [SNDR:0003EAC6]
     };
 
@@ -174,6 +178,7 @@ public:
         if (_isChargingThrow) {
             spdlog::debug("Charging throw is started");
         } else {
+            _soundHandle.Stop();
             spdlog::debug("Charging throw is ended");
         }
     }
@@ -217,6 +222,7 @@ public:
     RE::TESGlobal* gMjolnirFormID           = nullptr;
     RE::TESGlobal* gTridentFormID           = nullptr;
     RE::TESGlobal* gGuardianShieldFormID    = nullptr;
+    RE::BSSoundHandle _soundHandle;
 private:
 friend class AttackHook;
     bool _isShieldOpened;
@@ -324,7 +330,7 @@ public:
         float yAngle            = 0.35f;
         float throwedTime       = 0.f;
         float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
-        float gravity           = 1.f;
+        float gravity           = 3.69f;
         float throwingChargeDuration = 0.f;
     };
 
@@ -339,8 +345,9 @@ public:
         RE::NiPoint3 linearArrivingDir;
         std::pair<std::vector<RE::NiPoint3>, float> arrivingRoute;
         std::vector<RE::Actor *> targets;
-        float throwedTime;
-        float timeToArrive;
+        float throwedTime = 0.f;
+        float livingTime = 0.f;
+        float timeToArrive = Config::ArrivalTime;
         float linearDistance = 0.f;
         float linearDistanceFromStart = 0.f;
         float linearDistanceFromLastCallPos = 0.f;
@@ -399,9 +406,9 @@ public:
             auto callerPosition = callerBone ? callerBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
             linearArrivingDir = (callerPosition - startPosition);
             linearArrivingDir.Unitize();
-            linearDistanceFromStart = startPosition.GetDistance(callerPosition);
+            linearDistanceFromStart = startPosition.GetDistance(callerPosition) + 1.f;
             linearDistanceFromLastCallPos = linearDistanceFromStart;
-            speed = linearDistanceFromStart / Config::ArrivalTime;
+            speed = linearDistanceFromStart / timeToArrive;
             speed = std::clamp(speed, Config::MinArrivalSpeed, Config::MaxArrivalSpeed);
             timeToArrive = linearDistanceFromStart / speed;
             targets = GetTargets();
@@ -514,6 +521,7 @@ public:
     bool IsArriving(RE::Projectile* a_proj) const;
     bool IsHoming(RE::Projectile* a_proj) const;
     bool IsCharged() const {return _isCharged;}
+    void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
 
     bool isAxeCalled;
     bool isAxeThrowed;
@@ -577,6 +585,13 @@ public:
     static Draupnir* GetSingleton() {static Draupnir singleton; return &singleton;}
     bool Initialize();
 
+    struct Data {
+        float gravity = 2.69f;
+        float throwingChargeDuration = 0.f;
+    };
+
+    static inline Data data;
+
     static inline RE::SpellItem*        SpellDraupnirProjL          = nullptr;
     static inline RE::SpellItem*        SpellDraupnirsCallProjL     = nullptr;
     static inline RE::Projectile*       DraupnirSpearProjectiles[9];                            //  they will be explode after Draupnir's Call move
@@ -601,6 +616,7 @@ public:
     static void Call(const float a_damage, const float a_force);
     static void StartExplosions(const float a_delay);
     static void SetExplosionMagnitude(const float a_magnitude) {explosionMagnitude = a_magnitude;}
+    static void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
 
     /* forced detonation?
     forced detonation needed for living targets, because timing projectile explosions not working after hitting to actors.
@@ -666,8 +682,9 @@ public:
         float damage            = 0.f;
         float yAngle            = 0.35f;
         float throwedTime       = 0.f;
-        float gravity           = 2.5f;
+        float gravity           = 4.f;
         float throwingChargeDuration = 0.f;
+        bool isPenetrating;
     };
 
     struct ArrivingMjolnir {
@@ -897,7 +914,7 @@ public:
     void Update(const float a_delta);
     void SetThrowState(const ThrowState a_throwState);
     ThrowState GetThrowState() const;
-    void GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    bool GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Throw(const bool justContinue, const bool isVertical = false, const bool isHoming = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Call(const bool a_justDestroy = false, const bool a_justContinue = false, std::optional<float> a_delay = std::nullopt, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Catch(bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
@@ -906,6 +923,7 @@ public:
     bool IsArriving(RE::Projectile* a_proj) const;
     bool IsHoming(RE::Projectile* a_proj) const;
     bool IsCharged() const {return _isCharged;}
+    void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
 
     bool isMjolnirCalled;
     bool isMjolnirArriving;

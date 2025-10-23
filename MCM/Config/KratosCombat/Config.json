@@ -71,6 +71,16 @@
                   "sourceType": "ModSettingInt"
                 }
             },
+            {
+                "id": "iPowerAttackKey:Keybindings",
+                "text": "$KratosCombat_PowerAttackKey_OptionText",
+                "type": "keymap",
+                "help": "$KratosCombat_PowerAttackKey_InfoText",
+                "ignoreConflicts": false,
+                "valueOptions": {
+                  "sourceType": "ModSettingInt"
+                }
+            },
 
             {
                 "text": "$KratosCombat_RageType_HeaderText",
