@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 # Set your project name. This will be the name of your SKSE .dll file.
-project(KratosCombat VERSION 2.0.8.3 LANGUAGES CXX)
+project(KratosCombat VERSION 2.0.8.4 LANGUAGES CXX)
 
 set(ADD_COMMONLIBSSE_PLUGIN_AUTHOR "AnArchos" CACHE STRING "Plugin author")
 set(ADD_COMMONLIBSSE_PLUGIN_EMAIL "patreon.com/AnArchos" CACHE STRING "Plugin email")
@@ -72,7 +72,7 @@ if(DEFINED OUTPUT_FOLDER)
     )
 
     # If you perform a "Debug" build, also copy .pdb file (for debug symbols)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
         add_custom_command(
             TARGET "${PROJECT_NAME}"
             POST_BUILD

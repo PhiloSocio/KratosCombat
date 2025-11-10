@@ -57,7 +57,7 @@ void WeaponIdentify::Initialize(RE::Actor* a_actor)
         auto entries = invChanges->entryList;
         spdlog::info("Kratos's special weapons initializing...");
         for (auto entry : *entries) {
-            if (entry && entry->object) {
+            if (entry && entry->object && entry->object->GetFile()) {
                 if (entry->object->IsWeapon()) {
 #ifdef NEW_WEAPON_REGISTER_METHOD
 #else
@@ -120,7 +120,7 @@ void WeaponIdentify::Initialize(RE::Actor* a_actor)
                     }
 #endif
                 }
-            } else spdlog::info("entry is not an object");
+            } else spdlog::info("entry is not an ordinary object");
         } spdlog::info("Kratos's special weapons initialized.");
     }
 }
@@ -1640,10 +1640,6 @@ void BladeOfChaos::SetScorchingSpeed(const float a_speed, const bool a_forced)
     if (!a_forced && _fScorchingSpeed > 1.f) _fScorchingSpeed = 1.f;
 
     RE::PlayerCharacter::GetSingleton()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    WeaponIdentify::WeaponBone->AsNode()->GetChildren().back()->GetUserData()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    RE::PlayerCharacter::GetSingleton()->GetEquippedEntryData(false)->object->As<RE::TESObjectREFR>()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    WeaponIdentify::BladeOfChaos->As<RE::WeaponAnimationGraphManagerHolder>()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    reinterpret_cast<RE::IAnimationGraphManagerHolder*>(WeaponIdentify::WeaponBone)->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
 }
 void BladeOfChaos::BuffScorchingSpeed(const float a_buff, const bool a_forced)
 {
@@ -1651,10 +1647,6 @@ void BladeOfChaos::BuffScorchingSpeed(const float a_buff, const bool a_forced)
     if (!a_forced && _fScorchingSpeed > 1.f) _fScorchingSpeed = 1.f;
 
     RE::PlayerCharacter::GetSingleton()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    WeaponIdentify::WeaponBone->AsNode()->GetChildren().back()->GetUserData()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    RE::PlayerCharacter::GetSingleton()->GetEquippedEntryData(false)->object->As<RE::TESObjectREFR>()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    WeaponIdentify::BladeOfChaos->As<RE::TESObjectREFR>()->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
-//    reinterpret_cast<RE::IAnimationGraphManagerHolder*>(WeaponIdentify::WeaponBone)->SetGraphVariableFloat("ScorchingSpeed", _fScorchingSpeed);
 }
 void BladeOfChaos::DeBuffScorchingSpeed()
 {
