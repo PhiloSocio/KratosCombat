@@ -1276,10 +1276,13 @@ bool PlayerHook::ModEvent(RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource
 
 bool AttackHook::ProcessButton(RE::AttackBlockHandler* a_handler, RE::ButtonEvent* a_event, RE::PlayerControlsData* a_data)
 {
-    if (a_event && a_event->QUserEvent() == "Right Attack/Block") {
+    auto playerCamera = RE::PlayerCamera::GetSingleton();
+    if (playerCamera && playerCamera->IsInFirstPerson()) {
+        // In first person, so we skip processing
+    } else if (a_event && a_event->QUserEvent() == "Right Attack/Block") {
         if (auto kratos = Kratos::GetSingleton(); kratos->IsAiming() && kratos->GetEquippedRelic() == Kratos::Relic::kNone) {
             if (WeaponIdentify::isLeviathanAxe && WeaponIdentify::LeviathanAxe) {
-                auto AnArchos = PlayerCharacter::GetSingleton();
+                auto AnArchos = RE::PlayerCharacter::GetSingleton();
                 auto eqManager = RE::ActorEquipManager::GetSingleton();
                 auto Levi = LeviathanAxe::GetSingleton();
                 Levi->Call(true);

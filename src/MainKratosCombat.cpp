@@ -150,7 +150,7 @@ void WeaponIdentify::WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_R
     auto RelicName = "not a Relic";
 //  auto address = reinterpret_cast<std::uintptr_t>(a_RHandWeapon);
     auto kratos = Kratos::GetSingleton();
-    if (a_RHandWeapon) {
+    if (a_RHandWeapon && a_RHandWeapon->GetFile()) {
         const auto equippedWeaponFile = a_RHandWeapon->GetFile()->fileName;
         const FormID equippedWeaponID = a_RHandWeapon->GetLocalFormID();
         spdlog::debug("registering the {:8x} from {}", equippedWeaponID, equippedWeaponFile);
@@ -182,7 +182,7 @@ void WeaponIdentify::WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_R
 #endif
             if (WeaponIdentify::LeviathanAxe->HasWorldModel()) {
                 spdlog::debug("Levi is throwable");
-				const auto root = a_actor->Get3D();
+				const auto root = a_actor->Get3D1(false);
                 auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
                 Levi->data.weaponModel = weapon3D ? weapon3D->Clone() : nullptr;
                 Levi->data.weaponModel->local = RE::NiTransform();
@@ -300,7 +300,7 @@ void WeaponIdentify::WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_R
         }
 #endif
         spdlog::info("{} is {}", a_RHandWeapon->GetName(), RelicName);
-    } if (a_shield) {
+    } if (a_shield && a_shield->GetFile()) {
         const auto equippedShieldFile = a_shield->GetFile()->fileName;
         RelicName = "not a Relic";
         if (Config::GuardianShieldKWD && a_shield->HasKeyword(Config::GuardianShieldKWD)) {
@@ -893,7 +893,7 @@ void Kratos::OpenShield(RE::Actor* a_actor)
 void Kratos::CloseShield(RE::Actor* a_actor)
 {
     if (a_actor && a_actor->GetEquippedObject(true) && a_actor->GetEquippedObject(true)->IsArmor() && a_actor->GetEquippedObject(true)->As<RE::TESObjectREFR>()) {
-        if (auto shieldModel = a_actor->GetEquippedObject(true)->As<RE::TESObjectREFR>()->Get3D(); shieldModel) {
+        if (auto shieldModel = a_actor->GetEquippedObject(true)->As<RE::TESObjectREFR>()->Get3D1(false); shieldModel) {
             if (auto controllers = shieldModel->GetControllers(); controllers) {
                 if (auto manager = controllers->AsNiControllerManager(); manager) {
                     auto currentSequence = manager->activeSequences;
