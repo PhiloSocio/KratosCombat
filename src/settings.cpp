@@ -88,6 +88,7 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     }
 
     ReadFloatSetting(ini, "Main", "fBarehandedDamageMult", BarehandedDamageMult);
+    ReadFloatSetting(ini, "Main", "fThrowingDamageMult", ThrowingDamageMult);
 
     ReadFloatSetting(ini, "Main", "fThrowSpeed", ThrowSpeed);
     ReadFloatSetting(ini, "Main", "fThrowRotationSpeed", ThrowRotationSpeed);
@@ -176,6 +177,15 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     ReadIntSetting(ini, "Keybindings", "iPowerAttackKey", PowerAttackKey);
 
     ReadBoolSetting(ini, "Main", "bDontHitWhileArriving", DontDamageWhileArrive);
+    ReadBoolSetting(ini, "Main", "bUsePrecisionTrails", UsePrecisionTrails);
+    ReadBoolSetting(ini, "Main", "bRetroMoveset", RetroMoveset);
+    if (RetroMoveset && RE::PlayerCharacter::GetSingleton()) {
+        if (RetroMovesetSpell) RE::PlayerCharacter::GetSingleton()->AddSpell(RetroMovesetSpell);
+        else spdlog::error("You trying to open Retro Blades of Chaos moveset but don't have the updated esp!");
+    } else {
+        if (RetroMovesetSpell) RE::PlayerCharacter::GetSingleton()->RemoveSpell(RetroMovesetSpell);
+    }
+
     ReadBoolSetting(ini, "Misc", "bDebugModeOpen", DebugModeOpen);
 
     if      (ThrowSpeed < 1000.f)   ThrowSpeed = 1000.f;
@@ -199,7 +209,7 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     if (ArrivalRoadCurveMagnitude > 100.f)  ArrivalRoadCurveMagnitude = 100.f;
     if (ArrivalRoadCurveMagnitude < -100.f) ArrivalRoadCurveMagnitude = -100.f;
 
-    if (DebugModeOpen && spdlog::get_level() >= spdlog::level::info) {
+    if (DebugModeOpen) {
         spdlog::set_level(spdlog::level::trace);
         spdlog::debug("Debug mode enabled");
     } else {
@@ -267,6 +277,9 @@ bool Config::CheckForms()
     //  The Leviathan Axe's stuff
     auto Levi = LeviathanAxe::GetSingleton();
     found = Levi->Initialize();
+    //  The Blades of Chaos' stuff
+    auto BoC = BladeOfChaos::GetSingleton();
+    found = BoC->Initialize();
     //  The Draupnir Spear's stuff
     auto draupnir = Draupnir::GetSingleton();
     found = draupnir->Initialize();
@@ -305,7 +318,6 @@ std::optional<bool> APIs::Request()
 //      if (tdm) spdlog::debug("TDM API loaded");
 //      else spdlog::error("TDM API failed to load");
 //  }
-#ifdef PRECISION
     if (!precision) {
         precision = reinterpret_cast<PRECISION_API::IVPrecision4*>(PRECISION_API::RequestPluginAPI(PRECISION_API::InterfaceVersion::V4));
         if (precision) {
@@ -318,6 +330,5 @@ std::optional<bool> APIs::Request()
         result = true;
         spdlog::debug("Precision API already loaded");
     }
-#endif
     return result;
 }

@@ -265,6 +265,7 @@ public:
     static inline RE::NiAVObject* ShieldBone        = nullptr;
     static inline RE::TESObjectWEAP* LeviathanAxe   = nullptr;
     static inline RE::TESObjectWEAP* BladeOfChaos   = nullptr;
+    static inline RE::TESObjectWEAP* BladeOfChaosL  = nullptr;
     static inline RE::TESObjectWEAP* DraupnirSpear  = nullptr;
     static inline RE::TESObjectWEAP* BladeOfOlympus = nullptr;
     static inline RE::TESObjectWEAP* Mjolnir        = nullptr;
@@ -308,17 +309,32 @@ public:
     };
 
     struct Data {
-        RE::Projectile* proj;
+        RE::NiPointer<RE::Projectile> proj;
         RE::TESObjectWEAP* weap     = nullptr;
         RE::EnchantmentItem* ench   = nullptr;
         RE::AlchemyItem* poison     = nullptr;
         RE::NiPoint3 position       = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastVelocity   = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
-        RE::NiAVObject* model       = nullptr;
-        RE::NiAVObject* weaponModel = nullptr;
+        RE::NiPointer<RE::NiAVObject>   model;
+        RE::NiPointer<RE::NiNode>       weaponModelCopy;
+        RE::NiPointer<RE::NiNode>       replacedProjectileModel;
         std::vector<RE::NiPointer<RE::BSTempEffectParticle>> projTrails;
         RE::NiTransform trailTransform;
+        std::deque<RE::NiTransform> trailTransformHistory;
+        RE::NiPointer<RE::BSTempEffectParticle> projTrail;
+        RE::NiPointer<RE::NiNode> trailRootNode;
+        uint32_t trailSegmentCount;
+        RE::NiTransform lastTrailTransform;
+        bool hasLastTrailTransform = false;
+        float trailTimeAccumulator = 0.f;
+        float trailDistanceAccumulator = 0.f;
+        std::deque<float> segmentTimestamps;
+        uint32_t currentBoneIdx = 0;
+        float currentTime = 0.f;
+        float currentTimeOffset = 0.f;
+        PRECISION_API::TrailOverride trailOverride = PRECISION_API::TrailOverride();
+        PRECISION_API::TrailTransformOverride transformOverride = PRECISION_API::TrailTransformOverride();
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
         RE::NiNode* stuckedBone     = nullptr;
@@ -330,15 +346,15 @@ public:
         float yAngle            = 0.35f;
         float throwedTime       = 0.f;
         float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
-        float gravity           = 3.69f;
+        float gravity           = 3.21f;
         float throwingChargeDuration = 0.f;
     };
 
     struct ArrivingLeviathan {
         const LeviathanAxe* parent;
-        RE::Projectile* proj;
+        RE::NiPointer<RE::Projectile> proj;
         RE::Actor* caller;
-        RE::NiAVObject* callerBone;
+        RE::NiPointer<RE::NiAVObject> callerBone;
         RE::NiPoint3 startPosition;
         RE::NiPoint3 currentDir;
         RE::NiPoint3 desiredDir;
@@ -416,7 +432,7 @@ public:
     };
 
     struct HomingLeviathan {
-        RE::Projectile* proj;
+        RE::NiPointer<RE::Projectile> proj;
         std::vector<RE::Actor *> targets;
         RE::Actor* shooter;
         uint8_t hitCount;           //  how many times it will hit the targets?
@@ -520,7 +536,7 @@ public:
     void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical);
     bool IsArriving(RE::Projectile* a_proj) const;
     bool IsHoming(RE::Projectile* a_proj) const;
-    bool IsCharged() const {return _isCharged;}
+    bool IsCharged(const bool a_forLastThrow = false) const {return _isCharged ? _isCharged : (a_forLastThrow ? _isLastThrowCharged : false);}
     void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
 
     bool isAxeCalled;
@@ -554,6 +570,7 @@ friend class ProjectileHook;
     RE::EnchantmentItem* EnchCharge = nullptr;
 
     bool _isCharged = false;
+    bool _isLastThrowCharged = false;
     uint8_t chargeHitCount = 0;
     ThrowState throwState;
     PRECISION_API::CollisionDefinition collisionDefinition;
@@ -565,8 +582,34 @@ class BladeOfChaos
 {
 public:
     static  BladeOfChaos* GetSingleton() {static BladeOfChaos singleton; return &singleton;}
+    bool Initialize();
+
+    enum class WeaponState : std::uint_fast8_t {
+        kNone = 0,
+        kChainClose = 1,
+        kChainOpen = 2
+    };
+
+    struct Data {
+        RE::TESObjectWEAP* weap     = nullptr;
+        RE::TESObjectWEAP* weapL    = nullptr;
+        RE::EnchantmentItem* ench   = nullptr;
+        RE::AlchemyItem* poison     = nullptr;
+        RE::NiAVObject* weaponModel = nullptr;
+        RE::NiAVObject* weaponModelL= nullptr;
+        RE::NiNode* stuckedBone     = nullptr;
+        RE::Actor* stuckedActor     = nullptr;
+        RE::NiNode* stuckedBoneL    = nullptr;
+        RE::Actor* stuckedActorL    = nullptr;
+        float* enchMag              = nullptr;
+        float defaultEnchMag;
+        float damage            = 0.f;
+    };
+    Data data;
 
     void    Update(const float a_delta) {_lastChargeTime = AsyncUtil::GameTime::GetEngineTime();}
+    void    SetWeaponState(const WeaponState a_weaponState);
+    WeaponState GetWeaponState() const;
     bool    IsScorching() const {return _isScorching;}
     void    SetIsScorching(const bool a_isScorching = true) {_isScorching = a_isScorching;}
     float   GetScorchingSpeed();
@@ -574,7 +617,10 @@ public:
     void    BuffScorchingSpeed(const float a_buff = 0.05f, const bool a_forced = false);
     void    DeBuffScorchingSpeed();
     bool    IsQueueEnd();
+    void    HideChains(const bool a_hide = true);
 private:
+    WeaponState weaponState;
+    bool    _isChainHidden = false;
     bool    _isScorching = false;
     float   _fScorchingSpeed = 0.5f;
     float   _lastChargeTime;
@@ -664,6 +710,7 @@ public:
     };
 
     struct Data {
+        RE::NiPointer<RE::Projectile> proj;
         RE::TESObjectWEAP* weap     = nullptr;
         RE::EnchantmentItem* ench   = nullptr;
         RE::AlchemyItem* poison     = nullptr;
@@ -671,8 +718,11 @@ public:
         RE::NiPoint3 lastEulerAngles= {0.f, 0.f, 0.f};
         RE::NiPoint3 lastVelocity   = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
-        RE::NiAVObject* model       = nullptr;
-        std::vector<RE::NiPointer<RE::BSTempEffectParticle>> projTrails;
+        RE::NiPointer<RE::NiAVObject>   model;
+        RE::NiPointer<RE::NiNode>       weaponModelCopy;
+        RE::NiPointer<RE::NiNode>       replacedProjectileModel;
+        PRECISION_API::TrailOverride    trailOverride = PRECISION_API::TrailOverride();
+        PRECISION_API::TrailTransformOverride transformOverride = PRECISION_API::TrailTransformOverride();
         RE::NiTransform trailTransform;
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
@@ -682,14 +732,14 @@ public:
         float damage            = 0.f;
         float yAngle            = 0.35f;
         float throwedTime       = 0.f;
-        float gravity           = 4.f;
+        float gravity           = 3.69f;
         float throwingChargeDuration = 0.f;
         bool isPenetrating;
     };
 
     struct ArrivingMjolnir {
         const Mjolnir* parent;
-        RE::Projectile* proj;
+        RE::NiPointer<RE::Projectile> proj;
         RE::Actor* caller;
         RE::NiAVObject* callerBone;
         RE::NiPoint3 startPosition;
@@ -822,7 +872,7 @@ public:
     };
 
     struct HomingMjolnir {
-        RE::Projectile* proj;
+        RE::NiPointer<RE::Projectile> proj;
         std::vector<RE::Actor *> targets;
         RE::Actor* shooter;
         uint8_t hitCount;           //  how many times it will hit the targets?
@@ -922,7 +972,7 @@ public:
     void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false);
     bool IsArriving(RE::Projectile* a_proj) const;
     bool IsHoming(RE::Projectile* a_proj) const;
-    bool IsCharged() const {return _isCharged;}
+    bool IsCharged(const bool a_forLastThrow = false) const {return _isCharged ? _isCharged : (a_forLastThrow ? _isLastThrowCharged : false);}
     void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
 
     bool isMjolnirCalled;
@@ -930,6 +980,7 @@ public:
     bool isMjolnirThrowed;
 //  RE::Projectile::LaunchData* LeviThrowData   = nullptr;
 
+    AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;
     AsyncUtil::GameTime callUpdate;
 private:
@@ -953,6 +1004,7 @@ friend class ProjectileHook;
     RE::EnchantmentItem* EnchCharge     = nullptr;
 
     bool _isCharged = false;
+    bool _isLastThrowCharged = false;
     uint8_t chargeHitCount = 0;
     ThrowState throwState;
     PRECISION_API::CollisionDefinition collisionDefinition;
@@ -1031,6 +1083,15 @@ public:
 
     virtual EventChecker ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource) override;
 };
+class AnimObjectAnimationEventTracker : public RE::BSTEventSink<RE::BSAnimationGraphEvent>
+{
+public:
+    static AnimObjectAnimationEventTracker* GetSingleton() {static AnimObjectAnimationEventTracker singleton; return &singleton;}
+
+    static bool Register();
+
+    virtual EventChecker ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource) override;
+};
 class MagicEffectApplyTracker : public RE::BSTEventSink<RE::TESMagicEffectApplyEvent>
 {
 public:
@@ -1079,6 +1140,7 @@ inline bool RegisterEvents()
 {
     return !(
         !AnimationEventTracker::Register() ||
+    //    !AnimObjectAnimationEventTracker::Register() ||
         !MagicEffectApplyTracker::Register() ||
         !InputEventTracker::Register()// ||
     //    HitEventTracker::Register()

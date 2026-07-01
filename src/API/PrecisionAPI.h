@@ -126,6 +126,13 @@ namespace PRECISION_API
 		std::optional<std::string> meshOverride;
 	};
 
+	struct TrailTransformOverride
+	{
+		std::optional<RE::NiMatrix3> additionalRotation;
+		std::optional<RE::NiPoint3> localOffset;
+		std::optional<float> scale;
+	};
+
 	struct CollisionDefinition
 	{
 		CollisionDefinition() = default;
@@ -445,7 +452,8 @@ namespace PRECISION_API
 		/// <param name="a_sourceActorParentCell">Source actor cell</param>
 		/// <param name="a_projectile">Projectile</param>
 		/// <param name="a_trailOverride">Trail override</param>
-		virtual void AddAttackTrail(RE::NiNode* a_trailParentNode, RE::ActorHandle a_sourceActorHandle, RE::TESObjectCELL* a_sourceActorParentCell, RE::Projectile* a_projectile, std::optional<TrailOverride> a_trailOverride) noexcept = 0;
+		/// <param name="a_transformOverride">Transform override</param>
+		virtual void AddTrailEffect(RE::NiNode* a_trailParentNode, RE::ActorHandle a_sourceActorHandle, RE::TESObjectCELL* a_sourceActorParentCell, std::optional<TrailOverride> a_trailOverride, std::optional<TrailTransformOverride> a_transformOverride) noexcept = 0;
 
 		virtual void AddAttackCollision(RE::ActorHandle a_actorHandle, const RE::BSAnimationGraphEvent a_event) noexcept = 0;
 		virtual void AddAttackCollision(RE::ActorHandle a_actorHandle, CollisionDefinition& a_collisionDefinition, RE::Projectile* a_projectile) noexcept = 0;
@@ -463,8 +471,8 @@ namespace PRECISION_API
 	/// <returns>The pointer to the API singleton, or nullptr if request failed</returns>
 	[[nodiscard]] inline void* RequestPluginAPI(const InterfaceVersion a_interfaceVersion = InterfaceVersion::V4)
 	{
-		auto pluginHandle = GetModuleHandleA("Precision.dll");
-		_RequestPluginAPI requestAPIFunction = (_RequestPluginAPI)GetProcAddress(pluginHandle, "RequestPluginAPI");
+		auto pluginHandle = REX::W32::GetModuleHandleA("Precision.dll");
+		_RequestPluginAPI requestAPIFunction = (_RequestPluginAPI)REX::W32::GetProcAddress(pluginHandle, "RequestPluginAPI");
 		if (requestAPIFunction) {
 			return requestAPIFunction(a_interfaceVersion);
 		}

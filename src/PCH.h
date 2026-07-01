@@ -1,5 +1,7 @@
 #pragma once
 
+#undef ENABLE_SKYRIM_VR
+
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
 #include "REL/Relocation.h"
@@ -28,7 +30,6 @@ using namespace std::literals;
 #define EXPERIMENTAL_UNEQUIP_AFTER_THROW
 //#define NEW_WEAPON_REGISTER_METHOD
 //#define TRIDENT
-//#define PRECISION
 #define NEW_ARRIVING_METHOD
 #define SMART_ARRIVING_METHOD
 //#define OVERPOWERED

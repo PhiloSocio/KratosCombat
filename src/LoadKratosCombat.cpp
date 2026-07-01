@@ -4,10 +4,15 @@
 
 inline bool UpdateConfig() 
 {
-//  Config::CheckConfig(true);
-    Config::CheckConfig();
-    if (!Config::CheckForms()) spdlog::warn("can't get mandatory forms! check the required esp files.");
-    else return true;
+    if (!Config::CheckForms()) {
+        spdlog::warn("can't get mandatory forms! check the required esp files.");
+    //  Config::CheckConfig(true);
+        Config::CheckConfig();
+    } else {
+    //  Config::CheckConfig(true);
+        Config::CheckConfig();
+        return true;
+    }
     return false;
 }
 inline void InstallHooks() 
@@ -25,7 +30,8 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
             InstallHooks();
         break;
     case SKSE::MessagingInterface::kPostLoad:
-        APIs::Request();
+        if (APIs::Request())
+            Config::IsPrecisionInstalled = true;
         break;
     case SKSE::MessagingInterface::kPreLoadGame:
         if (auto Levi = LeviathanAxe::GetSingleton(); auto mjolnir = Mjolnir::GetSingleton()) {
@@ -38,7 +44,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
         break;
     case SKSE::MessagingInterface::kPostLoadGame:
     case SKSE::MessagingInterface::kNewGame:
-        if (!Kratos::GetSingleton()->Initialize()) spdlog::warn("can't get important magic effects! Check the esp files!");
+        if (!Config::CheckForms()) spdlog::warn("can't get important magic effects! Check the esp files!");
         else if (RegisterEvents()) {Papyrus::eventsRegistered = true; WeaponIdentify::Initialize(); WeaponIdentify::WeaponCheck();}
         break;
     case SKSE::MessagingInterface::kSaveGame:
@@ -57,7 +63,6 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 }
 
 SKSEPluginLoad(const SKSE::LoadInterface *skse) {
-
     SetupLog();
 
     auto* plugin  = SKSE::PluginDeclaration::GetSingleton();

@@ -9,12 +9,19 @@
 #define PI4 0.7853981633974483f
 #define PI8 0.3926990816987242f
 
-#define downVec {0.f, 0.f, -1.f}
-#define upVec   {0.f, 0.f, 1.f}
+#define downVec     {0.f, 0.f, -1.f}
+#define upVec       {0.f, 0.f, 1.f}
 #define frontVec    {0.f, 1.f, 0.f}
 #define backVec     {0.f, -1.f, 0.f}
 #define rightVec    {1.f, 0.f, 0.f}
 #define leftVec     {-1.f, 0.f, 0.f}
+
+inline constexpr RE::NiPoint3 downVec3(downVec);
+inline constexpr RE::NiPoint3 upVec3(upVec);
+inline constexpr RE::NiPoint3 frontVec3(frontVec);
+inline constexpr RE::NiPoint3 backVec3(backVec);
+inline constexpr RE::NiPoint3 rightVec3(rightVec);
+inline constexpr RE::NiPoint3 leftVec3(leftVec);
 
 static float* g_deltaTime = (float*)RELOCATION_ID(523660, 410199).address();            //  sensitive to slow time spell
 static float* g_deltaTimeRealTime = (float*)RELOCATION_ID(523661, 410200).address();    //  const
@@ -603,7 +610,7 @@ namespace MathUtil
             float sinY = std::sin(angleRadY);
             float cosZ = std::cos(angleRadZ);
             float sinZ = std::sin(angleRadZ);
-                // X ekseninde döndürme matrisi
+
             NiMatrix3 rotationMatrixX;
             rotationMatrixX.entry[0][0] = 1.0;
             rotationMatrixX.entry[1][1] = cosX;
@@ -611,7 +618,6 @@ namespace MathUtil
             rotationMatrixX.entry[2][1] = sinX;
             rotationMatrixX.entry[2][2] = cosX;
 
-            // Y ekseninde döndürme matrisi
             NiMatrix3 rotationMatrixY;
             rotationMatrixY.entry[0][0] = cosY;
             rotationMatrixY.entry[0][2] = sinY;
@@ -619,7 +625,6 @@ namespace MathUtil
             rotationMatrixY.entry[2][0] = -sinY;
             rotationMatrixY.entry[2][2] = cosY;
 
-            // Z ekseninde döndürme matrisi
             NiMatrix3 rotationMatrixZ;
             rotationMatrixZ.entry[0][0] = cosZ;
             rotationMatrixZ.entry[0][1] = -sinZ;
@@ -627,7 +632,6 @@ namespace MathUtil
             rotationMatrixZ.entry[1][1] = cosZ;
             rotationMatrixZ.entry[2][2] = 1.0;
 
-            // Orijinal matris ile çarpma
             a_matrix = a_matrix * rotationMatrixX * rotationMatrixY * rotationMatrixZ;
         }
     //    [[nodiscard]] static NiMatrix3 SetRotationMatrixByVector(float Ax, float Ay, float Az, float Bx, float By, float Bz) {
@@ -659,10 +663,29 @@ namespace MathUtil
 //
     //        return matrix;
     //    }
+        //http://www.iquilezles.org/www/articles/minispline/minispline.html
+        [[nodiscard]] static RE::NiPoint3 CatmullRom(const RE::NiPoint3& a_p0, const RE::NiPoint3& a_p1, const RE::NiPoint3& a_p2, const RE::NiPoint3& a_p3, float a_t)
+        {
+            RE::NiPoint3 a = a_p1 * 2.f;
+            RE::NiPoint3 b = a_p2 - a_p0;
+            RE::NiPoint3 c = a_p0 * 2.f - a_p1 * 5.f + a_p2 * 4.f - a_p3;
+            RE::NiPoint3 d = -a_p0 + a_p1 * 3.f - a_p2 * 3.f + a_p3;
+
+            RE::NiPoint3 ret = (a + (b * a_t) + (c * a_t * a_t) + (d * a_t * a_t * a_t)) * 0.5f;
+            return ret;
+        }
+        [[nodiscard]] static RE::NiPoint3 HkVectorToNiPoint(const RE::hkVector4& vec) { return { vec.quad.m128_f32[0], vec.quad.m128_f32[1], vec.quad.m128_f32[2] }; }
     };
 }
 namespace ObjectUtil
 {
+    struct Capsule
+	{
+		RE::NiPoint3 a;
+		RE::NiPoint3 b;
+		float radius;
+	};
+
     struct Node
     {
         static float GetLength(RE::NiAVObject* a_node)
@@ -673,15 +696,50 @@ namespace ObjectUtil
             } return length;
         }
 
-	    static RE::NiTransform GetLocalTransform(RE::NiAVObject* a_node, const RE::NiTransform& a_worldTransform, bool a_bUseOldParentTransform = false)    //  from ersh precision
-	    {
-	    	RE::NiPointer<RE::NiNode> parent(a_node->parent);
-	    	if (parent) {
-	    		RE::NiTransform inverseParent = (a_bUseOldParentTransform ? parent->previousWorld : parent->world).Invert();
-	    		return inverseParent * a_worldTransform;
-	    	}
-	    	return a_worldTransform;
-	    }
+        static RE::NiTransform GetLocalTransform(RE::NiAVObject* a_node, const RE::NiTransform& a_worldTransform, bool a_bUseOldParentTransform = false)    //  from ersh precision
+        {
+            RE::NiPointer<RE::NiNode> parent(a_node->parent);
+            if (parent) {
+                RE::NiTransform inverseParent = (a_bUseOldParentTransform ? parent->previousWorld : parent->world).Invert();
+                return inverseParent * a_worldTransform;
+            }
+            return a_worldTransform;
+        }
+
+        static void UpdateNodeTransformLocal(RE::NiAVObject* node, const RE::NiTransform& world)
+        {
+            if (!node || !node->parent)
+                return;
+
+            auto invParent = node->parent->world.Invert();
+
+            node->local = invParent * world;
+        }
+
+        static  bool GetCapsuleParams(RE::NiAVObject* a_node, Capsule& a_outCapsule)
+        {
+            if (a_node && a_node->collisionObject) {
+                auto collisionObject = static_cast<RE::bhkCollisionObject*>(a_node->collisionObject.get());
+                auto rigidBody = collisionObject->GetRigidBody();
+
+                if (rigidBody && rigidBody->referencedObject) {
+                    RE::hkpRigidBody* hkpRigidBody = static_cast<RE::hkpRigidBody*>(rigidBody->referencedObject.get());
+                    const RE::hkpShape* hkpShape = hkpRigidBody->collidable.shape;
+                    if (hkpShape->type == RE::hkpShapeType::kCapsule) {
+                        auto hkpCapsuleShape = static_cast<const RE::hkpCapsuleShape*>(hkpShape);
+                        float bhkInvWorldScale = RE::bhkWorld::GetWorldScaleInverse();
+
+                        a_outCapsule.radius = hkpCapsuleShape->radius * bhkInvWorldScale;
+                        a_outCapsule.a = MathUtil::Algebra::HkVectorToNiPoint(hkpCapsuleShape->vertexA) * bhkInvWorldScale;
+                        a_outCapsule.b = MathUtil::Algebra::HkVectorToNiPoint(hkpCapsuleShape->vertexB) * bhkInvWorldScale;
+
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
     };
 
     struct Projectile

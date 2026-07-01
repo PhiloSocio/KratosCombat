@@ -6,13 +6,14 @@ class Config
 {
 public:
     //Kratos
-    static inline float BarehandedDamageMult        = 10.f;
+    static inline float BarehandedDamageMult        = 5.f;
+    static inline float ThrowingDamageMult          = 1.f;
     static inline bool BuffRageWhenDamaged          = false;
     //Axe-Mace throw
     static inline float ThrowSpeed                  = 3700.f;       //  cm/s
     static inline float ThrowRotationSpeed          = 2160.f;       //  deg/s
-    static inline float NoGravityDurationLeviathan  = 0.36f;
-    static inline float NoGravityDurationMjolnir    = 0.36f;
+    static inline float NoGravityDurationLeviathan  = 1.36f;
+    static inline float NoGravityDurationMjolnir    = 1.36f;
     static inline std::string ThrowEvent            = "ThrowWeapon";
     static inline std::string ThrowEventV           = "ThrowWeaponV";
     static inline std::string ThrowEndEvent         = "ThrowAttackEnd";
@@ -24,12 +25,15 @@ public:
     //Trails
     static inline bool DrawTrails                   = true;         //  draw trails for thrown weapons
     static inline uint8_t TrailParticleCount        = 6u;           //  how many particles will be used for the trail
-    static inline std::string TrailModelPathLevi    = "effects/WeaponTrails/AttackTrailMagic_Frost.nif";
-    static inline std::string TrailModelPathMjolnir = "effects/WeaponTrails/AttackTrailMagic_Shock.nif";
+    static inline std::string TrailModelPathDef     = "effects/WeaponTrails/AttackTrail.nif";
+    static inline std::string TrailModelPathMagic   = "effects/WeaponTrails/AttackTrailMagic.nif";
+    static inline std::string TrailModelPathFrost   = "effects/WeaponTrails/AttackTrailMagic_Frost.nif";
+    static inline std::string TrailModelPathShock   = "effects/WeaponTrails/AttackTrailMagic_Shock.nif";
     
     //Requirements
     static inline bool IsSkipEquipAnimationInstalled = false;
     static inline bool IsAdvancedThrowingInstalled = false;
+    static inline bool UsePrecisionTrails = true;
     static inline bool IsPrecisionInstalled = false;
     static inline bool IsTrueDirectionalMovementInstalled = false;
 
@@ -47,6 +51,10 @@ public:
     static inline std::string CallAttackEvent       = "LeviCallAttack";
     static inline std::string ChargeLeviEvent       = "LeviCharge";
     static inline bool  DontDamageWhileArrive       = false;
+
+    //BoC
+    static inline bool RetroMoveset = false;
+    static inline RE::SpellItem* RetroMovesetSpell = nullptr;
 
     //Limit values
     static inline float MaxArrivalSpeed             = 69000.f;      //  cm/s
@@ -127,9 +135,10 @@ public:
     static inline uint32_t LongDistanceKey    = -1;
     static inline uint32_t PowerAttackKey     = -1;
 
-    static inline std::string DraupnirModESP    = "Draupnir Spear Mechanic.esp";
-    static inline std::string KratosCombatESP   = "KratosCombat.esp";
-    static inline std::string TridentModESP     = "KratosCombat-Trident.esp";
+    static inline std::string DraupnirModESP        = "Draupnir Spear Mechanic.esp";
+    static inline std::string KratosCombatESP       = "KratosCombat.esp";
+    static inline std::string BladesOfChaosModESP   = "KratosCombat-BladesOfChaos.esp";
+    static inline std::string TridentModESP         = "KratosCombat-Trident.esp";
 
     static inline bool  DebugModeOpen       = true;
 

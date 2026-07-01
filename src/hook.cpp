@@ -103,7 +103,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
             (projBase == Levi->LeviProjBaseL ? Levi->LeviathanAxeProjectileL : Levi->LeviathanAxeProjectileH) = a_this;
             (projBase == Levi->LeviProjBaseL ? Levi->LeviathanAxeProjectileH : Levi->LeviathanAxeProjectileL) = nullptr;
 
-            Levi->data.model = projectileNode;
+            Levi->data.model.reset(projectileNode);
         //    for (auto& projTrail : Levi->data.projTrails) {
         //        if (projTrail) {
         //            projTrail->lifetime = projTrail->age + 0.1;
@@ -111,7 +111,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
         //    }
         //
         //    auto animatedBone = projectileNode->GetObjectByName("Cylinder02");
-        //    auto leviModel = Levi->data.weaponModel;//(WeaponIdentify::LeviathanAxe->AsReference1() ? WeaponIdentify::LeviathanAxe->AsReference1()->Get3D() : nullptr);
+        //    auto leviModel = Levi->data.replacedProjectileModel;//(WeaponIdentify::LeviathanAxe->AsReference1() ? WeaponIdentify::LeviathanAxe->AsReference1()->Get3D() : nullptr);
         //    if (animatedBone && leviModel) {
         //        auto animatedNode = animatedBone->AsNode();
         //        auto leviNode = leviModel->AsNode();
@@ -195,7 +195,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     vel = linearDir * speed;
                 //  skip gravity effect for a while
                     if (livingTime < Config::NoGravityDurationLeviathan && projBase->data.gravity < Levi->data.gravity) {
-                        projBase->data.gravity = 1.f;
+                        projBase->data.gravity = 0.f;
                     } else {
                         projBase->data.gravity = Levi->data.gravity;
                     }
@@ -216,60 +216,17 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
     //                                      projectileNode->local.rotate.entry[2][2]};  //  cosb
 
                     RE::NiPoint3 rotation = linearDir;
-#ifdef EXPERIMENTAL_LEVIATHAN_MODEL
-/*
-leviAngle is a variable that keeps euler rotations of the leviathan's projectile.
-Levi->data.yAngle is the tilt angle of the leviathan.
-livingTime is the living time of the projectile from launching.
-Levi->data.rotationSpeed is the rotation speed of the projectile.
 
-the spin must look like the leviathan axe's throwed state spin from the god of war 2018 and ragnarok games.
-*/
-                    float spinAngle = livingTime * Levi->data.rotationSpeed;
-                    float yTilt = Levi->data.yAngle;
-
-                //  quaternion method
-                    RE::NiQuaternion yTiltQuat = 
-                        MathUtil::Algebra::QuaternionWithAngleAxis(yTilt, RE::NiPoint3(frontVec));
-
-                    RE::NiQuaternion spinQuat = 
-                        MathUtil::Algebra::QuaternionWithAngleAxis(spinAngle, RE::NiPoint3(upVec));
-
-                    RE::NiQuaternion finalQuat = MathUtil::Algebra::MultiplyQuaternions(yTiltQuat, spinQuat);
-
-                    RE::NiMatrix3 finalRot = MathUtil::Algebra::QuaternionToMatrix(finalQuat);
-
-                //    finalRot.ToEulerAnglesXYZ(rotation);
-
-                //  matrix method
-                    RE::NiMatrix3 tiltY;
-                    tiltY.SetEulerAnglesXYZ(0.f, Levi->data.yAngle, 0.f);
-
-                    RE::NiMatrix3 spinZ;
-                    spinZ.SetEulerAnglesXYZ(0.f, 0.f, spinAngle);
-
-                    RE::NiMatrix3 rotationMatrix = tiltY * spinZ;
-                //    rotationMatrix.ToEulerAnglesXYZ(rotation);
-
-                //  rodrigues method
-                    RE::NiPoint3 localRight(linearDir.UnitCross(RE::NiPoint3(upVec)));
-                    RE::NiPoint3 localUp(linearDir.UnitCross(localRight));
-                    RE::NiPoint3 rotatingAxis = MathUtil::Algebra::RotateVectorRodrigues(localUp, linearDir, Levi->data.yAngle);
-                    rotatingAxis.Unitize();
-                    rotation = MathUtil::Algebra::RotateVectorRodrigues(linearDir, rotatingAxis, livingTime * Levi->data.rotationSpeed);
-#endif
                     leviAngle.x = asin(rotation.z);
                 //    leviAngle.y = yTilt;
                     leviAngle.z = atan2(rotation.x, rotation.y);
                 }
             } else {
                 if (projBase != Levi->LeviProjBaseA) {
-#ifdef PRECISION
-                    if (APIs::precision || APIs::Request()) {
-                        APIs::precision->RemoveProjectileCollision(AnArchos->GetHandle(), Levi->collisionDefinition);
-                    }
-#endif
-                    runtimeData.flags |= (1 << 25); 
+            //        if (APIs::precision || APIs::Request()) {
+            //            APIs::precision->RemoveProjectileCollision(AnArchos->GetHandle(), Levi->collisionDefinition);
+            //        }
+                    runtimeData.flags |= pFlag::kDestroyed; 
                 //  spdlog::debug("[HOOK] levi destroyed before call"); 
                     return;
                 }
@@ -510,7 +467,7 @@ the spin must look like the leviathan axe's throwed state spin from the god of w
             auto mjolnir = Mjolnir::GetSingleton();
             if (a_this != mjolnir->LastMjolnirProjectile) mjolnir->LastMjolnirProjectile = a_this;
             mjolnir->MjolnirProjectileT = a_this;
-            mjolnir->data.model = a_this->Get3D();
+            mjolnir->data.model.reset(projectileNode);
 
             if (livingTime > 0.3f && mjolnir->GetThrowState() == tStateM::kThrown) mjolnir->SetThrowState(tStateM::kCanArrive);
 
@@ -625,7 +582,7 @@ the spin must look like the leviathan axe's throwed state spin from the god of w
 
                 if (mjolnir->isMjolnirArriving) {
                     if (projBase != mjolnir->MjolnirProjBaseA) {
-                        runtimeData.flags |= (1 << 25); 
+                        runtimeData.flags |= pFlag::kDestroyed; 
                     //  spdlog::debug("[HOOK] mjolnir destroyed before call");
                         return;
                     }
@@ -771,7 +728,7 @@ the spin must look like the leviathan axe's throwed state spin from the god of w
                 for (auto ID : Draupnir::MeleeHitProjectileIDs) {
                     if (ID == a_this->formID) {
                         if (livingTime > 0.1f) {
-                            runtimeData.flags|= (1 << 25);
+                            runtimeData.flags|= pFlag::kDestroyed;
                             Draupnir::DraupnirSpearProjBaseL->model = Draupnir::DefaultDraupnirModel;
                             Draupnir::MeleeHitProjectileIDs.clear();
                         }
@@ -788,7 +745,7 @@ the spin must look like the leviathan axe's throwed state spin from the god of w
             else {
                 auto trident = Trident::GetSingleton();
                 trident->data.proj = a_this;
-                trident->data.model = a_this->Get3D();
+                trident->data.model = projectileNode;
                 trident->data.position = a_this->data.location;
             }
         }
