@@ -333,8 +333,8 @@ public:
         uint32_t currentBoneIdx = 0;
         float currentTime = 0.f;
         float currentTimeOffset = 0.f;
-        PRECISION_API::TrailOverride trailOverride = PRECISION_API::TrailOverride();
-        PRECISION_API::TrailTransformOverride transformOverride = PRECISION_API::TrailTransformOverride();
+        TrailOverride trailOverride = TrailOverride();
+        TrailTransformOverride transformOverride = TrailTransformOverride();
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
         RE::NiNode* stuckedBone     = nullptr;
@@ -632,19 +632,31 @@ public:
     bool Initialize();
 
     struct Data {
-        float gravity = 2.69f;
-        float throwingChargeDuration = 0.f;
+        RE::NiPointer<RE::Projectile>   proj;
+        RE::NiPointer<RE::NiAVObject>   model;
+        RE::TESObjectWEAP*              weap    = nullptr;
+        RE::EnchantmentItem*            ench    = nullptr;
+        RE::AlchemyItem*                poison  = nullptr;
+        RE::NiPointer<RE::NiNode>       weaponModelCopy;
+        RE::NiPointer<RE::NiNode>       replacedProjectileModel;
+        TrailOverride                   trailOverride       = TrailOverride();
+        TrailTransformOverride          transformOverride   = TrailTransformOverride();
+        float damage                    = 0.f;
+        float gravity                   = 2.69f;
+        float rotationSpeed             = Config::ThrowRotationSpeed; //  rad/s
+        float throwingChargeDuration    = 0.f;
     };
 
     static inline Data data;
 
+    static inline RE::NiPointer<RE::Projectile>   DraupnirSpearProjectiles[9];                            //  they will be explode after Draupnir's Call move
+    static inline RE::NiPointer<RE::Projectile>   DraupnirsCallProjectiles[9];                            //  hard to explain
+    static inline RE::NiPointer<RE::NiNode>       DraupnirSpearHitBones[9];                               //  keeps attached nodes of throwed draupnirs for forced detonation*
+    static inline RE::NiPointer<RE::Actor>        DraupnirSpearHitActors[9];                              //  keeps hitten actors
+    static inline RE::NiPointer<RE::Projectile>   DraupnirSpearProjectileL;
+
     static inline RE::SpellItem*        SpellDraupnirProjL          = nullptr;
     static inline RE::SpellItem*        SpellDraupnirsCallProjL     = nullptr;
-    static inline RE::Projectile*       DraupnirSpearProjectiles[9];                            //  they will be explode after Draupnir's Call move
-    static inline RE::Projectile*       DraupnirsCallProjectiles[9];                            //  hard to explain
-    static inline RE::NiNode*           DraupnirSpearHitBones[9];                               //  keeps attached nodes of throwed draupnirs for forced detonation*
-    static inline RE::Actor*            DraupnirSpearHitActors[9];                              //  keeps hitten actors
-    static inline RE::Projectile*       DraupnirSpearProjectileL    = nullptr;
     static inline RE::BGSProjectile*    DraupnirSpearProjBaseL      = nullptr;
     static inline RE::BGSProjectile*    DraupnirsCallProjBaseL      = nullptr;
 
@@ -667,6 +679,8 @@ public:
     /* forced detonation?
     forced detonation needed for living targets, because timing projectile explosions not working after hitting to actors.
     */
+    static inline AsyncUtil::GameTime projectileUpdate;
+    static inline AsyncUtil::GameTime trailUpdate;
 private:
 friend class ProjectileHook;
     static inline float explosionMagnitude = 1.f;
@@ -678,7 +692,7 @@ friend class ProjectileHook;
     static inline RE::NiAVObject* spearModel = nullptr;
     static inline std::vector<RE::FormID> MeleeHitProjectileIDs;
     static inline RE::BSFixedString DefaultDraupnirModel;
-    static inline std::vector<std::tuple<RE::NiNode*, RE::Actor*, RE::Projectile*>> spearHits;
+    static inline std::vector<std::tuple<RE::NiPointer<RE::NiNode>, RE::NiPointer<RE::Actor>, RE::NiPointer<RE::Projectile>>> spearHits;
     static void TriggerExplosions(float a_delay, float a_force, RE::ProjectileHandle* a_pHandle);
     static void TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::ProjectileHandle* a_pHandle, RE::Actor* a_target);
     static void TriggerExplosionAtLocation(RE::Projectile* a_proj, RE::ProjectileHandle* a_pHandle);
@@ -720,9 +734,8 @@ public:
         RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
         RE::NiPointer<RE::NiAVObject>   model;
         RE::NiPointer<RE::NiNode>       weaponModelCopy;
-        RE::NiPointer<RE::NiNode>       replacedProjectileModel;
-        PRECISION_API::TrailOverride    trailOverride = PRECISION_API::TrailOverride();
-        PRECISION_API::TrailTransformOverride transformOverride = PRECISION_API::TrailTransformOverride();
+        TrailOverride                   trailOverride       = TrailOverride();
+        TrailTransformOverride          transformOverride   = TrailTransformOverride();
         RE::NiTransform trailTransform;
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw

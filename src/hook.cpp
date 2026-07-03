@@ -190,12 +190,9 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     leviAngle.x = asin(curvyDir.z);
                     leviAngle.z = atan2(curvyDir.x, curvyDir.y);
                 } else {
-                    float speed = Config::ThrowSpeed;
-                //  speed *= (*g_deltaTimeRealTime / *g_deltaTime); //  for not be effected by slow motion/fast motion
-                    vel = linearDir * speed;
                 //  skip gravity effect for a while
-                    if (livingTime < Config::NoGravityDurationLeviathan && projBase->data.gravity < Levi->data.gravity) {
-                        projBase->data.gravity = 0.f;
+                    if (livingTime < Config::NoGravityDurationLeviathan) {
+                        projBase->data.gravity = 0.69f;
                     } else {
                         projBase->data.gravity = Levi->data.gravity;
                     }
@@ -537,8 +534,8 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     mjolnirAngle.x = asin(curvyDir.z);
                     mjolnirAngle.z = atan2(curvyDir.x, curvyDir.y);
                 } else {
-                    if (livingTime < Config::NoGravityDurationMjolnir && projBase->data.gravity < mjolnir->data.gravity) {
-                        projBase->data.gravity = 1.f;
+                    if (livingTime < Config::NoGravityDurationMjolnir) {
+                        projBase->data.gravity = 0.69f;
                     } else {
                         projBase->data.gravity = mjolnir->data.gravity;
                     }
@@ -569,22 +566,22 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 if (arrSpeed < Config::MinArrivalSpeed && !isCatchable) arrSpeed = Config::MinArrivalSpeed * 0.7f;
                 else if (arrSpeed > Config::MaxArrivalSpeed)            arrSpeed = Config::MaxArrivalSpeed * 0.7f;
 
-                if (isCatchable && projBase == mjolnir->MjolnirProjBaseA) {
-                    if (mjolnir->GetThrowState() == tStateM::kArriving) mjolnir->SetThrowState(tStateM::kArrived);
-                    mjolnir->Catch();
-                    spdlog::debug("Mjolnir proj catched");
-            //    } else {
-            //        a_this->GetCurrent3D()->world.rotate.SetEulerAnglesXYZ(40,30,60); //  these methods can't change rotation
-            //        a_this->Get3D()->world.rotate.SetEulerAnglesXYZ(40,30,60);
-            //        a_this->Get3D1(false)->world.rotate.SetEulerAnglesXYZ(40,30,60);
-            //        a_this->Get3D2()->world.rotate.SetEulerAnglesXYZ(40,30,60);
-                }
 
                 if (mjolnir->isMjolnirArriving) {
                     if (projBase != mjolnir->MjolnirProjBaseA) {
-                        runtimeData.flags |= pFlag::kDestroyed; 
+                        runtimeData.flags |= pFlag::kDestroyed;
                     //  spdlog::debug("[HOOK] mjolnir destroyed before call");
                         return;
+                    }
+                    if (isCatchable && projBase == mjolnir->MjolnirProjBaseA) {
+                        if (mjolnir->GetThrowState() == tStateM::kArriving) mjolnir->SetThrowState(tStateM::kArrived);
+                        mjolnir->Catch();
+                        spdlog::debug("Mjolnir proj catched");
+                //    } else {
+                //        a_this->GetCurrent3D()->world.rotate.SetEulerAnglesXYZ(40,30,60); //  these methods can't change rotation
+                //        a_this->Get3D()->world.rotate.SetEulerAnglesXYZ(40,30,60);
+                //        a_this->Get3D1(false)->world.rotate.SetEulerAnglesXYZ(40,30,60);
+                //        a_this->Get3D2()->world.rotate.SetEulerAnglesXYZ(40,30,60);
                     }
                     if (mjolnir->MjolnirProjectileA != a_this) mjolnir->MjolnirProjectileA = a_this;
                     if (mjolnir->GetThrowState() == tStateM::kCanArrive) mjolnir->SetThrowState(tStateM::kArriving);
@@ -719,17 +716,18 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
         }
         else if (WeaponIdentify::IsRelic(projBase, Kratos::Relic::kDraupnirSpear)) {
             if (projBase == Draupnir::DraupnirSpearProjBaseL) {
+                Draupnir::data.model.reset(projectileNode);
             //  skip gravity effect for a while
-                if (livingTime < Config::NoGravityDurationDraupnir && projBase->data.gravity < Draupnir::data.gravity) {
-                    projBase->data.gravity = 1.f;
+                if (livingTime < Config::NoGravityDurationDraupnir) {
+                    projBase->data.gravity = 0.69f;
                 } else {
                     projBase->data.gravity = Draupnir::data.gravity;
                 }
                 for (auto ID : Draupnir::MeleeHitProjectileIDs) {
                     if (ID == a_this->formID) {
-                        if (livingTime > 0.1f) {
+                        if (livingTime > 0.069f) {
                             runtimeData.flags|= pFlag::kDestroyed;
-                            Draupnir::DraupnirSpearProjBaseL->model = Draupnir::DefaultDraupnirModel;
+                        //    Draupnir::DraupnirSpearProjBaseL->model = Draupnir::DefaultDraupnirModel;
                             Draupnir::MeleeHitProjectileIDs.clear();
                         }
                     }
@@ -919,6 +917,17 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
             if (mjolnir->GetThrowState() == tStateM::kThrown) mjolnir->SetThrowState(tStateM::kCanArrive);
         }
         else if (projBase == Draupnir::DraupnirSpearProjBaseL) {
+
+            const RE::BSFixedString stuckedModelNodeName = "DraupnirProjectile";
+            auto stuckedModel = Draupnir::data.model->GetObjectByName(stuckedModelNodeName);
+            stuckedModel->GetFlags() &= RE::NiAVObject::Flag::kHidden;
+
+            const RE::BSFixedString stuckedModelLightFadeNodeName = "LightSpellProjectile";
+            auto stuckedLight = Draupnir::data.model->GetObjectByName(stuckedModelLightFadeNodeName);
+            stuckedLight->GetFlags() &= RE::NiAVObject::Flag::kHidden;
+
+            Draupnir::data.replacedProjectileModel.reset();
+
             for (auto& point : a_AllCdPointCollector->hits) {
                 const auto target = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
 
@@ -926,19 +935,14 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                     if (target->formType == RE::FormType::ActorCharacter) {
                         if (const auto victim = target->As<RE::Actor>(); victim) {
                             if (!victim->IsDead()) {
-                                RE::EnchantmentItem* ench = nullptr;
-                                if (rtData.weaponSource && rtData.weaponSource->formEnchanting) ench = rtData.weaponSource->formEnchanting;
+                                if (Draupnir::data.weap && Draupnir::data.ench && Draupnir::data.ench->effects[0])
+                                    ObjectUtil::Enchantment::ChargeInventoryWeapon(shooter, Draupnir::data.weap, -Draupnir::data.ench->effects[0]->effectItem.magnitude);
 
                                 if (shooter) {
-                                    if (ench) {
-                                        if (const auto eff = ench->GetCostliestEffectItem(); eff && eff->IsHostile()) {
-                                            shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, ench);
-                                        //  ench->data.chargeOverride -= 1000u;
-                                        }
-                                    } else {
-                                        if (rtData.weaponSource)
-                                            shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
-                                    }
+                                    shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
+
+                                    auto kratos = Kratos::GetSingleton();
+                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(rtData.weaponDamage, 0.5f));
                                 }
                             }
                         }

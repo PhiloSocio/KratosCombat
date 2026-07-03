@@ -935,7 +935,6 @@ namespace ObjectUtil
             float damage = 0.f;
             if (a_attacker && a_target && a_weapon) {
                 if (auto weaponIE = GetInventoryEntryDataForBoundObject(a_attacker, a_weapon); weaponIE) {
-                    spdlog::debug("before crash 3");
                     RE::HitData hitData;
                     hitData.Populate(a_attacker, a_target, weaponIE);
                     damage = hitData.totalDamage;

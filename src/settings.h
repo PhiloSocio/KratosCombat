@@ -2,6 +2,9 @@
 #include "SimpleIni.h"
 #include "API/PrecisionAPI.h"
 
+using TrailOverride = PRECISION_API::TrailOverride;
+using TrailTransformOverride = PRECISION_API::TrailTransformOverride;
+
 class Config
 {
 public:
@@ -12,8 +15,8 @@ public:
     //Axe-Mace throw
     static inline float ThrowSpeed                  = 3700.f;       //  cm/s
     static inline float ThrowRotationSpeed          = 2160.f;       //  deg/s
-    static inline float NoGravityDurationLeviathan  = 1.36f;
-    static inline float NoGravityDurationMjolnir    = 1.36f;
+    static inline float NoGravityDurationLeviathan  = 0.36f;
+    static inline float NoGravityDurationMjolnir    = 0.36f;
     static inline std::string ThrowEvent            = "ThrowWeapon";
     static inline std::string ThrowEventV           = "ThrowWeaponV";
     static inline std::string ThrowEndEvent         = "ThrowAttackEnd";
