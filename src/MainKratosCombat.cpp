@@ -960,7 +960,7 @@ void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Act
                 _gettingHittedInValor = false;
                 a_actor->SetGraphVariableInt("iKratosActionType", (uint8_t)Kratos::Action::kRage);
                 a_actor->NotifyAnimationGraph("DoKratosAction");
-                RestoreRage(a_actor, -(*values.rageDamageAmount * 10.f), true);
+                RestoreRage(a_actor, -(*values.rageDamageAmount * 5.f), true);
             }
             if (VFXeffect.valor) a_actor->ApplyArtObject(VFXeffect.valor, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
             break;
@@ -1000,7 +1000,7 @@ void Kratos::EndRage(const Kratos::Rage a_rage, const bool a_fromAnnotation, con
                 auto aHandle = a_actor->GetHandle();
                 mTarget->DispelEffect(SpellSpartanRage, aHandle);
                 ResetEquipAnimationAfter(0, a_actor);
-                RestoreRage(a_actor, -(*values.rageDamageAmount * 6.f), true);
+                RestoreRage(a_actor, -(*values.rageDamageAmount * 3.f), true);
                 if (_LastEquippedObjectR)
                     ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectR, true);
                 if (_LastEquippedObjectL)
@@ -1104,491 +1104,8 @@ void LeviathanAxe::Update(const float a_delta) {
         } else spdlog::warn("proj or proj->Get3D2() null");
     }
     if (Config::DrawTrails) {
-        if (trailUpdate.IsTimeToUpdate()) {
-            auto bone = data.replacedProjectileModel;
-            if (bone) {
-                const bool isCharged = IsCharged(true);
-                float particleMult = isCharged ? 3.f : 2.f;
-                data.trailOverride.meshOverride = isCharged ? Config::TrailModelPathFrost : Config::TrailModelPathDef;
-                float length = bone->worldBound.radius;
-                ObjectUtil::Capsule capsule;
-                ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
-                float capsuleLength = capsule.a.GetDistance(capsule.b);
-                length = length > capsuleLength ? length : capsuleLength;
-                float scale = fmax(length, capsule.radius) * 0.01f;
-                float tipOffset = length;
-
-                if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
-                    trailUpdate.Done();
-                    TrailOverride trailOverride = data.trailOverride;
-                    trailOverride.lifetimeMult = particleMult;
-                    data.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
-                    data.transformOverride.scale = bone->worldBound.radius * 0.01f;
-                    auto node = RE::NiNode::Create(0);
-                    bone->AttachChild(node, false);
-                    APIs::precision->AddTrailEffect(
-                        node, 
-                        RE::PlayerCharacter::GetSingleton()->GetHandle(), 
-                        RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                        trailOverride, 
-                        data.transformOverride);
-                    if (isCharged) {
-                        trailOverride.meshOverride = Config::TrailModelPathDef;
-                        APIs::precision->AddTrailEffect(
-                            node, 
-                            RE::PlayerCharacter::GetSingleton()->GetHandle(), 
-                            RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                            trailOverride, 
-                            data.transformOverride);
-                    }
-                //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastLeviProjectile);
-                } else {
-                    auto weaponForward = frontVec3;
-                    data.trailTransform = bone->world;
-                    data.trailTransform.translate +=
-                        data.trailTransform.rotate * weaponForward * tipOffset;
-
-                //    auto dir = data.trailTransform.translate - bone->world.translate;
-                    auto dir = data.lastOrientation;
-                //    dir.Unitize();
-                    MathUtil::Algebra::SetRotationMatrix(data.trailTransform.rotate, -dir.x, dir.y, dir.z);
-                    RE::NiMatrix3 weaponRotation(0.f, NI_HALF_PI, -NI_HALF_PI);
-                    data.trailTransform.rotate = data.trailTransform.rotate * weaponRotation;
-                    RE::NiMatrix3 flip90(-NI_HALF_PI, 0.f, 0.f);
-                    data.trailTransform.rotate = data.trailTransform.rotate * flip90;
-
-                    if (!data.projTrail) {
-                        data.projTrail = RE::NiPointer<RE::BSTempEffectParticle>(
-                            RE::BSTempEffectParticle::Spawn(
-                                RE::PlayerCharacter::GetSingleton()->GetParentCell(),
-                                10.f,
-                                data.trailOverride.meshOverride.value().data(),
-                                data.trailTransform.rotate,
-                                data.trailTransform.translate,
-                                scale,
-                                7,
-                                nullptr));
-
-                        data.trailRootNode.reset();
-                        data.trailTimeAccumulator = 0.f;
-                        data.segmentTimestamps.clear();
-                        spdlog::warn("Created trail particle.");
-                    } else if (!data.trailRootNode) {
-                        auto particleObject = data.projTrail ? data.projTrail->particleObject : nullptr;
-                        auto fadeNode = particleObject ? particleObject->AsFadeNode() : nullptr;
-                        auto trailRoot = fadeNode ? fadeNode->GetObjectByName("TrailRoot"sv) : nullptr;
-                        data.trailRootNode.reset(trailRoot ? trailRoot->AsNode() : nullptr);
-                        data.trailSegmentCount = data.trailRootNode ? data.trailRootNode->GetChildren().size() : 0u;
-
-                        data.trailTransformHistory.clear();
-                    //    for (uint32_t i = 0; i < data.trailSegmentCount; i++)
-                    //        data.trailTransformHistory.push_front(data.trailTransform);
-
-                        if (data.trailRootNode)
-                            if (data.trailRootNode->GetChildren().empty())
-                                spdlog::error("Trail root node has no children! Check the trail model path!");
-                            else
-                                spdlog::info("Found projectile trail root node!");
-                        else 
-                            spdlog::warn("Cannot find projectile trail root node...");
-                    } else {
-                        if (auto fadeNode = data.projTrail->particleObject ? data.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
-                            fadeNode->currentFade = 1.f;
-
-                            data.trailRootNode->world = data.trailTransform;
-                            ObjectUtil::Node::UpdateNodeTransformLocal(data.trailRootNode.get(), data.trailTransform);
-                            data.trailTransformHistory.emplace_back(data.trailTransform);
-    /*
-                            if (data.trailTransformHistory.size() >= 4) {
-                                    float segmentsToAdd = 0.f;
-                                    uint32_t segmentsToAddTrunc = 0;
-
-                                    // calculate how many segments we'll be adding on this update
-                                    segmentsToAdd = data.trailTimeAccumulator + (a_delta * 120.f);
-                                    segmentsToAddTrunc = trunc(segmentsToAdd);
-                                    data.trailTimeAccumulator = segmentsToAdd - segmentsToAddTrunc;
-
-                                    if (data.segmentTimestamps.size() > 0) {
-                                        // move the tail if expired
-                                        uint32_t segmentsToMove = 0;
-
-                                        for (uint32_t i = 0; i < data.currentBoneIdx; ++i) {
-                                            if (data.segmentTimestamps.size() > i && data.currentTime + data.currentTimeOffset > data.segmentTimestamps[i] + (0.1f * 1.f)) {
-                                                ++segmentsToMove;
-                                            } else {
-                                                break;
-                                            }
-                                        }
-
-                                        // check if there's gonna be enough bones left to add new segments, if not - forcibly move the tail, even if it's not expired yet
-                                        uint32_t totalSegments = data.currentBoneIdx + segmentsToAddTrunc - segmentsToMove;
-                                        if (totalSegments >= data.trailRootNode->children.size()) {
-                                            segmentsToMove += totalSegments - (data.trailRootNode->children.size() - 1);
-                                            uint32_t timestampIdx = data.segmentTimestamps.size() > segmentsToMove ? segmentsToMove : data.segmentTimestamps.size() - 1;
-                                            data.currentTimeOffset = data.segmentTimestamps[timestampIdx] + (0.1f * 1.f) - data.currentTime;
-                                        }
-
-                                        segmentsToMove = std::min(segmentsToMove, static_cast<uint32_t>(data.segmentTimestamps.size()));
-
-                                        if (segmentsToMove > 0) {
-                                            data.segmentTimestamps.erase(data.segmentTimestamps.begin(), data.segmentTimestamps.begin() + segmentsToMove);
-
-                                            for (uint32_t i = 0; i < data.currentBoneIdx; ++i) {
-                                                if (data.trailRootNode->children.size() > i + segmentsToMove) {
-                                                    auto& segmentBone = data.trailRootNode->children[i];
-                                                    auto& segmentToRead = data.trailRootNode->children[i + segmentsToMove];
-                                                    if (segmentBone && segmentToRead) {
-                                                        segmentBone->local = segmentToRead->local;
-                                                    }
-                                                }
-                                            }
-
-                                            data.currentBoneIdx -= segmentsToMove;
-                                        }
-                                    }                               
-
-                                    // add new segment(s)
-                                    if (segmentsToAdd > 0.f) {
-                                        auto p3_it = data.trailTransformHistory.rbegin();
-                                        auto p2_it = p3_it + 1;
-                                        auto p1_it = p2_it + 1;
-                                        auto p0_it = p1_it + 1;
-
-                                        auto& p0 = p0_it->translate;
-                                        auto& p1 = p1_it->translate;
-                                        auto& p2 = p2_it->translate;
-                                        auto& p3 = p3_it->translate;
-
-                                        for (uint32_t i = 0; i < segmentsToAddTrunc; ++i) {
-                                            if (data.trailRootNode->children.size() > data.currentBoneIdx) {
-                                                auto& segmentBone = data.trailRootNode->children[data.currentBoneIdx];
-                                                if (segmentBone) {
-                                                    float t = (i + 1.f) / segmentsToAdd;
-
-                                                    RE::NiPoint3 p0end = p0 + (p0_it->rotate * rightVec3) * 50.f;
-                                                    RE::NiPoint3 p1end = p1 + (p1_it->rotate * rightVec3) * 50.f;
-                                                    RE::NiPoint3 p2end = p2 + (p2_it->rotate * rightVec3) * 50.f;
-                                                    RE::NiPoint3 p3end = p3 + (p3_it->rotate * rightVec3) * 50.f;
-
-                                                    RE::NiPoint3 interpolatedPos = MathUtil::Algebra::CatmullRom(p0, p1, p2, p3, t);
-                                                    RE::NiPoint3 interpolatedEnd = MathUtil::Algebra::CatmullRom(p0end, p1end, p2end, p3end, t);
-
-                                                    RE::NiPoint3 interpolatedDir = interpolatedEnd - interpolatedPos;
-                                                    interpolatedDir.Unitize();
-
-                                                    RE::NiTransform newTransform = segmentBone->world;
-
-                                                    MathUtil::Algebra::SetRotationMatrix(newTransform.rotate, -interpolatedDir.x, interpolatedDir.y, interpolatedDir.z);
-
-                                                    newTransform.rotate = newTransform.rotate * weaponRotation;
-                                                    newTransform.translate = interpolatedPos;
-                                                    newTransform.scale = scale;
-
-                                                    ObjectUtil::Node::UpdateNodeTransformLocal(segmentBone.get(), newTransform);
-                                                    segmentBone->world = newTransform;
-
-                                                    data.segmentTimestamps.emplace_back(data.currentTime + a_delta * t);
-                                                    ++data.currentBoneIdx;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            if (data.trailTransformHistory.size() > 0 && data.currentBoneIdx < data.trailRootNode->children.size()) {
-                                    RE::NiTransform worldTransform = *(data.trailTransformHistory.rbegin());
-
-                                    RE::NiPoint3 end = worldTransform.translate + (worldTransform.rotate * rightVec3) * 50.f;
-                                    RE::NiPoint3 dir = end - worldTransform.translate;
-                                    dir.Unitize();
-
-                                    //worldTransform.rotate.SetEulerAnglesXYZ(dir);
-                                    MathUtil::Algebra::SetRotationMatrix(worldTransform.rotate, -dir.x, dir.y, dir.z);
-                                    worldTransform.rotate = worldTransform.rotate * weaponRotation;
-                                    worldTransform.scale = scale;
-
-                                    RE::NiTransform localTransform = ObjectUtil::Node::GetLocalTransform(data.trailRootNode->children[data.currentBoneIdx].get(), worldTransform);
-
-                                    for (uint32_t i = data.currentBoneIdx; i < data.trailRootNode->children.size(); ++i) {
-                                        auto& segmentBone = data.trailRootNode->children[i];
-                                        if (segmentBone) {
-                                            segmentBone->local = localTransform;
-                                            segmentBone->world = worldTransform;
-                                        }
-                                    }
-                                }
-    */
-    /*
-                            data.trailRootNode->world = data.trailTransform;
-                            ObjectUtil::Node::UpdateNodeTransformLocal(data.trailRootNode.get(), data.trailTransform);
-                            RE::NiPoint3 delta =
-                                data.trailTransform.translate -
-                                data.lastTrailTransform.translate;
-
-                            float travelled = delta.Length();
-
-                            delta.Unitize();
-
-                            float segmentSpacing = length * 0.10f;
-                            float distance = travelled;
-
-                            while (distance >= segmentSpacing)
-                            {
-                                RE::NiTransform sample = data.lastTrailTransform;
-
-                                sample.translate =
-                                    data.lastTrailTransform.translate +
-                                    delta * distance;
-
-                                sample.rotate = data.trailTransform.rotate;
-
-                                data.trailTransformHistory.push_front(sample);
-
-                                if (data.trailTransformHistory.size() > data.trailSegmentCount)
-                                    data.trailTransformHistory.pop_back();
-
-                                distance -= segmentSpacing;
-                            }
-
-                            data.lastTrailTransform = data.trailTransform;
-                            data.trailTransformHistory.push_front(data.trailTransform);
-
-                            if (data.trailTransformHistory.size() > data.trailSegmentCount)
-                                data.trailTransformHistory.pop_back();
-
-                            for (uint32_t i = 0; i < data.trailTransformHistory.size(); i++) {
-                                auto segmentTransform = data.trailTransformHistory[i];
-
-                                if (i + 1 < data.trailTransformHistory.size()) {
-                                    RE::NiPoint3 dir =
-                                        data.trailTransformHistory[i].translate -
-                                        data.trailTransformHistory[i + 1].translate;
-
-                                    dir.Unitize();
-
-                                    MathUtil::Algebra::SetRotationMatrix(segmentTransform.rotate, -dir.x, dir.y, dir.z);
-
-                                    segmentTransform.rotate = segmentTransform.rotate * weaponRotation;
-                                    segmentTransform.rotate = segmentTransform.rotate * flip90;
-                                }
-
-                                auto& segment = data.trailRootNode->GetChildren()[i];
-
-                                ObjectUtil::Node::UpdateNodeTransformLocal(segment.get(), segmentTransform);
-                                segment->world = segmentTransform;
-                            }
-    */
-                        }
-    /*
-                        float deltaDistance = data.lastVelocity.Length() * a_delta;
-                        data.trailDistanceAccumulator += deltaDistance;
-                        float segmentSpacing = std::max(4.f, length * 0.15f) * 20.f;
-                    //    if (data.trailDistanceAccumulator < segmentSpacing)
-                    //        data.trailDistanceAccumulator = segmentSpacing;
-
-                        spdlog::info(
-                            "history={} segments={} deltaDist={} accumulator={}",
-                            data.trailTransformHistory.size(),
-                            data.trailSegmentCount,
-                            deltaDistance,
-                            data.trailDistanceAccumulator);
-                        int whileCount = 0;
-                        while (data.trailDistanceAccumulator >= segmentSpacing) {
-                            whileCount++;
-                            data.trailDistanceAccumulator -= segmentSpacing;
-                            RE::NiTransform sample = data.trailTransform;
-                            sample.translate -= data.lastOrientation * data.trailDistanceAccumulator;
-                            data.trailTransformHistory.push_front(sample);
-                            if (data.trailTransformHistory.size() > data.trailSegmentCount)
-                                data.trailTransformHistory.pop_back();
-                        }
-                        spdlog::info(
-                            "length={} spacing={} delta={} whileCount={}",
-                            length,
-                            segmentSpacing,
-                            deltaDistance,
-                            whileCount);
-
-                        if (!data.trailTransformHistory.empty()) {
-                            auto& first = data.trailTransformHistory.front().translate;
-                            auto& last = data.trailTransformHistory.back().translate;
-                            spdlog::info(
-                                "trail length = {}",
-                                (first - last).Length());
-                        }
-    */
-    /*
-                        float deltaDistance = data.lastVelocity.Length() * a_delta;
-                        data.trailDistanceAccumulator += deltaDistance;
-                        float segmentSpacing = std::max(4.f, length * 0.15f);
-                        while (data.trailDistanceAccumulator >= segmentSpacing) {
-                            data.trailDistanceAccumulator -= segmentSpacing;
-                            RE::NiTransform sample = data.trailTransform;
-                            sample.translate -= data.lastOrientation * data.trailDistanceAccumulator;
-                            data.trailTransformHistory.push_front(sample);
-                            if (data.trailTransformHistory.size() > data.trailSegmentCount) {
-                                data.trailTransformHistory.pop_back();
-                            }
-                        }
-    */
-    /*
-                        constexpr float SamplesPerSecond = 120.f;
-
-                        if (!data.hasLastTrailTransform)
-                        {
-                            data.lastTrailTransform = data.trailTransform;
-                            data.hasLastTrailTransform = true;
-                        }
-
-                        data.trailTimeAccumulator += a_delta;
-
-                        const float sampleTime = 1.f / SamplesPerSecond;
-
-                        while (data.trailTimeAccumulator >= sampleTime)
-                        {
-                            data.trailTimeAccumulator -= sampleTime;
-
-                            float alpha = 1.f - data.trailTimeAccumulator / sampleTime;
-
-                            RE::NiTransform sample = data.lastTrailTransform;
-
-                            sample.translate =
-                                data.lastTrailTransform.translate +
-                                (data.trailTransform.translate - data.lastTrailTransform.translate) * alpha;
-
-                            sample.rotate = data.trailTransform.rotate;
-
-                            data.trailTransformHistory.push_front(sample);
-
-                            if (data.trailTransformHistory.size() > data.trailSegmentCount) 
-                                data.trailTransformHistory.pop_back();
-                        }
-
-                        data.lastTrailTransform = data.trailTransform;
-    */
-    /*
-                        float deltaDistance = data.lastVelocity.Length() * a_delta;
-                        float segmentSpacing = std::max(4.f, length * 0.15f) / particleMult;
-                        if (data.trailDistanceAccumulator == 0.f)
-                            data.trailDistanceAccumulator = segmentSpacing;
-                        data.trailDistanceAccumulator += deltaDistance;
-                        while (data.trailDistanceAccumulator >= segmentSpacing) {
-                            data.trailDistanceAccumulator -= segmentSpacing;
-
-                            RE::NiTransform sample = data.trailTransform;
-
-                            float sampleOffset = data.trailDistanceAccumulator;
-
-                            sample.translate -= data.lastOrientation * sampleOffset;
-
-                            data.trailTransformHistory.push_front(sample);
-
-                            if (data.trailTransformHistory.size() > data.trailSegmentCount)
-                                data.trailTransformHistory.pop_back();
-                        }
-    */
-    /*
-                        float segmentSpacing = std::max(4.f, length * 0.15f);
-                        if (data.trailDistanceAccumulator == 0.f)
-                            data.trailDistanceAccumulator = segmentSpacing;
-                        float deltaDistance = data.lastVelocity.Length() * a_delta;
-                        data.trailDistanceAccumulator += deltaDistance;
-                        while (data.trailDistanceAccumulator >= segmentSpacing) {
-                            data.trailDistanceAccumulator -= segmentSpacing;
-                            RE::NiTransform sample = data.trailTransform;
-                            sample.translate -= data.lastOrientation * data.trailDistanceAccumulator;
-                            data.trailTransformHistory.push_front(sample);
-
-                            if (data.trailTransformHistory.size() > data.trailSegmentCount) {
-                                data.trailTransformHistory.pop_back();
-                            }
-                        }*/
-                    }
-                }
-/*
-                auto projTrail = RE::NiPointer<RE::BSTempEffectParticle>(
-                    RE::BSTempEffectParticle::Spawn(
-                        RE::PlayerCharacter::GetSingleton()->GetParentCell(),
-                        10.f,
-                        Config::TrailModelPathLevi.data(),
-                        data.trailTransform.rotate,
-                        data.trailTransform.translate,
-                        0.01f * length,
-                        7,
-                        nullptr
-                    )
-                );
-
-                if (projTrail) {
-                    if (auto fadeNode = projTrail->particleObject ? projTrail->particleObject->AsFadeNode() : nullptr) {
-                        fadeNode->fadeAmount = 1.f;
-                    }
-
-                    const uint32_t maxTrails =
-                        static_cast<uint32_t>(particleMult * Config::TrailParticleCount);
-
-                    data.projTrails.push_back(projTrail);
-
-                    if (data.projTrails.size() > maxTrails) {
-                        data.projTrails.pop_back();
-                    }
-                }*/
-            }
-/*
-        if (!data.projTrails.empty()) {
-            data.projTrails.erase(
-                std::remove_if(data.projTrails.begin(), data.projTrails.end(),
-                    [a_delta](RE::NiPointer<RE::BSTempEffectParticle>& projTrail) -> bool
-                    {
-                        if (!projTrail)
-                            return true;
-
-                        if (projTrail->age >= 1.0f) {
-                            projTrail->age += a_delta;
-                        }
-
-                        return (projTrail->age >= projTrail->lifetime);
-                    }),
-                data.projTrails.end());
-*/
-        } else if (data.projTrail) {
-            data.projTrail->age += data.projTrail->lifetime;
-            if (data.projTrail->particleObject && data.projTrail->particleObject->AsGeometry()) {
-                auto effect = data.projTrail->particleObject->AsGeometry()->properties[RE::BSGeometry::States::kEffect];
-                auto effectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect.get());
-                if (effectShader) {
-                    auto effectShaderMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShader->material);
-                    if (effectShaderMaterial) {
-                        if (auto newMaterial = static_cast<RE::BSEffectShaderMaterial*>(effectShaderMaterial->Create())) {
-                            newMaterial->CopyMembers(effectShaderMaterial);
-                            effectShader->SetMaterial(newMaterial, false);
-                            newMaterial->~BSEffectShaderMaterial();
-                            RE::free(newMaterial);
-
-                            effectShaderMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShader->material);
-                            if (effectShaderMaterial->baseColor.alpha > 0.f)
-                                effectShaderMaterial->baseColor.alpha -= a_delta / 1.5f;
-                            else {
-                                effectShaderMaterial->baseColor.alpha = 0.f;
-                                data.projTrail.reset();
-                                data.trailRootNode.reset();
-                            }
-                        }
-                    }
-                }
-            } else if (auto fadeNode = data.projTrail->particleObject ? data.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
-                if (fadeNode->currentFade > 0.f) {
-                    float fadeDuration = 0.5f;
-                    fadeNode->currentFade -= a_delta / fadeDuration;
-                } else {
-                    fadeNode->currentFade = 0.f;
-                    data.projTrail.reset();
-                    data.trailRootNode.reset();
-                }
-            } else {
-                data.projTrail.reset();
-                data.trailRootNode.reset();
-            }
-        }
+        AddProjectileTrail(a_delta);
+        FadeProjectileTrail(a_delta);
     }
 }
 tState LeviathanAxe::GetThrowState()     const          {return throwState;}
@@ -1611,7 +1128,7 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 
     if (data.stuckedBone) {
         a_point = data.stuckedBone->world.translate;
-        data.stuckedBone = nullptr;
+        data.stuckedBone.reset();
 
         if (data.stuckedActor) {
 #ifdef EXPERIMENTAL_EXTRAARROW
@@ -1620,7 +1137,7 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
             data.stuckedActor->RemoveExtraArrows3D();
 #endif
             spdlog::debug("levi stucked actor's extra arrows removed");
-            data.stuckedActor = nullptr;
+            data.stuckedActor.reset();
         } else spdlog::debug("levi not stucked anybody");
     } else spdlog::debug("levi not stucked any bone");
 
@@ -1645,6 +1162,8 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const bool isHoming, RE::Actor* a_actor)
 {
     if (!a_actor) {spdlog::warn("LeviathanAxe::Throw - a_actor is null"); return;}
+
+    trailRemoveUpdate.Done();
 
     bool isVertical = a_isVertical;
     bool isThrowAttack = false;
@@ -1693,7 +1212,7 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         if (data.model && (justContinue/* || isHoming*/)) a_actor->Unk_A0(data.model.get(), pRot.x, pRot.z, origin);
         RE::Projectile::LaunchData lData(a_actor, origin, pRot, leviThrowSpell);
 
-        lData.weaponSource = data.weap;
+    //    lData.weaponSource = data.weap; // somehow causing very high damage
 #ifdef EXPERIMENTAL_THROWPOISON
         lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
 #endif
@@ -1774,6 +1293,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
         data.projTrail.reset();
 
         trailUpdate.Done();
+        trailRemoveUpdate.Done();
         data.model.reset();
 
         auto stuckedLevi =  LastLeviProjectile ? LastLeviProjectile : nullptr;
@@ -1841,7 +1361,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellLeviProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
-            lData.weaponSource = data.weap;
+        //    lData.weaponSource = data.weap;   //  somehow caused very high projectile damage.
 #ifdef EXPERIMENTAL_THROWPOISON
             lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
 #endif
@@ -1913,9 +1433,14 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         data.lastHitActors.clear();
         data.lastHitForms.clear();
 
+        if (WeaponIdentify::WeaponBone && WeaponIdentify::WeaponBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
+            WeaponIdentify::WeaponBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
+            data.replacedProjectileModel->parent->local.translate = RE::NiPoint3();
+            data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(NI_HALF_PI, 0.f, NI_HALF_PI);
+        }
         trailUpdate.Done();
         data.model.reset();
-        data.replacedProjectileModel.reset();
+        trailRemoveUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
 
         isAxeCalled = false;
         std::jthread delayedCast([=]() {
@@ -1923,6 +1448,183 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
             if (GetThrowState() == tState::kThrowable) kratos->SetIsCanCallAxe(a_actor, false);
         });
         delayedCast.detach();
+    }
+}
+void LeviathanAxe::AddProjectileTrail(const float a_delta)
+{
+    if (trailUpdate.IsTimeToUpdate()) {
+        trailRemoveUpdate.Done();
+        DeleteProjectileTrail();
+        auto bone = data.replacedProjectileModel;
+        if (bone) {
+            const bool isCharged = IsCharged(true);
+            float particleMult = isCharged ? 3.f : 2.f;
+            data.trailOverride.meshOverride = isCharged ? Config::TrailModelPathFrost : Config::TrailModelPathDef;
+            float length = bone->worldBound.radius;
+            ObjectUtil::Capsule capsule;
+            ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
+            float capsuleLength = capsule.a.GetDistance(capsule.b);
+            length = length > capsuleLength ? length : capsuleLength;
+            float scale = fmax(length, capsule.radius) * 0.01f;
+            float tipOffset = length;
+
+            if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
+                trailUpdate.Done();
+                TrailOverride trailOverride = data.trailOverride;
+                trailOverride.lifetimeMult = particleMult;
+                data.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
+                data.transformOverride.scale = bone->worldBound.radius * 0.01f;
+                auto node = RE::NiNode::Create(0);
+                node->name = "trailParentNode";
+                bone->AttachChild(node, false);
+                APIs::precision->AddTrailEffect(
+                    node, 
+                    RE::PlayerCharacter::GetSingleton()->GetHandle(), 
+                    RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
+                    trailOverride, 
+                    data.transformOverride);
+                if (isCharged) {
+                    trailOverride.meshOverride = Config::TrailModelPathDef;
+                    APIs::precision->AddTrailEffect(
+                        node, 
+                        RE::PlayerCharacter::GetSingleton()->GetHandle(), 
+                        RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
+                        trailOverride, 
+                        data.transformOverride);
+                }
+            //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastLeviProjectile);
+            } else {
+                auto weaponForward = frontVec3;
+                data.trailTransform = bone->world;
+                data.trailTransform.translate +=
+                    data.trailTransform.rotate * weaponForward * tipOffset;
+
+            //    auto dir = data.trailTransform.translate - bone->world.translate;
+                auto dir = data.lastOrientation;
+            //    dir.Unitize();
+                MathUtil::Algebra::SetRotationMatrix(data.trailTransform.rotate, -dir.x, dir.y, dir.z);
+                RE::NiMatrix3 weaponRotation(0.f, NI_HALF_PI, -NI_HALF_PI);
+                data.trailTransform.rotate = data.trailTransform.rotate * weaponRotation;
+                RE::NiMatrix3 flip90(-NI_HALF_PI, 0.f, 0.f);
+                data.trailTransform.rotate = data.trailTransform.rotate * flip90;
+
+                if (!data.projTrail) {
+                    data.projTrail = RE::NiPointer<RE::BSTempEffectParticle>(
+                        RE::BSTempEffectParticle::Spawn(
+                            RE::PlayerCharacter::GetSingleton()->GetParentCell(),
+                            10.f,
+                            data.trailOverride.meshOverride.value().data(),
+                            data.trailTransform.rotate,
+                            data.trailTransform.translate,
+                            scale,
+                            7,
+                            nullptr));
+
+                    data.trailRootNode.reset();
+                    data.trailTimeAccumulator = 0.f;
+                    data.segmentTimestamps.clear();
+                    spdlog::warn("Created trail particle.");
+                } else if (!data.trailRootNode) {
+                    auto particleObject = data.projTrail ? data.projTrail->particleObject : nullptr;
+                    auto fadeNode = particleObject ? particleObject->AsFadeNode() : nullptr;
+                    auto trailRoot = fadeNode ? fadeNode->GetObjectByName("TrailRoot"sv) : nullptr;
+                    data.trailRootNode.reset(trailRoot ? trailRoot->AsNode() : nullptr);
+                    data.trailSegmentCount = data.trailRootNode ? data.trailRootNode->GetChildren().size() : 0u;
+
+                    data.trailTransformHistory.clear();
+                //    for (uint32_t i = 0; i < data.trailSegmentCount; i++)
+                //        data.trailTransformHistory.push_front(data.trailTransform);
+
+                    if (data.trailRootNode)
+                        if (data.trailRootNode->GetChildren().empty())
+                            spdlog::error("Trail root node has no children! Check the trail model path!");
+                        else
+                            spdlog::info("Found projectile trail root node!");
+                    else 
+                        spdlog::warn("Cannot find projectile trail root node...");
+                } else {
+                    if (auto fadeNode = data.projTrail->particleObject ? data.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
+                        fadeNode->currentFade = 1.f;
+
+                        data.trailRootNode->world = data.trailTransform;
+                        ObjectUtil::Node::UpdateNodeTransformLocal(data.trailRootNode.get(), data.trailTransform);
+                        data.trailTransformHistory.emplace_back(data.trailTransform);
+                    }
+                }
+            }
+        }
+    } else if (data.projTrail) {
+        data.projTrail->age += data.projTrail->lifetime;
+        if (data.projTrail->particleObject && data.projTrail->particleObject->AsGeometry()) {
+            auto effect = data.projTrail->particleObject->AsGeometry()->properties[RE::BSGeometry::States::kEffect];
+            auto effectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect.get());
+            if (effectShader) {
+                auto effectShaderMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShader->material);
+                if (effectShaderMaterial) {
+                    if (auto newMaterial = static_cast<RE::BSEffectShaderMaterial*>(effectShaderMaterial->Create())) {
+                        newMaterial->CopyMembers(effectShaderMaterial);
+                        effectShader->SetMaterial(newMaterial, false);
+                        newMaterial->~BSEffectShaderMaterial();
+                        RE::free(newMaterial);
+
+                        effectShaderMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShader->material);
+                        if (effectShaderMaterial->baseColor.alpha > 0.f)
+                            effectShaderMaterial->baseColor.alpha -= a_delta / 1.5f;
+                        else {
+                            effectShaderMaterial->baseColor.alpha = 0.f;
+                            data.projTrail.reset();
+                            data.trailRootNode.reset();
+                        }
+                    }
+                }
+            }
+        } else if (auto fadeNode = data.projTrail->particleObject ? data.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
+            if (fadeNode->currentFade > 0.f) {
+                float fadeDuration = 0.5f;
+                fadeNode->currentFade -= a_delta / fadeDuration;
+            } else {
+                fadeNode->currentFade = 0.f;
+                data.projTrail.reset();
+                data.trailRootNode.reset();
+            }
+        } else {
+            data.projTrail.reset();
+            data.trailRootNode.reset();
+        }
+    }
+}
+void LeviathanAxe::FadeProjectileTrail(const float a_delta)
+{
+    if (trailRemoveUpdate.IsTimeToUpdate()) {
+        if (data.replacedProjectileModel) {
+            if (data.proj && data.projState == ProjectileState::kHavok) {
+        //        auto& rtData = data.proj->GetProjectileRuntimeData();
+                auto velocity = (data.replacedProjectileModel->world.translate - data.replacedProjectileModel->previousWorld.translate) / *g_deltaTime;
+                auto speed = velocity.Length();//rtData.linearVelocity.Length();
+                spdlog::debug("projectile trail fading... current speed: {}", speed);
+                if (speed != 0.f && speed < 269.f) {
+                    DeleteProjectileTrail();
+                    trailRemoveUpdate.Done();
+                }
+            } else {
+                DeleteProjectileTrail();
+                data.replacedProjectileModel.reset();
+                trailRemoveUpdate.Done();
+            }
+        }
+    }
+}
+void LeviathanAxe::DeleteProjectileTrail()
+{
+    if (data.replacedProjectileModel) {
+        auto trailParentBone = data.replacedProjectileModel->GetObjectByName("trailParentNode");
+        data.replacedProjectileModel->DetachChild(trailParentBone);
+    //    if (data.replacedProjectileModel->parent)
+    //        data.replacedProjectileModel->parent->DetachChild(data.replacedProjectileModel.get());
+        if (WeaponIdentify::WeaponBone) {
+            WeaponIdentify::WeaponBone->AsNode()->DetachChild(data.replacedProjectileModel->parent);
+        }
+        spdlog::debug("projectile trail deleted");
     }
 }
 void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_coolDown)
@@ -2302,7 +2004,7 @@ void Draupnir::Throw()
         RE::Projectile::ProjectileRot pRot = {AnArchos->GetAimAngle(), AnArchos->GetAimHeading()};
         RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
 
-        lData.weaponSource = data.weap;
+    //    lData.weaponSource = data.weap;
 #ifdef EXPERIMENTAL_THROWPOISON
         lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
 #endif
@@ -2346,7 +2048,7 @@ void Draupnir::MeleeThrow()
         origin = WeaponIdentify::WeaponBone->world.translate;
         AnArchos->Unk_A0(WeaponIdentify::WeaponBone, pRot.x, pRot.z, origin);
         RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
-        lData.weaponSource = WeaponIdentify::DraupnirSpear;
+    //    lData.weaponSource = WeaponIdentify::DraupnirSpear;
         if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(AnArchos) > 0.f)
             lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
 
@@ -2404,7 +2106,7 @@ void Draupnir::RainOfDraupnir()
     pRot.x = PI2 + MathUtil::Algebra::GenerateRandomFloat(-0.018f, 0.018f);
 //    spdlog::debug("aim angle: {} heading angle: {}", pRot.x, pRot.z);
     RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
-    lData.weaponSource = WeaponIdentify::DraupnirSpear;
+//    lData.weaponSource = WeaponIdentify::DraupnirSpear;
     if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(AnArchos) > 0.f)
         lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
 
@@ -2521,6 +2223,36 @@ void Draupnir::StartChargingThrow(RE::Actor* a_actor)
         kratos->SetIsChargingThrow(true);
     }
 }
+void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
+{
+    if (a_proj && a_proj->Get3D() && data.model) {
+        auto projModel = a_proj->Get3D();
+        auto projNode = projModel ? projModel->AsFadeNode() : nullptr;
+        auto copyModel = data.model->Clone();
+        if (projNode && copyModel) {
+            const RE::BSFixedString stuckedModelNodeName = "DraupnirSpearBlade";
+            auto stuckedModel = copyModel->GetObjectByName(stuckedModelNodeName);
+            if (stuckedModel) {
+                stuckedModel->flags &= RE::NiAVObject::Flag::kHidden;
+                projNode->AttachChild(stuckedModel, false);
+                spdlog::debug("draupnir model replaced with stucked model");
+            }
+
+            const RE::BSFixedString stuckedModelLightFadeNodeName = "LightSpellProjectile";
+            auto stuckedLight = copyModel->GetObjectByName(stuckedModelLightFadeNodeName);
+            if (stuckedLight) {
+                stuckedLight->AsFadeNode()->flags &= RE::NiAVObject::Flag::kHidden;
+                projNode->AttachChild(stuckedLight, false);
+                spdlog::debug("added the light model to stucked draupnir model");
+            }
+
+            if (data.replacedProjectileModel && data.replacedProjectileModel->parent) {
+                data.replacedProjectileModel->parent->DetachChild(data.replacedProjectileModel.get());
+                data.replacedProjectileModel.reset();
+            }
+        } else spdlog::warn("projectile node is null");
+    } else spdlog::warn("projectile or projectile model is null");
+}
 #pragma endregion
 #pragma region Mjolnir
 Mjolnir* Mjolnir::GetSingleton()                {static Mjolnir singleton; return &singleton;}
@@ -2570,45 +2302,9 @@ void Mjolnir::Update(const float a_delta) {
             trailUpdate.RegisterForUpdate(a_delta * 2.f, false);
         }
     }
-    if (trailUpdate.IsTimeToUpdate()) {
-        auto bone = data.model ? data.model->AsNode() : nullptr;
-        if (bone) {
-            const bool isCharged = IsCharged(true);
-            float particleMult = isCharged ? 3.f : 2.f;
-            data.trailOverride.meshOverride = isCharged ? Config::TrailModelPathShock : Config::TrailModelPathDef;
-            float length = bone->worldBound.radius;
-            ObjectUtil::Capsule capsule;
-            ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
-            float capsuleLength = capsule.a.GetDistance(capsule.b);
-            length = length > capsuleLength ? length : capsuleLength;
-            float scale = fmax(length, capsule.radius) * 0.01f;
-
-            if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
-                trailUpdate.Done();
-                TrailOverride trailOverride = data.trailOverride;
-                trailOverride.lifetimeMult = particleMult;
-                data.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
-                data.transformOverride.scale = bone->worldBound.radius * 0.01f;
-                auto node = RE::NiNode::Create(0);
-                bone->AttachChild(node, false);
-                APIs::precision->AddTrailEffect(
-                    node, 
-                    RE::PlayerCharacter::GetSingleton()->GetHandle(), 
-                    RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                    trailOverride, 
-                    data.transformOverride);
-                if (isCharged) {
-                    trailOverride.meshOverride = Config::TrailModelPathDef;
-                    APIs::precision->AddTrailEffect(
-                        node, 
-                        RE::PlayerCharacter::GetSingleton()->GetHandle(), 
-                        RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                        trailOverride, 
-                        data.transformOverride);
-                }
-            //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastLeviProjectile);
-            }
-        }
+    if (Config::DrawTrails) {
+        AddProjectileTrail(a_delta);
+        FadeProjectileTrail(a_delta);
     }
 }
 tStateM Mjolnir::GetThrowState()     const      {return throwState;}
@@ -2653,6 +2349,8 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
 {
     if (!a_actor) {spdlog::warn("Mjolnir::Throw - a_actor is null"); return;}
 
+    trailRemoveUpdate.Done();
+
     bool isVertical = a_isVertical;
     bool isThrowAttack = false;
     bool isPowerThrowAttack = false;
@@ -2669,8 +2367,9 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         auto& mag = MjolnirProjEffSetting.magnitude;
         const auto MjolnirDamage = data.damage;
         mag = MjolnirDamage * WeaponIdentify::DamageMult * Config::ThrowingDamageMult;
+        data.rotationSpeed = Config::ThrowRotationSpeed;
         bool isPowerThrow; a_actor->GetGraphVariableBool("IsPowerThrowing", isPowerThrow);
-        if (isVertical || isPowerThrow) {mag *= 1.5f; data.yAngle = 1.57f; Config::ThrowRotationSpeed *= -1.f;}
+        if (isVertical || isPowerThrow) {mag *= 1.5f; data.yAngle = 1.57f; data.rotationSpeed = Config::ThrowRotationSpeed * -1.f;}
         else data.yAngle = 0.f;
         float throwChargeDamageMult = std::sqrtf(data.throwingChargeDuration + 1.f);
         if (throwChargeDamageMult > 2.f) throwChargeDamageMult = 2.f;
@@ -2698,7 +2397,7 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         if (data.model && (justContinue/* || isHoming*/)) pRot = MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation);//a_actor->Unk_A0(data.model, pRot.x, pRot.z, origin);
         RE::Projectile::LaunchData lData(a_actor, origin, pRot, MjolnirThrowSpell);
 
-        lData.weaponSource = data.weap;
+    //    lData.weaponSource = data.weap;
 #ifdef EXPERIMENTAL_THROWPOISON
         lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
 #endif
@@ -2790,6 +2489,7 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
         projectileUpdate.Done();
 
         trailUpdate.Done();
+        trailRemoveUpdate.Done();
         data.model.reset();
 
         auto thrownMjolnir =  LastMjolnirProjectile;
@@ -2831,7 +2531,7 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellMjolnirProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
-            lData.weaponSource = data.weap;
+        //    lData.weaponSource = data.weap;
 #ifdef EXPERIMENTAL_THROWPOISON
             lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
 #endif
@@ -2894,7 +2594,7 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         data.lastHitForms.clear();
 
         trailUpdate.Done();
-        data.model.reset();
+        trailRemoveUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
 
         isMjolnirCalled = false;
         std::jthread delayedCast([=]() {
@@ -2902,6 +2602,84 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
             if (GetThrowState() == tStateM::kThrowable) kratos->SetIsCanCallMjolnir(a_actor, false);
         });
         delayedCast.detach();
+    }
+}
+void Mjolnir::AddProjectileTrail(const float a_delta)
+{
+    if (trailUpdate.IsTimeToUpdate()) {
+        auto bone = data.model ? data.model->AsNode() : nullptr;
+        if (bone) {
+            trailRemoveUpdate.Done();
+            DeleteProjectileTrail();
+            const bool isCharged = IsCharged(true);
+            float particleMult = isCharged ? 3.f : 2.f;
+            data.trailOverride.meshOverride = isCharged ? Config::TrailModelPathShock : Config::TrailModelPathDef;
+            float length = bone->worldBound.radius;
+            ObjectUtil::Capsule capsule;
+            ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
+            float capsuleLength = capsule.a.GetDistance(capsule.b);
+            length = length > capsuleLength ? length : capsuleLength;
+            float scale = fmax(length, capsule.radius) * 0.01f;
+
+            if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
+                trailUpdate.Done();
+                TrailOverride trailOverride = data.trailOverride;
+                trailOverride.lifetimeMult = particleMult;
+                data.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
+                data.transformOverride.scale = scale;
+                auto node = RE::NiNode::Create(0);
+                node->name = "trailParentNode";
+                bone->AttachChild(node, false);
+                APIs::precision->AddTrailEffect(
+                    node, 
+                    RE::PlayerCharacter::GetSingleton()->GetHandle(), 
+                    RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
+                    trailOverride, 
+                    data.transformOverride);
+                if (isCharged) {
+                    trailOverride.meshOverride = Config::TrailModelPathDef;
+                    APIs::precision->AddTrailEffect(
+                        node, 
+                        RE::PlayerCharacter::GetSingleton()->GetHandle(), 
+                        RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
+                        trailOverride, 
+                        data.transformOverride);
+                }
+            }
+        }
+    }
+}
+void Mjolnir::FadeProjectileTrail(const float a_delta)
+{
+    if (trailRemoveUpdate.IsTimeToUpdate()) {
+        if (data.model) {
+            if (data.proj && data.projState == ProjectileState::kHavok) {
+        //        auto& rtData = data.proj->GetProjectileRuntimeData();
+                auto velocity = (data.model->world.translate - data.model->previousWorld.translate) / *g_deltaTime;
+                auto speed = velocity.Length();//rtData.linearVelocity.Length();
+                spdlog::debug("projectile trail fading... current speed: {}", speed);
+                if (speed != 0.f && speed < 269.f) {
+                    DeleteProjectileTrail();
+                    trailRemoveUpdate.Done();
+                }
+            } else {
+                DeleteProjectileTrail();
+                data.model.reset();
+                trailRemoveUpdate.Done();
+            }
+        }
+    }
+}
+void Mjolnir::DeleteProjectileTrail()
+{
+    if (data.model && data.model->AsNode()) {
+        auto trailParentBone = data.model->GetObjectByName("trailParentNode");
+        if(!trailParentBone)
+            spdlog::debug("projectile trail not existing");
+        else {
+            data.model->AsNode()->DetachChild(trailParentBone);
+            spdlog::debug("projectile trail deleted");
+        }
     }
 }
 void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
@@ -3143,7 +2921,7 @@ void Trident::Throw(const bool justContinue, RE::Actor* a_actor)
 #ifdef EXPERIMENTAL_THROWPOISON
         lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
 #endif
-        lData.weaponSource = WeaponIdentify::Trident;
+    //    lData.weaponSource = WeaponIdentify::Trident;
         if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(a_actor) > 0.f)
             lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(a_actor);
 
@@ -3205,7 +2983,7 @@ void Trident::RainOfTrident()
     pRot.x = PI2 + MathUtil::Algebra::GenerateRandomFloat(-0.02f, 0.02f);
 //    spdlog::debug("aim angle: {} heading angle: {}", pRot.x, pRot.z);
     RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellTrishulsMightProjL);
-    lData.weaponSource = WeaponIdentify::DraupnirSpear;
+//    lData.weaponSource = WeaponIdentify::DraupnirSpear;
     if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(AnArchos) > 0.f)
         lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
 

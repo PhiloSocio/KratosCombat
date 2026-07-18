@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 # Set your project name. This will be the name of your SKSE .dll file.
-project(KratosCombat VERSION 2.0.8.5 LANGUAGES CXX)
+project(KratosCombat VERSION 2.0.8.6 LANGUAGES CXX)
 
 set(FULL_PROJECT_NAME "Kratos Combat" CACHE STRING "Full project name")
 set(ADD_COMMONLIBSSE_PLUGIN_AUTHOR "AnArchos" CACHE STRING "Plugin author")

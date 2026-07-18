@@ -367,7 +367,7 @@ namespace MathUtil
         [[nodiscard]] inline static RE::NiMatrix3 QuaternionToMatrix(const RE::NiQuaternion& q)
         {
             RE::NiQuaternion normQ = q;
-            Unitize(normQ); // normalize etmek şart — dönüş matrisinin düzgün olması için
+            Unitize(normQ);
 
             float x = normQ.x, y = normQ.y, z = normQ.z, w = normQ.w;
             
@@ -390,7 +390,39 @@ namespace MathUtil
 
             return m;
         }
-        [[nodiscard]] inline static void QuaternionToAngleAxis(const RE::NiQuaternion& q, float& outAngle, RE::NiPoint3& outAxis)
+        [[nodiscard]] inline static RE::NiQuaternion MatrixToQuaternion(const RE::NiMatrix3& m) {
+            RE::NiQuaternion q;
+            float trace = m.entry[0][0] + m.entry[1][1] + m.entry[2][2];
+
+            if (trace > 0.0f) {
+                float s = 0.5f / std::sqrt(trace + 1.0f);
+                q.w = 0.25f / s;
+                q.x = (m.entry[2][1] - m.entry[1][2]) * s;
+                q.y = (m.entry[0][2] - m.entry[2][0]) * s;
+                q.z = (m.entry[1][0] - m.entry[0][1]) * s;
+            } else if (m.entry[0][0] > m.entry[1][1] && m.entry[0][0] > m.entry[2][2]) {
+                float s = 2.0f * std::sqrt(1.0f + m.entry[0][0] - m.entry[1][1] - m.entry[2][2]);
+                q.w = (m.entry[2][1] - m.entry[1][2]) / s;
+                q.x = 0.25f * s;
+                q.y = (m.entry[0][1] + m.entry[1][0]) / s;
+                q.z = (m.entry[0][2] + m.entry[2][0]) / s;
+            } else if (m.entry[1][1] > m.entry[2][2]) {
+                float s = 2.0f * std::sqrt(1.0f + m.entry[1][1] - m.entry[0][0] - m.entry[2][2]);
+                q.w = (m.entry[0][2] - m.entry[2][0]) / s;
+                q.x = (m.entry[0][1] + m.entry[1][0]) / s;
+                q.y = 0.25f * s;
+                q.z = (m.entry[1][2] + m.entry[2][1]) / s;
+            } else {
+                float s = 2.0f * std::sqrt(1.0f + m.entry[2][2] - m.entry[0][0] - m.entry[1][1]);
+                q.w = (m.entry[1][0] - m.entry[0][1]) / s;
+                q.x = (m.entry[0][2] + m.entry[2][0]) / s;
+                q.y = (m.entry[1][2] + m.entry[2][1]) / s;
+                q.z = 0.25f * s;
+            }
+            Unitize(q);
+            return q;
+        }
+        inline static void QuaternionToAngleAxis(const RE::NiQuaternion& q, float& outAngle, RE::NiPoint3& outAxis)
         {
             RE::NiQuaternion normQ = q;
             Unitize(normQ);
@@ -399,8 +431,7 @@ namespace MathUtil
 
             float s = std::sqrt(1.0f - normQ.w * normQ.w);
             if (s < 1e-6f) {
-                // Sıfıra çok yakınsa yön rastgele olabilir
-                outAxis = RE::NiPoint3{1.f, 0.f, 0.f}; // default
+                outAxis = RE::NiPoint3{1.f, 0.f, 0.f};
             } else {
                 outAxis = RE::NiPoint3{
                     normQ.x / s,
@@ -433,6 +464,41 @@ namespace MathUtil
                 a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,                 // y
                 a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w                  // z
             };
+        }
+        [[nodiscard]] inline static RE::NiQuaternion Slerp(const RE::NiQuaternion& a, const RE::NiQuaternion& b, float t) {
+            float dot = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z;
+            RE::NiQuaternion qb = b;
+            if (dot < 0.0f) {
+                dot = -dot;
+                qb.w = -qb.w;
+                qb.x = -qb.x;
+                qb.y = -qb.y;
+                qb.z = -qb.z;
+            }
+
+            const float threshold = 0.9995f;
+            if (dot > threshold) {
+                RE::NiQuaternion result;
+                result.w = a.w + t * (qb.w - a.w);
+                result.x = a.x + t * (qb.x - a.x);
+                result.y = a.y + t * (qb.y - a.y);
+                result.z = a.z + t * (qb.z - a.z);
+                Unitize(result);
+                return result;
+            }
+
+            float theta = std::acos(dot);
+            float sinTheta = std::sin(theta);
+            float w1 = std::sin((1.0f - t) * theta) / sinTheta;
+            float w2 = std::sin(t * theta) / sinTheta;
+
+            RE::NiQuaternion result;
+            result.w = w1 * a.w + w2 * qb.w;
+            result.x = w1 * a.x + w2 * qb.x;
+            result.y = w1 * a.y + w2 * qb.y;
+            result.z = w1 * a.z + w2 * qb.z;
+            Unitize(result);
+            return result;
         }
 
         [[nodiscard]] inline static float ParabolicClamp(float t, float minVal, float maxVal) {
@@ -564,7 +630,7 @@ namespace MathUtil
             std::uniform_real_distribution<float> distribution(lower, upper);
                 return distribution(generator);
         }
-        [[nodiscard]] static inline void SetRotationMatrix(RE::NiMatrix3& a_matrix, const float sacb, const float cacb, const float sb) {
+        static inline void SetRotationMatrix(RE::NiMatrix3& a_matrix, const float sacb, const float cacb, const float sb) {
             const float cb = std::sqrtf(1 - sb * sb);
             const float ca = cacb / cb;
             const float sa = sacb / cb;
@@ -578,7 +644,7 @@ namespace MathUtil
             a_matrix.entry[1][2] = -ca * sb;
             a_matrix.entry[2][2] = cb;
         }
-        [[nodiscard]] static void RotateMatrixAroundAxis(NiMatrix3& a_matrix, const float angleRad, const char* axis) {
+        static void RotateMatrixAroundAxis(NiMatrix3& a_matrix, const float angleRad, const char* axis) {
             const float cosA = std::cos(angleRad);
             const float sinA = std::sin(angleRad);
             if (std::strcmp(axis, "x") == 0) {
@@ -603,7 +669,7 @@ namespace MathUtil
                 return;
             }
         }
-        [[nodiscard]] static void RotateMatrixAroundAxisses(NiMatrix3& a_matrix, float angleRadX, float angleRadY, float angleRadZ) {
+        static void RotateMatrixAroundAxisses(NiMatrix3& a_matrix, float angleRadX, float angleRadY, float angleRadZ) {
             float cosX = std::cos(angleRadX);
             float sinX = std::sin(angleRadX);
             float cosY = std::cos(angleRadY);
@@ -675,6 +741,18 @@ namespace MathUtil
             return ret;
         }
         [[nodiscard]] static RE::NiPoint3 HkVectorToNiPoint(const RE::hkVector4& vec) { return { vec.quad.m128_f32[0], vec.quad.m128_f32[1], vec.quad.m128_f32[2] }; }
+        [[nodiscard]] inline static RE::NiMatrix3 InterpolateRotation(const RE::NiMatrix3& from, const RE::NiMatrix3& to, float t) {
+            auto qFrom = MatrixToQuaternion(from);
+            auto qTo   = MatrixToQuaternion(to);
+            auto qBlend = Slerp(qFrom, qTo, t);
+            return QuaternionToMatrix(qBlend);
+        }
+        inline static void InterpolateRotation(RE::NiMatrix3& matrix, const RE::NiMatrix3& target, float t) {
+            auto qFrom = MatrixToQuaternion(matrix);
+            auto qTo   = MatrixToQuaternion(target);
+            auto qBlend = Slerp(qFrom, qTo, t);
+            matrix = QuaternionToMatrix(qBlend);
+        }
     };
 }
 namespace ObjectUtil

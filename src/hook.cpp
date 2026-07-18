@@ -192,9 +192,13 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 } else {
                 //  skip gravity effect for a while
                     if (livingTime < Config::NoGravityDurationLeviathan) {
-                        projBase->data.gravity = 0.69f;
+                        projBase->data.gravity = 0.f;
+                    } else if (projBase->data.gravity == Levi->data.gravity) {
+                        //  do nothing
                     } else {
-                        projBase->data.gravity = Levi->data.gravity;
+                        projBase->data.gravity += *g_deltaTime * Levi->data.gravity;
+                        if (projBase->data.gravity == Levi->data.gravity)
+                            projBase->data.gravity = Levi->data.gravity;
                     }
                     //apply rotation
                 //  leviAngle.x = asin(linearDir.z);
@@ -263,10 +267,11 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 if (Levi->IsArriving(a_this)) {
                     auto& aLevi = Levi->arrivingLevi;
                     float aLivingTime = aLevi.GetLivingTime();
+                //    aLevi.timeToArrive = arrSpeed / distance;
                     const float t = std::clamp(aLivingTime / aLevi.timeToArrive, 0.f, 1.f);
                     RE::NiMatrix3 handRot   = targetPoint->world.rotate;
-                    RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec);
-                    RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec);
+                    RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec3);
+                    RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec3);
                     palmDir.Unitize();
                     handForward.Unitize();
                 //    spdlog::debug("Levi proj arriving, t = {}, aLivingTime = {}, aLevi.timeToArrive = {}",
@@ -290,17 +295,26 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 //    vel = aLevi.desiredDir * (aLevi.speed < arrSpeed ? aLevi.speed : arrSpeed);
                     float height = leviPos.z - AnArchos->GetPosition().z;
 
-                    RE::NiPoint3 rotation = handRot * RE::NiPoint3(backVec);
+              //      RE::NiPoint3 rotation = handRot * RE::NiPoint3(backVec3);
 
-                    RE::NiPoint3 localRight(linearDir.UnitCross(RE::NiPoint3(upVec)));
-                    RE::NiPoint3 localUp(linearDir.UnitCross(localRight));
-                    RE::NiPoint3 rotatingAxis = MathUtil::Algebra::RotateVectorRodrigues(localUp, linearDir, Levi->data.yAngle);
-                    rotatingAxis.Unitize();
-                    rotation = MathUtil::Algebra::RotateVectorRodrigues(linearDir, rotatingAxis, livingTime * Levi->data.rotationSpeed);
+              //      RE::NiPoint3 localRight(linearDir.UnitCross(RE::NiPoint3(upVec3)));
+              //      RE::NiPoint3 localUp(linearDir.UnitCross(localRight));
+              //      RE::NiPoint3 rotatingAxis = MathUtil::Algebra::RotateVectorRodrigues(localUp, linearDir, Levi->data.yAngle);
+              //      rotatingAxis.Unitize();
+              //      rotation = MathUtil::Algebra::RotateVectorRodrigues(linearDir, rotatingAxis, livingTime * Levi->data.rotationSpeed);
 
-                    leviAngle.x = asin(rotation.z);
-                    leviAngle.z = atan2(rotation.x, rotation.y);
-                
+              //      leviAngle.x = asin(rotation.z);
+              //      leviAngle.z = atan2(rotation.x, rotation.y);
+
+    //                if (Levi->data.replacedProjectileModel && Levi->data.replacedProjectileModel->parent && WeaponIdentify::WeaponBone) {
+    //                    auto& worldRotation = Levi->data.replacedProjectileModel->parent->world.rotate;
+    //                    auto& localRotation = Levi->data.replacedProjectileModel->parent->local.rotate;
+    //                    auto targetWorldRotation = WeaponIdentify::WeaponBone->world.rotate;
+    //                    auto targetLocalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);//targetWorldRotation * RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
+    //                    MathUtil::Algebra::InterpolateRotation(worldRotation, targetWorldRotation, t);
+    //                    MathUtil::Algebra::InterpolateRotation(localRotation, targetLocalRotation, t);
+    //                }
+
                     if (!Config::DontDamageWhileArrive && t < 0.99f/*aLevi.timeToArrive > 0.1f*/) {
                         if (auto aTarget = aLevi.GetNextTarget(leviPos); aTarget) {
                             auto targetPos = aTarget->GetPosition() + (aTarget->GetBoundMax() + aTarget->GetBoundMin()) * 0.75f;
@@ -535,12 +549,16 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     mjolnirAngle.z = atan2(curvyDir.x, curvyDir.y);
                 } else {
                     if (livingTime < Config::NoGravityDurationMjolnir) {
-                        projBase->data.gravity = 0.69f;
+                        projBase->data.gravity = 0.f;
+                    } else if (projBase->data.gravity == mjolnir->data.gravity) {
+                        //  do nothing
                     } else {
-                        projBase->data.gravity = mjolnir->data.gravity;
+                        projBase->data.gravity += *g_deltaTime * mjolnir->data.gravity;
+                        if (projBase->data.gravity == mjolnir->data.gravity)
+                            projBase->data.gravity = mjolnir->data.gravity;
                     }
                     //apply rotation
-                    float rot = Config::ThrowRotationSpeed * livingTime;
+                    float rot = mjolnir->data.rotationSpeed * livingTime;
                     mjolnirAngle.x = asin(linearDir.z);
             //        mjolnirAngle.y = mjolnir->data.yAngle;
                     mjolnirAngle.y = rot;
@@ -592,10 +610,11 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         aMjolnir.lastVelocity = vel;
                         float aLivingTime = aMjolnir.GetLivingTime();
                         const float blendTime = 0.f;
+                    //    aMjolnir.timeToArrive = arrSpeed / distance;
                         const float t = std::clamp(aLivingTime / (aMjolnir.timeToArrive + blendTime), 0.f, 1.f);
                         RE::NiMatrix3 handRot   = targetPoint->world.rotate;
-                        RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec);
-                        RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec);
+                        RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec3);
+                        RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec3);
                         palmDir.Unitize();
                         handForward.Unitize();
 
@@ -719,10 +738,25 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 Draupnir::data.model.reset(projectileNode);
             //  skip gravity effect for a while
                 if (livingTime < Config::NoGravityDurationDraupnir) {
-                    projBase->data.gravity = 0.69f;
+                    projBase->data.gravity = 0.f;
+                } else if (projBase->data.gravity == Draupnir::data.gravity) {
+                    //  do nothing
                 } else {
-                    projBase->data.gravity = Draupnir::data.gravity;
+                    projBase->data.gravity += *g_deltaTime * Draupnir::data.gravity;
+                    if (projBase->data.gravity == Draupnir::data.gravity)
+                        projBase->data.gravity = Draupnir::data.gravity;
                 }
+
+                auto& mjolnirAngle = a_this->data.angle;
+                float rot = Draupnir::data.rotationSpeed * livingTime;
+
+                auto& vel = runtimeData.linearVelocity;
+                auto linearDir = vel;
+                linearDir.Unitize();
+
+                mjolnirAngle.x = asin(linearDir.z);
+                mjolnirAngle.y = rot;
+
                 for (auto ID : Draupnir::MeleeHitProjectileIDs) {
                     if (ID == a_this->formID) {
                         if (livingTime > 0.069f) {
@@ -795,7 +829,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                             if (isHoming && victim == Levi->homingLevi.GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) isSameTarget = false;
                             if (isArriving && victim == Levi->arrivingLevi.GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) isSameTarget = false;
                             if (!victim->IsDead()) {
-                                if (!isArriving) Levi->data.stuckedActor = victim;
+                                if (!isArriving) Levi->data.stuckedActor.reset(victim);
 
                                 if (Levi->data.weap && Levi->data.ench && Levi->data.ench->effects[0])
                                     ObjectUtil::Enchantment::ChargeInventoryWeapon(shooter, Levi->data.weap, -Levi->data.ench->effects[0]->effectItem.magnitude);
@@ -814,6 +848,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                     return true;
                 } else {
                     Levi->trailUpdate.Done();
+                    Levi->trailRemoveUpdate.RegisterForUpdate(0.f, false);
                     if (const auto model = a_this->Get3D(); model) {
                         auto controllers = model->GetControllers();
                         if (controllers) {
@@ -910,22 +945,37 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                         }
                     }
                 } else {spdlog::warn("WEIRD, target or mjolnir is not exists");}
-                if (isSameTarget || (!isTargetActor && (isArriving || isHoming))) return true;
-                else mjolnir->trailUpdate.Done();
+                if (isSameTarget || (!isTargetActor && (isArriving || isHoming))) {
+                    return true;
+                } else {
+                    mjolnir->trailUpdate.Done();
+                    mjolnir->trailRemoveUpdate.RegisterForUpdate(0.f, false);
+                }
             }
 
             if (mjolnir->GetThrowState() == tStateM::kThrown) mjolnir->SetThrowState(tStateM::kCanArrive);
         }
         else if (projBase == Draupnir::DraupnirSpearProjBaseL) {
 
-            const RE::BSFixedString stuckedModelNodeName = "DraupnirProjectile";
-            auto stuckedModel = Draupnir::data.model->GetObjectByName(stuckedModelNodeName);
-            stuckedModel->GetFlags() &= RE::NiAVObject::Flag::kHidden;
+            Draupnir::ReplaceStickedProjectileModel(a_this);
 
-            const RE::BSFixedString stuckedModelLightFadeNodeName = "LightSpellProjectile";
-            auto stuckedLight = Draupnir::data.model->GetObjectByName(stuckedModelLightFadeNodeName);
-            stuckedLight->GetFlags() &= RE::NiAVObject::Flag::kHidden;
-
+        //    RE::NiPointer<RE::BSTempEffectParticle> particleEffect;
+        //    std::string modelPath = "D:\\Games\\Skyrim Modlists\\Anvil\\mods\\Kratos Combat - Draupnir - v1.6\\meshes\\weapons\\DraupnirSpear\\StuckedDraupnirSpear.nif";
+        //    auto model = a_this->Get3D();
+        //    if (model) {
+        //        particleEffect.reset(RE::BSTempEffectParticle::Spawn(
+        //            shooter->GetParentCell(),
+        //            10.f,
+        //            modelPath.data(),
+        //            model->world.rotate,
+        //            model->world.translate,
+        //            10.f,
+        //            7,
+        //            model->AsNode()));
+        //    }
+        //    if (particleEffect && particleEffect->AsNode()) {
+        //    //    model->AsNode()->AttachChild(particleEffect->AsNode(), false);
+        //    }
             Draupnir::data.replacedProjectileModel.reset();
 
             for (auto& point : a_AllCdPointCollector->hits) {
@@ -1048,8 +1098,8 @@ void ProjectileHook::LeviAndDraupnirImpactData(RE::Projectile::ImpactData* impac
         //        if (isTargetActor && rtData.weaponDamage > (ActorTarget->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth) / 10.f)/**/) {
         //            ObjectUtil::Actor::PushActorAway(ActorTarget, projBase->data.force, rtData.linearVelocity);
         //        }
-                Levi->data.stuckedActor = ActorTarget;
-                Levi->data.stuckedBone = impactData->damageRootNode;
+                Levi->data.stuckedActor.reset(ActorTarget);
+                Levi->data.stuckedBone.reset(impactData->damageRootNode);
                 Levi->isAxeStucked = true;
                 Levi->data.projState = LeviathanAxe::ProjectileState::kStucked;
                 impactData->impactResult = RE::ImpactResult::kStick;
@@ -1062,9 +1112,9 @@ void ProjectileHook::LeviAndDraupnirImpactData(RE::Projectile::ImpactData* impac
                 spdlog::debug("{} is bounced from {}!", projBase->GetName(), Levi->data.stuckedBone ? Levi->data.stuckedBone->name : "NULL");
             }
 
-            if (shooter && (APIs::precision || APIs::Request())) {
-                APIs::precision->RemoveProjectileCollision(shooter->GetHandle(), Levi->collisionDefinition);
-            }
+        //    if (shooter && (APIs::precision || APIs::Request())) {
+        //        APIs::precision->RemoveProjectileCollision(shooter->GetHandle(), Levi->collisionDefinition);
+        //    }
         //  const bool isVertical = projBase == Levi->LeviProjBaseH;
         //  auto offset = projBase->data.collisionRadius;
         //  auto& pos = proj->data.location;
@@ -1286,7 +1336,7 @@ inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
             } else if (auto agressor = a_this.aggressor.get().get(); agressor && agressor->IsPlayerRef() && !a_target->IsDead()) {
                 if (kratos->IsInRage(agressor)) {
                     if (!(a_this.flags & RE::HitData::Flag::kBash))
-                        a_this.totalDamage *= Config::BarehandedDamageMult;
+                        a_this.totalDamage = a_this.totalDamage + a_this.totalDamage * (Config::BarehandedDamageMult - 1.f);
               //      a_this.totalDamage = Config::BarehandedDamage / (RE::PlayerCharacter::GetSingleton()->GetGameStatsData().difficulty);
                     if (agressor->AsActorValueOwner())
                         agressor->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, a_this.totalDamage);
@@ -1295,7 +1345,7 @@ inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
                 }
                 else if (WeaponIdentify::isBarehanded) {
                     if (!(a_this.flags & RE::HitData::Flag::kBash))
-                        a_this.totalDamage *= Config::BarehandedDamageMult;
+                        a_this.totalDamage = a_this.totalDamage + a_this.totalDamage * (Config::BarehandedDamageMult - 1.f);
               //      a_this.totalDamage = Config::BarehandedDamage / (RE::PlayerCharacter::GetSingleton()->GetGameStatsData().difficulty);
                     kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(a_this.totalDamage, 2.f));
                 } else kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(a_this.totalDamage));

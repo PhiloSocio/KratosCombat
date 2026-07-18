@@ -337,8 +337,8 @@ public:
         TrailTransformOverride transformOverride = TrailTransformOverride();
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
-        RE::NiNode* stuckedBone     = nullptr;
-        RE::Actor* stuckedActor     = nullptr;
+        RE::NiPointer<RE::NiNode> stuckedBone;
+        RE::NiPointer<RE::Actor> stuckedActor;
         ProjectileState projState   = ProjectileState::kNone;
         float* enchMag              = nullptr;
         float defaultEnchMag;
@@ -538,6 +538,9 @@ public:
     bool IsHoming(RE::Projectile* a_proj) const;
     bool IsCharged(const bool a_forLastThrow = false) const {return _isCharged ? _isCharged : (a_forLastThrow ? _isLastThrowCharged : false);}
     void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void AddProjectileTrail(const float a_delta);
+    void FadeProjectileTrail(const float a_delta);
+    void DeleteProjectileTrail();
 
     bool isAxeCalled;
     bool isAxeThrowed;
@@ -546,6 +549,7 @@ public:
 
     AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;
+    AsyncUtil::GameTime trailRemoveUpdate;
 private:
 friend class WeaponIdentify;
 friend class AnimationEventTracker;
@@ -675,6 +679,7 @@ public:
     static void StartExplosions(const float a_delay);
     static void SetExplosionMagnitude(const float a_magnitude) {explosionMagnitude = a_magnitude;}
     static void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    static void ReplaceStickedProjectileModel(RE::Projectile* a_proj);
 
     /* forced detonation?
     forced detonation needed for living targets, because timing projectile explosions not working after hitting to actors.
@@ -689,7 +694,6 @@ friend class ProjectileHook;
     static inline float explosionDelay = 0.f;
     static inline size_t currentHitIndex = 0;
     static inline bool explosionsStarted = false;
-    static inline RE::NiAVObject* spearModel = nullptr;
     static inline std::vector<RE::FormID> MeleeHitProjectileIDs;
     static inline RE::BSFixedString DefaultDraupnirModel;
     static inline std::vector<std::tuple<RE::NiPointer<RE::NiNode>, RE::NiPointer<RE::Actor>, RE::NiPointer<RE::Projectile>>> spearHits;
@@ -746,6 +750,7 @@ public:
         float yAngle            = 0.35f;
         float throwedTime       = 0.f;
         float gravity           = 3.69f;
+        float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
         float throwingChargeDuration = 0.f;
         bool isPenetrating;
     };
@@ -987,14 +992,17 @@ public:
     bool IsHoming(RE::Projectile* a_proj) const;
     bool IsCharged(const bool a_forLastThrow = false) const {return _isCharged ? _isCharged : (a_forLastThrow ? _isLastThrowCharged : false);}
     void StartChargingThrow(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    void AddProjectileTrail(const float a_delta);
+    void FadeProjectileTrail(const float a_delta);
+    void DeleteProjectileTrail();
 
     bool isMjolnirCalled;
     bool isMjolnirArriving;
     bool isMjolnirThrowed;
-//  RE::Projectile::LaunchData* LeviThrowData   = nullptr;
 
     AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;
+    AsyncUtil::GameTime trailRemoveUpdate;
     AsyncUtil::GameTime callUpdate;
 private:
 friend class WeaponIdentify;

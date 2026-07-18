@@ -89,6 +89,8 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
 
     ReadFloatSetting(ini, "Main", "fBarehandedDamageMult", BarehandedDamageMult);
     ReadFloatSetting(ini, "Main", "fThrowingDamageMult", ThrowingDamageMult);
+    if (BarehandedDamageMult < 0.0f) BarehandedDamageMult = 0.f;
+    if (ThrowingDamageMult < 0.0f) ThrowingDamageMult = 0.f;
 
     ReadFloatSetting(ini, "Main", "fThrowSpeed", ThrowSpeed);
     ReadFloatSetting(ini, "Main", "fThrowRotationSpeed", ThrowRotationSpeed);
