@@ -8,6 +8,7 @@
 #define PI3 1.0471975511965977f
 #define PI4 0.7853981633974483f
 #define PI8 0.3926990816987242f
+#define PI16 0.1963495408493621f
 
 #define downVec     {0.f, 0.f, -1.f}
 #define upVec       {0.f, 0.f, 1.f}
@@ -502,11 +503,32 @@ namespace MathUtil
         }
 
         [[nodiscard]] inline static float ParabolicClamp(float t, float minVal, float maxVal) {
-            float factor = 4.0f * t * (1.0f - t); // 0 ve 1'de min, 0.5'te max
+            float factor = 4.0f * t * (1.0f - t); // t = 0 and t = 1 min, t = 0.5 max
             return minVal + (maxVal - minVal) * factor;
         }
 
-        [[nodiscard]] inline static RE::NiPoint3 BezierPoint(float t, const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3) {
+        struct BezierSample
+        {
+            RE::NiPoint3 point;
+            RE::NiPoint3 tangent;
+            float t;
+            float distanceFromStart;
+            BezierSample(const RE::NiPoint3& a_point, const RE::NiPoint3& a_tangent, float a_t, float a_distanceFromStart) : point(a_point), tangent(a_tangent), t(a_t), distanceFromStart(a_distanceFromStart) {};
+        };
+        struct BezierCurve
+        {
+            std::vector<BezierSample> samples;
+            float arcLength;
+            BezierCurve() = default;
+            BezierCurve(std::vector<BezierSample>&& a_samples, float a_arcLength) : samples(std::move(a_samples)), arcLength(a_arcLength) {};
+        };
+        [[nodiscard]] inline static RE::NiPoint3 BezierPoint(
+            float t, 
+            const RE::NiPoint3& P0, 
+            const RE::NiPoint3& P1, 
+            const RE::NiPoint3& P2, 
+            const RE::NiPoint3& P3)
+        {
             // t is expected to be in [0, 1]
             t = std::clamp(t, 0.0f, 1.0f);
             const float u = 1.0f - t;
@@ -520,8 +542,29 @@ namespace MathUtil
                     P2 * (3.f * u * tt) + 
                     P3 * ttt;
         }
+        [[nodiscard]] inline static RE::NiPoint3 BezierDerivative(
+            float t,
+            const RE::NiPoint3& P0,
+            const RE::NiPoint3& P1,
+            const RE::NiPoint3& P2,
+            const RE::NiPoint3& P3)
+        {
+            t = std::clamp(t, 0.0f, 1.0f);
 
-        [[nodiscard]] static float BezierCurveLength(const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3, int subdivisions) {
+            const float u = 1.0f - t;
+
+            return
+                (P1 - P0) * (3.0f * u * u) +
+                (P2 - P1) * (6.0f * u * t) +
+                (P3 - P2) * (3.0f * t * t);
+        }
+        [[nodiscard]] static float BezierCurveLength(
+            const RE::NiPoint3& P0, 
+            const RE::NiPoint3& P1, 
+            const RE::NiPoint3& P2, 
+            const RE::NiPoint3& P3, 
+            const int subdivisions)
+        {
             if (subdivisions <= 0)
                 return 0.0f;
 
@@ -539,15 +582,15 @@ namespace MathUtil
             return length;
         }
 
-        [[nodiscard]] static std::pair<std::vector<RE::NiPoint3>, float>
-        DrawAndMeasureBezier(const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3, int subdivisions)
+        [[nodiscard]] static BezierCurve
+        CalculateAndMeasureBezier(const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3, int subdivisions)
         {
-            std::vector<RE::NiPoint3> points;
-            points.reserve(subdivisions + 1);
+            std::vector<BezierSample> samples;
+            samples.reserve(subdivisions + 1);
 
             float length = 0.0f;
             RE::NiPoint3 prevPoint = P0;
-            points.push_back(P0);
+            samples.emplace_back(BezierSample(P0, RE::NiPoint3(), 0.f, 0.f));
 
             const float invSubdiv = 1.0f / static_cast<float>(subdivisions);
 
@@ -555,11 +598,12 @@ namespace MathUtil
                 float t = static_cast<float>(i) * invSubdiv;
                 RE::NiPoint3 currentPoint = MathUtil::Algebra::BezierPoint(t, P0, P1, P2, P3);
                 length += (currentPoint - prevPoint).Length();
-                points.push_back(currentPoint);
+                RE::NiPoint3 bezierDerivative = BezierDerivative(t, P0, P1, P2, P3);
+                samples.emplace_back(BezierSample(currentPoint, bezierDerivative, t, length));
                 prevPoint = currentPoint;
             }
 
-            return {points, length};
+            return BezierCurve(std::move(samples), length);
         }
 
         [[nodiscard]] static float AttractToNearest(const float value, const std::vector<float>& targets, const float strength)
@@ -1307,7 +1351,7 @@ namespace ObjectUtil
 
     struct Sound
     {
-        static void PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::NiAVObject* a_source, const float a_volume = 1.f, RE::BSSoundHandle* a_handle = nullptr)
+        static RE::BSSoundHandle* PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::NiAVObject* a_source, const float a_volume = 1.f, RE::BSSoundHandle* a_handle = nullptr, const uint16_t a_fadeInDuration = 0)
         {
             if (a_sound && a_source) {
                 auto audioManager = RE::BSAudioManager::GetSingleton();
@@ -1316,8 +1360,13 @@ namespace ObjectUtil
                 audioManager->BuildSoundDataFromDescriptor(refHandle, a_sound->soundDescriptor);
                 refHandle.SetObjectToFollow(a_source);
                 refHandle.SetVolume(a_volume);
-                refHandle.Play();
+                if (a_fadeInDuration != 0u)
+                    refHandle.FadeInPlay(a_fadeInDuration);
+                else
+                    refHandle.Play();
+                return &refHandle;
             }
+            return nullptr;
         }
     };
 

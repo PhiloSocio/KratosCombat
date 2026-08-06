@@ -275,8 +275,8 @@ void WeaponIdentify::WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_R
             mjolnir->data.poison    = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
 #endif
             mjolnir->data.damage    = static_cast<float>(Mjolnir->attackDamage);
-            mjolnir->MjolnirProjBaseT->model = Mjolnir->model;
-            mjolnir->MjolnirProjBaseA->model = Mjolnir->model;
+        //    mjolnir->MjolnirProjBaseT->model = Mjolnir->model;
+        //    mjolnir->MjolnirProjBaseA->model = Mjolnir->model;
             if (WeaponIdentify::Mjolnir->HasWorldModel()) {
                 spdlog::debug("Mjolnir is throwable");
                 mjolnir->SetThrowState(tStateM::kThrowable);
@@ -600,8 +600,14 @@ bool Kratos::Initialize()
     SpellFinisherButton     = dataHandler->LookupForm<RE::SpellItem>(0x807, Config::KratosCombatESP);
     SpellMidDistButton      = dataHandler->LookupForm<RE::SpellItem>(0x80B, Config::KratosCombatESP);
     SpellLongDistButton     = dataHandler->LookupForm<RE::SpellItem>(0x80D, Config::KratosCombatESP);
-    soundEffect.catchLevi   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x2398A, "Skyrim.esm");
-    soundEffect.callLevi    = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x7D013, "Skyrim.esm");
+    soundEffect.throwLevi   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x85E, Config::KratosCombatESP);
+    soundEffect.callLevi    = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x86B, Config::KratosCombatESP);
+    soundEffect.arrivingLeviStart   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x85A, Config::KratosCombatESP);
+    soundEffect.arrivingLeviLoop0   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x85B, Config::KratosCombatESP);
+    soundEffect.arrivingLeviLoop1   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x85C, Config::KratosCombatESP);
+    soundEffect.arrivingLeviLoop2   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x85D, Config::KratosCombatESP);
+    soundEffect.arrivingLeviNear    = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x86C, Config::KratosCombatESP);
+    soundEffect.catchLevi   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x84E, Config::KratosCombatESP);
     soundEffect.chargeLevi  = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3EDD5, "Skyrim.esm");
     soundEffect.chargeLeviLoop  = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3E5CB, "Skyrim.esm");
     soundEffect.chargeLeviEndT  = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3EDD5, "Skyrim.esm");
@@ -1157,7 +1163,6 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
             a_point = pcPos + dir * 36000.f;
         }
     }
-    data.projState = ProjectileState::kNone;
 }
 void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const bool isHoming, RE::Actor* a_actor)
 {
@@ -1255,7 +1260,7 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         if (Config::IsAdvancedThrowingInstalled && (isThrowAttack || isPowerThrowAttack)) {
             ResetCharge(data.enchMag, data.defaultEnchMag, true);
             WeaponIdentify::skipEquipAnim = true;
-            ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
+            ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, true);
             ResetEquipAnimationAfter(100, a_actor);
             spdlog::debug("Leviathan unequipped after throwing");
         } else {
@@ -1326,29 +1331,38 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             isAxeCalled = true;
             isAxeThrowed = false;
 
-            const auto leviDamage = data.damage;
-            float mag = leviDamage * WeaponIdentify::DamageMult;
-            const auto leviProjEff = SpellLeviProjA->effects[0];
-            auto& leviProjEffSetting = leviProjEff->effectItem;
-            leviProjEffSetting.magnitude = mag * 0.25f;
-
+            if (!Config::DontDamageWhileArrive) {
+                const auto leviProjEff = SpellLeviProjA->effects[0];
+                auto& leviProjEffSetting = leviProjEff->effectItem;
+                auto& mag = leviProjEffSetting.magnitude;
+                const auto leviDamage = data.damage;
+                mag = leviDamage * WeaponIdentify::DamageMult * Config::ThrowingDamageMult;
+                mag *= 0.5f;
+                if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff && leviProjBaseEff->data.projectileBase) {
+                //    leviProjBaseEff->data.projectileBase->data.defaultWeaponSource = WeaponIdentify::LeviathanAxe;
+                //    leviProjBaseEff->data.associatedForm = WeaponIdentify::LeviathanAxe;
+                    auto& pbData = leviProjBaseEff->data.projectileBase->data;
+                    pbData.force = mag * 2.f;
+                } else spdlog::warn("not found Levi arriving effect!");
+                spdlog::debug("damage mult: {} throwing dm {} levi damage {} total damage {}", WeaponIdentify::DamageMult, Config::ThrowingDamageMult, leviDamage, mag);
+            }
 
             RE::NiPoint3 startPoint = data.position;
             RE::NiPoint3  targetPoint = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
             if (!a_justContinue) {
                 GetPosition(startPoint, AnArchos);
-                arrivingLevi.arrivingRelativeAngleZ = 0.5f;
-                a_actor->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingLevi.arrivingRelativeAngleZ);
+    //            arrivingLevi.arrivingRelativeAngleZ = 0.5f;
+    //            a_actor->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingLevi.arrivingRelativeAngleZ);
             //    RE::NiMatrix3 handRot = WeaponIdentify::RHandBone->world.rotate;
             //    RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec);
             //    RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec);
             //    palmDir.Unitize();
             //    handForward.Unitize();
-                RE::NiPoint3 p0 = arrivingLevi.startPosition;
-                RE::NiPoint3 p3 = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
-                RE::NiPoint3 linearArrivingDir = p3 - p0;
-                linearArrivingDir.Unitize();
-                const float distanceFromStart = p0.GetDistance(p3);
+            //    RE::NiPoint3 p0 = arrivingLevi.startPosition;
+            //    RE::NiPoint3 p3 = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
+            //    RE::NiPoint3 linearArrivingDir = p3 - p0;
+            //    linearArrivingDir.Unitize();
+            //    const float distanceFromStart = p0.GetDistance(p3);
             //    RE::NiPoint3 p1 = p0 + linearArrivingDir * distanceFromStart / 3.f;
             //    RE::NiPoint3 p2 = p3 + palmDir * (distanceFromStart / 3.f + 50.f) + handForward * (distanceFromStart / 3.f + 50.f);
             //    float charZ = AnArchos->GetPosition().z;
@@ -1361,7 +1375,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellLeviProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
-        //    lData.weaponSource = data.weap;   //  somehow caused very high projectile damage.
+            lData.weaponSource = data.weap;
 #ifdef EXPERIMENTAL_THROWPOISON
             lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
 #endif
@@ -1371,7 +1385,6 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             WeaponIdentify::isBarehanded = false;
             RE::Projectile::Launch(&pHandle, lData);
             data.proj.reset(pHandle.get().get());
-            SetThrowState(ThrowState::kArriving);
             auto kratos = Kratos::GetSingleton();
             if (GetThrowState() == tState::kThrowable) kratos->SetIsCanCallAxe(a_actor, false);
 
@@ -1385,7 +1398,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
                 arrivingLevi = ArrivingLeviathan(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
                 spdlog::debug("Levi call is started");
             }
-
+            SetThrowState(ThrowState::kArriving);
             spdlog::info("Levi is arriving...");
         } else {spdlog::warn("WEIRD SpellLeviProjA is nullptr!");}
     } else {spdlog::warn("WEIRD you don't have the axe for calling!!");}
@@ -1424,7 +1437,7 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
             kratos->DoKratosAction(Kratos::Action::kWeaponCharge);
             ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::LeviathanAxe, WeaponIdentify::skipEquipAnim);//, 1U, true, false, false, true);
             ResetEquipAnimationAfter(100, a_actor);
-            WeaponIdentify::WeaponCheck();
+        //    WeaponIdentify::WeaponCheck();
             if (WeaponIdentify::skipEquipAnim) WeaponIdentify::skipEquipAnim = false;
         } else spdlog::warn("you not have the leviathan axe");
 
@@ -1786,10 +1799,85 @@ bool LeviathanAxe::IsHoming(RE::Projectile* a_proj) const {return a_proj == homi
 void LeviathanAxe::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
+        kratos->_soundHandle.Stop();
         ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeLeviLoop, WeaponIdentify::RHandBone, 5.f, &kratos->_soundHandle);
         a_actor->ApplyArtObject(kratos->VFXeffect.handFrostBright, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
     }
+}
+void LeviathanAxe::SoundData::StopAllSounds()
+{
+    if (CallStartSH) CallStartSH->Stop();
+    if (ArrivingStartSH) ArrivingStartSH->Stop();
+    if (ArrivingLoop0SH) ArrivingLoop0SH->Stop();
+    if (ArrivingLoop1SH) ArrivingLoop1SH->Stop();
+    if (ArrivingLoop2SH) ArrivingLoop2SH->Stop();
+    if (ArrivingNearSH) ArrivingNearSH->Stop();
+    if (CatchSH) CatchSH->Stop();
+}void LeviathanAxe::SoundData::FadeAllSounds(const uint16_t a_durationMS)
+{
+    if (CallStartSH) CallStartSH->FadeOutAndRelease(a_durationMS);
+    if (ArrivingStartSH) ArrivingStartSH->FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop0SH) ArrivingLoop0SH->FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop1SH) ArrivingLoop1SH->FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop2SH) ArrivingLoop2SH->FadeOutAndRelease(a_durationMS);
+    if (ArrivingNearSH) ArrivingNearSH->FadeOutAndRelease(a_durationMS);
+    if (CatchSH) CatchSH->FadeOutAndRelease(a_durationMS);
+}
+void LeviathanAxe::SoundData::PlayCallingHandSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.callLevi; soundEffect)
+        CallStartSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void LeviathanAxe::SoundData::PlayArrivingStartSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviStart; soundEffect)
+        ArrivingStartSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void LeviathanAxe::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect)
+        ArrivingLoop0SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect)
+        ArrivingLoop1SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect)
+        ArrivingLoop2SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void LeviathanAxe::SoundData::PlayArrivingNearSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviNear; soundEffect)
+        ArrivingNearSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void LeviathanAxe::SoundData::PlayCatchingSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.catchLevi; soundEffect)
+        CatchSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void LeviathanAxe::SoundData::PlayThrowingSounds(RE::NiAVObject* a_source)
+{
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviNear; soundEffect)
+//        ThrowingStartSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void LeviathanAxe::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
+{
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect)
+//        ThrowingLoop0SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect)
+//        ThrowingLoop1SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop2; soundEffect)
+//        ThrowingLoop2SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void LeviathanAxe::SoundData::FadeArrivingLoopSounds(const uint16_t a_durationMS)
+{
+    if (ArrivingLoop0SH) ArrivingLoop0SH->FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop1SH) ArrivingLoop1SH->FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop2SH) ArrivingLoop2SH->FadeOutAndRelease(a_durationMS);
+}
+void LeviathanAxe::SoundData::FadeThrowingLoopSounds(const uint16_t a_durationMS)
+{
+    if (ThrowingLoop0SH) ThrowingLoop0SH->FadeOutAndRelease(a_durationMS);
+    if (ThrowingLoop1SH) ThrowingLoop1SH->FadeOutAndRelease(a_durationMS);
+    if (ThrowingLoop2SH) ThrowingLoop2SH->FadeOutAndRelease(a_durationMS);
 }
 #pragma endregion
 #pragma region Blades_of_Chaos
@@ -2218,6 +2306,7 @@ inline void Draupnir::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::Project
 void Draupnir::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
+        kratos->_soundHandle.Stop();
     //    ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeLeviLoop, WeaponIdentify::RHandBone, 5.f, &kratos->_soundHandle);
         a_actor->ApplyArtObject(kratos->VFXeffect.handFlame, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
@@ -2297,10 +2386,20 @@ void Mjolnir::Update(const float a_delta) {
         callUpdate.Done();
     }
     if (projectileUpdate.IsTimeToUpdate()) {
-        if (data.model && data.proj && data.proj->Get3D() && data.model.get() == data.proj->Get3D()) {
-            projectileUpdate.Done();
-            trailUpdate.RegisterForUpdate(a_delta * 2.f, false);
-        }
+        if (data.model && data.proj && data.proj->Get3D() && data.weaponModelCopy && data.model.get() == data.proj->Get3D()) {
+            auto animatedNode = data.model->AsNode();
+
+            auto cloneModel = data.weaponModelCopy.get()->Clone();
+            auto cloneNode = cloneModel ? cloneModel->AsNode() : nullptr;
+            data.replacedProjectileModel.reset(cloneNode);
+
+            if (animatedNode) {
+                animatedNode->AttachChild(data.replacedProjectileModel.get(), false);
+                projectileUpdate.Done();
+                trailUpdate.RegisterForUpdate(a_delta * 2.f, false);
+                spdlog::debug("levi model changed!");
+            } else spdlog::warn("animated node or levinode null");
+        } else spdlog::warn("proj or proj->Get3D2() null");
     }
     if (Config::DrawTrails) {
         AddProjectileTrail(a_delta);
@@ -2410,17 +2509,17 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         RE::Projectile::Launch(&pHandle, lData);
         data.proj.reset(pHandle.get().get());
 
-    //    if (WeaponIdentify::isMjolnir) {
-    //        const auto root = a_actor->Get3D1(false);
-    //        auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
-    //        auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
-    //        auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-    //        data.weaponModelCopy.reset(copyWeaponModelNode);
-    //        if (data.weaponModelCopy) {
-    //            data.weaponModelCopy->local = RE::NiTransform();
-    //            data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
-    //        }
-    //    }
+        if (WeaponIdentify::isMjolnir) {
+            const auto root = a_actor->Get3D1(false);
+            auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
+            auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
+            auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
+            data.weaponModelCopy.reset(copyWeaponModelNode);
+            if (data.weaponModelCopy) {
+                data.weaponModelCopy->local = RE::NiTransform();
+                data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            }
+        }
 
         projectileUpdate.RegisterForUpdate(0.0f, false);
 
@@ -2518,9 +2617,9 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
             const auto MjolnirProjEff = SpellMjolnirProjA->effects[0];
             auto& MjolnirProjEffSetting = MjolnirProjEff->effectItem;
             MjolnirProjEffSetting.magnitude = mag * 0.25f;
-            if (const auto MjolnirProjBaseEff = MjolnirProjEff->baseEffect; MjolnirProjBaseEff) {
-                MjolnirProjBaseEff->data.projectileBase->SetModel(data.weap->GetModel());
-            } else spdlog::warn("not found Mjolnir throwing effect!");
+        //    if (const auto MjolnirProjBaseEff = MjolnirProjEff->baseEffect; MjolnirProjBaseEff) {
+        //        MjolnirProjBaseEff->data.projectileBase->SetModel(data.weap->GetModel());
+        //    } else spdlog::warn("not found Mjolnir throwing effect!");
 
             RE::NiPoint3 startPoint = data.position;
             GetPosition(startPoint, AnArchos);
@@ -2531,7 +2630,7 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellMjolnirProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
-        //    lData.weaponSource = data.weap;
+            lData.weaponSource = data.weap;
 #ifdef EXPERIMENTAL_THROWPOISON
             lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
 #endif
@@ -2593,7 +2692,13 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         data.lastHitActors.clear();
         data.lastHitForms.clear();
 
+        if (WeaponIdentify::WeaponBone && WeaponIdentify::WeaponBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
+            WeaponIdentify::WeaponBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
+            data.replacedProjectileModel->parent->local.translate = RE::NiPoint3();
+            data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(NI_HALF_PI, 0.f, NI_HALF_PI);
+        }
         trailUpdate.Done();
+        data.model.reset();
         trailRemoveUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
 
         isMjolnirCalled = false;
@@ -2652,10 +2757,10 @@ void Mjolnir::AddProjectileTrail(const float a_delta)
 void Mjolnir::FadeProjectileTrail(const float a_delta)
 {
     if (trailRemoveUpdate.IsTimeToUpdate()) {
-        if (data.model) {
+        if (data.replacedProjectileModel) {
             if (data.proj && data.projState == ProjectileState::kHavok) {
         //        auto& rtData = data.proj->GetProjectileRuntimeData();
-                auto velocity = (data.model->world.translate - data.model->previousWorld.translate) / *g_deltaTime;
+                auto velocity = (data.replacedProjectileModel->world.translate - data.replacedProjectileModel->previousWorld.translate) / *g_deltaTime;
                 auto speed = velocity.Length();//rtData.linearVelocity.Length();
                 spdlog::debug("projectile trail fading... current speed: {}", speed);
                 if (speed != 0.f && speed < 269.f) {
@@ -2664,7 +2769,7 @@ void Mjolnir::FadeProjectileTrail(const float a_delta)
                 }
             } else {
                 DeleteProjectileTrail();
-                data.model.reset();
+                data.replacedProjectileModel.reset();
                 trailRemoveUpdate.Done();
             }
         }
@@ -2672,14 +2777,15 @@ void Mjolnir::FadeProjectileTrail(const float a_delta)
 }
 void Mjolnir::DeleteProjectileTrail()
 {
-    if (data.model && data.model->AsNode()) {
-        auto trailParentBone = data.model->GetObjectByName("trailParentNode");
-        if(!trailParentBone)
-            spdlog::debug("projectile trail not existing");
-        else {
-            data.model->AsNode()->DetachChild(trailParentBone);
-            spdlog::debug("projectile trail deleted");
+    if (data.replacedProjectileModel) {
+        auto trailParentBone = data.replacedProjectileModel->GetObjectByName("trailParentNode");
+        data.replacedProjectileModel->DetachChild(trailParentBone);
+    //    if (data.replacedProjectileModel->parent)
+    //        data.replacedProjectileModel->parent->DetachChild(data.replacedProjectileModel.get());
+        if (WeaponIdentify::WeaponBone) {
+            WeaponIdentify::WeaponBone->AsNode()->DetachChild(data.replacedProjectileModel->parent);
         }
+        spdlog::debug("projectile trail deleted");
     }
 }
 void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
@@ -2849,6 +2955,7 @@ bool Mjolnir::IsHoming(RE::Projectile* a_proj) const {return a_proj == homingMjo
 void Mjolnir::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
+        kratos->_soundHandle.Stop();
         ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeMjolnir, WeaponIdentify::RHandBone, 5.f, &kratos->_soundHandle);
         a_actor->ApplyArtObject(kratos->VFXeffect.handShock, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
@@ -3156,13 +3263,13 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 */            break;
         case "CatchLevi"_h:
             break;
-        case "LeviCallAttack"_h:     //event: attackPowerStartInPlace, attackStart, PowerAttack [IDLE:000E8456], NormalAttack [IDLE:00013215]
-            if (auto Levi = LeviathanAxe::GetSingleton(); !WeaponIdentify::isLeviathanAxe && WeaponIdentify::LeviathanAxe) {
-                Levi->Call(true);
-                auto AnArchos = PlayerCharacter::GetSingleton();
-                ObjectUtil::Actor::EquipItem(AnArchos, WeaponIdentify::LeviathanAxe, true, 1u, true, false, false, false);
-                ResetEquipAnimationAfter(100, AnArchos);
-            } else spdlog::info("Levi is not callable");
+    //    case "LeviCallAttack"_h:     //event: attackPowerStartInPlace, attackStart, PowerAttack [IDLE:000E8456], NormalAttack [IDLE:00013215]
+    //        if (auto Levi = LeviathanAxe::GetSingleton(); !WeaponIdentify::isLeviathanAxe && WeaponIdentify::LeviathanAxe) {
+    //            Levi->Call(true);
+    //            auto AnArchos = PlayerCharacter::GetSingleton();
+    //            ObjectUtil::Actor::EquipItem(AnArchos, WeaponIdentify::LeviathanAxe, true, 1u, true, false, false, false);
+    //            ResetEquipAnimationAfter(100, AnArchos);
+    //        } else spdlog::info("Levi is not callable");
         case "ThrowAttackStart"_h:
             if (WeaponIdentify::isLeviathanAxe) {
                 if (auto Levi = LeviathanAxe::GetSingleton()) {
@@ -3296,7 +3403,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
     //        Kratos::GetSingleton()->SetIsCanRage();
             break;
         case "weaponDraw"_h:
-            WeaponIdentify::WeaponCheck();
+        //    WeaponIdentify::WeaponCheck();
             if (auto BoC = BladeOfChaos::GetSingleton()) {
                 BoC->HideChains();
             }

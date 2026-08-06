@@ -84,8 +84,14 @@ public:
     };
 
     struct SoundEffects {
-        RE::BGSSoundDescriptorForm* catchLevi = nullptr;    //  WPNImpactBladeVsIceSD [SNDR:0002398A]
+        RE::BGSSoundDescriptorForm* throwLevi = nullptr;
         RE::BGSSoundDescriptorForm* callLevi = nullptr;     //  telekinesis,0x7D013
+        RE::BGSSoundDescriptorForm* arrivingLeviStart = nullptr;
+        RE::BGSSoundDescriptorForm* arrivingLeviLoop0 = nullptr;
+        RE::BGSSoundDescriptorForm* arrivingLeviLoop1 = nullptr;
+        RE::BGSSoundDescriptorForm* arrivingLeviLoop2 = nullptr;
+        RE::BGSSoundDescriptorForm* arrivingLeviNear = nullptr;
+        RE::BGSSoundDescriptorForm* catchLevi = nullptr;    //  WPNImpactBladeVsIceSD [SNDR:0002398A]
         RE::BGSSoundDescriptorForm* chargeLevi = nullptr;   //  MAGIcicleChargeSD [SNDR:0003EDD5], MAGIcicleReadyLPSD [SNDR:0003F1F0]
         RE::BGSSoundDescriptorForm* chargeLeviLoop = nullptr;// MAGFrostBiteFireLPMSD [SNDR:0003E5CB]
         RE::BGSSoundDescriptorForm* chargeLeviEndT = nullptr;
@@ -353,26 +359,33 @@ public:
     struct ArrivingLeviathan {
         const LeviathanAxe* parent;
         RE::NiPointer<RE::Projectile> proj;
-        RE::Actor* caller;
-        RE::NiPointer<RE::NiAVObject> callerBone;
+        RE::NiPointer<RE::Actor> caller;
+        RE::NiPointer<RE::NiAVObject> callerHandBone;
+        RE::NiPointer<RE::NiAVObject> callerBreastBone;
         RE::NiPoint3 startPosition;
         RE::NiPoint3 currentDir;
         RE::NiPoint3 desiredDir;
+        RE::NiPoint3 smoothedDesiredDir;
         RE::NiPoint3 linearArrivingDir;
-        std::pair<std::vector<RE::NiPoint3>, float> arrivingRoute;
+        MathUtil::Algebra::BezierCurve arrivingRoute;
+        RE::NiPoint3 bezierControlPoints[4];
+        int arrivingRouteClosestIndex;
         std::vector<RE::Actor *> targets;
+        bool  isCatchable = false;
+        bool  isInCallingAnimation = false;
         float throwedTime = 0.f;
         float livingTime = 0.f;
         float timeToArrive = Config::ArrivalTime;
         float linearDistance = 0.f;
         float linearDistanceFromStart = 0.f;
         float linearDistanceFromLastCallPos = 0.f;
-        float arrivingRelativeAngleZ = 0.f;
+        float arrivingRelativeAngleZ = 0.5f;
+        float arrivingRelativeAngleSnapStrength = Config::ArrivalAngleSnap;
         float speed = 2400.f;
 
         float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
         std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
-            targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller, linearDistance, true);
+            targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller.get(), linearDistance, true);
             CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
             return targets;
         }
@@ -387,10 +400,9 @@ public:
                         auto targetDir = targetPos - a_origin;
                         targetDir.Unitize();
                         float distance = actor->GetPosition().GetDistance(a_origin);
-                        result = distance < 100.f || 
-                            distance > linearDistance || 
-                            currentDir.Dot(targetDir) > std::cos(PI8) || 
-                            currentDir.Dot(linearArrivingDir) > std::cos(PI8);
+                        result = distance > linearDistance
+                            || currentDir.Dot(targetDir) < std::cos(PI8)
+                            || currentDir.Dot(linearArrivingDir) < std::cos(PI8);
                     }
                     return result;
                 });
@@ -402,32 +414,80 @@ public:
                 );
             };
         }
-
         RE::Actor* GetNextTarget(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
             if (a_origin) {
                 GetTargets(a_origin);
             }
             return !targets.empty() ? targets.front() : nullptr;
         }
+        bool IsInCallingAnimation() {
+            if (caller) {
+                caller->GetGraphVariableBool("bIsInCallingAnimation", isInCallingAnimation);
+            } return isInCallingAnimation;
+        }
+        void UpdateArrivingDirection(const bool a_initial = false) {
+            if (caller && parent && callerBreastBone) {
+                if (parent->GetThrowState() == ThrowState::kThrowable || isCatchable) {
+
+                } else if (a_initial || linearDistance > 100.f) {
+                    RE::NiPoint3  spineForwardDir = callerBreastBone->world.rotate * RE::NiPoint3(frontVec3);
+                    spineForwardDir.z = 0.f;  //  ignore vertical direction
+                    spineForwardDir.Unitize();
+
+                    RE::NiPoint3 linearDir2D(linearArrivingDir.x, linearArrivingDir.y, 0.f);
+                    linearDir2D.Unitize();
+
+                    float dot = spineForwardDir.Dot(linearDir2D);
+                    float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
+
+                    arrivingRelativeAngleZ = atan2(det, dot);  //  angle between spine forward direction and axe direction
+                    arrivingRelativeAngleZ = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, PI]
+                    arrivingRelativeAngleZ = MathUtil::Angle::RadianToDegree(arrivingRelativeAngleZ) / 360.f;  //  normalize angle to [0, 1]
+
+                    if (arrivingRelativeAngleSnapStrength > 0.f) {
+                        std::vector<float> targets = {0.f, 0.25f, 0.5f, 0.75f, 1.f};
+                    //    if ((arrivingRelativeAngle < 0.124f || arrivingRelativeAngle > 0.876f) && snapStrength < 0.8f) snapStrength += 0.1f;
+                        arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, targets, arrivingRelativeAngleSnapStrength);    //  for helping to the blender generator
+                    }
+
+                    if (!a_initial) {
+                        float previousAngle; caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle);
+                        constexpr float smoothTime = 0.369f;
+                        const float alpha = 1.f - std::exp(-*g_deltaTime / smoothTime);
+                        float smoothedArrivingRelativeAngle = previousAngle;
+                        smoothedArrivingRelativeAngle += (arrivingRelativeAngleZ - previousAngle) * alpha;
+                        arrivingRelativeAngleZ = smoothedArrivingRelativeAngle;
+                    }
+                }
+                caller->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
+            }
+        }
 
         virtual ~ArrivingLeviathan() = default;
         ArrivingLeviathan() = default;
         ArrivingLeviathan(const LeviathanAxe* a_parent, RE::Projectile* a_proj, 
             RE::Actor* a_caller, 
-            RE::NiAVObject* a_callerBone, 
+            RE::NiAVObject* a_callerHandBone, 
             RE::NiPoint3& a_startPosition) : parent(a_parent), proj(a_proj),
-            caller(a_caller), callerBone(a_callerBone), startPosition(a_startPosition)
+            caller(a_caller), callerHandBone(a_callerHandBone), startPosition(a_startPosition)
         {
             throwedTime = AsyncUtil::GameTime::GetEngineTime();
-            auto callerPosition = callerBone ? callerBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
-            linearArrivingDir = (callerPosition - startPosition);
+            callerBreastBone.reset(caller ? caller->GetNodeByName("NPC Spine2 [Spn2]") : nullptr);
+            auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();
-            linearDistanceFromStart = startPosition.GetDistance(callerPosition) + 1.f;
+            linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
             linearDistanceFromLastCallPos = linearDistanceFromStart;
             speed = linearDistanceFromStart / timeToArrive;
             speed = std::clamp(speed, Config::MinArrivalSpeed, Config::MaxArrivalSpeed);
-            timeToArrive = linearDistanceFromStart / speed;
             targets = GetTargets();
+            arrivingRoute = MathUtil::Algebra::BezierCurve();
+            arrivingRouteClosestIndex = 0;
+            smoothedDesiredDir = (uint_fast8_t)a_parent->data.projState < 2U ? a_parent->data.lastVelocity : linearArrivingDir * speed;
+            spdlog::debug("projstate: {}, ", a_parent->data.projState == LeviathanAxe::ProjectileState::kNone ? "none" : a_parent->data.projState == LeviathanAxe::ProjectileState::kLaunched ? "launched" : a_parent->data.projState == LeviathanAxe::ProjectileState::kHavok ? "havok" : "stucked");
+            UpdateArrivingDirection(true);
+            bezierControlPoints[0] = startPosition;
+            bezierControlPoints[1] = startPosition + linearArrivingDir * linearDistanceFromLastCallPos * 0.33f;
         }
     };
 
@@ -517,9 +577,42 @@ public:
         }
     };
 
+    struct SoundData {
+        Kratos* kratos = nullptr;
+        RE::BSSoundHandle* CallStartSH = nullptr;
+        RE::BSSoundHandle* ArrivingStartSH = nullptr;
+        RE::BSSoundHandle* ArrivingLoop0SH = nullptr;
+        RE::BSSoundHandle* ArrivingLoop1SH = nullptr;
+        RE::BSSoundHandle* ArrivingLoop2SH = nullptr;
+        RE::BSSoundHandle* ArrivingNearSH = nullptr;
+        RE::BSSoundHandle* CatchSH = nullptr;
+        RE::BSSoundHandle* ThrowingStartSH = nullptr;
+        RE::BSSoundHandle* ThrowingLoop0SH = nullptr;
+        RE::BSSoundHandle* ThrowingLoop1SH = nullptr;
+        RE::BSSoundHandle* ThrowingLoop2SH = nullptr;
+
+        void StopAllSounds();
+        void FadeAllSounds(const uint16_t a_durationMS = 500u);
+
+        void PlayCallingHandSounds(RE::NiAVObject* a_source);
+        void PlayArrivingStartSounds(RE::NiAVObject* a_source);
+        void PlayArrivingLoopSounds(RE::NiAVObject* a_source);
+        void PlayArrivingNearSounds(RE::NiAVObject* a_source);
+
+        void PlayCatchingSounds(RE::NiAVObject* a_source);
+        void PlayThrowingSounds(RE::NiAVObject* a_source);
+        void PlayThrowingLoopSounds(RE::NiAVObject* a_source);
+
+        void FadeArrivingLoopSounds(const uint16_t a_durationMS = 1000u);
+        void FadeThrowingLoopSounds(const uint16_t a_durationMS = 1000u);
+
+        SoundData(Kratos* a_kratos) : kratos(a_kratos) {};
+    };
+
     Data data;
     ArrivingLeviathan arrivingLevi;
     HomingLeviathan homingLevi;
+    SoundData soundData = SoundData(Kratos::GetSingleton());
 
     void Update(const float a_delta);
     void SetThrowState(const ThrowState a_throwState);
@@ -615,7 +708,7 @@ public:
     void    SetWeaponState(const WeaponState a_weaponState);
     WeaponState GetWeaponState() const;
     bool    IsScorching() const {return _isScorching;}
-    void    SetIsScorching(const bool a_isScorching = true) {_isScorching = a_isScorching;}
+    void    SetIsScorching(const bool a_isScorching = true) {_isScorching = a_isScorching; RE::PlayerCharacter::GetSingleton()->SetGraphVariableBool("bIsScorching", a_isScorching);}
     float   GetScorchingSpeed();
     void    SetScorchingSpeed(const float a_speed, const bool a_forced = false);
     void    BuffScorchingSpeed(const float a_buff = 0.05f, const bool a_forced = false);
@@ -738,6 +831,7 @@ public:
         RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
         RE::NiPointer<RE::NiAVObject>   model;
         RE::NiPointer<RE::NiNode>       weaponModelCopy;
+        RE::NiPointer<RE::NiNode>       replacedProjectileModel;
         TrailOverride                   trailOverride       = TrailOverride();
         TrailTransformOverride          transformOverride   = TrailTransformOverride();
         RE::NiTransform trailTransform;
@@ -759,7 +853,7 @@ public:
         const Mjolnir* parent;
         RE::NiPointer<RE::Projectile> proj;
         RE::Actor* caller;
-        RE::NiAVObject* callerBone;
+        RE::NiAVObject* callerHandBone;
         RE::NiPoint3 startPosition;
         RE::NiPoint3 startVelocity = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastVelocity  = {0.f, 0.f, 0.f};
@@ -767,11 +861,11 @@ public:
         RE::NiPoint3 desiredDir;
         RE::NiPoint3 desiredVelocity;
         RE::NiPoint3 linearArrivingDir;
-        std::pair<std::vector<RE::NiPoint3>, float> arrivingRoute;
+        MathUtil::Algebra::BezierCurve arrivingRoute;
         std::vector<RE::Actor *> targets;
         float callTime      = 0.f;
         float launchTime    = 0.f;
-        float timeToArrive  = 0.f;
+        float timeToArrive  = Config::ArrivalTime;
         float linearDistance = 0.f;
         float linearDistanceFromStart = 0.f;
         float linearDistanceFromLastCallPos = 0.f;
@@ -796,10 +890,9 @@ public:
                         auto targetDir = targetPos - a_origin;
                         targetDir.Unitize();
                         float distance = actor->GetPosition().GetDistance(a_origin);
-                        result = distance < 100.f || 
-                            distance > linearDistance || 
-                            currentDir.Dot(targetDir) > std::cos(PI8) || 
-                            currentDir.Dot(linearArrivingDir) > std::cos(PI8);
+                        result = distance > linearDistance
+                            || currentDir.Dot(targetDir) < std::cos(PI8)
+                            || currentDir.Dot(linearArrivingDir) < std::cos(PI8);
                     }
                     return result;
                 });
@@ -822,20 +915,19 @@ public:
         virtual ~ArrivingMjolnir() = default;
         ArrivingMjolnir() = default;
         ArrivingMjolnir(RE::Actor* a_caller, 
-            RE::NiAVObject* a_callerBone, 
-            RE::NiPoint3& a_startPosition) : caller(a_caller), callerBone(a_callerBone), startPosition(a_startPosition)
+            RE::NiAVObject* a_callerHandBone, 
+            RE::NiPoint3& a_startPosition) : caller(a_caller), callerHandBone(a_callerHandBone), startPosition(a_startPosition)
         {
             callTime = AsyncUtil::GameTime::GetEngineTime();
-            auto callerPosition = callerBone ? callerBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
-            linearArrivingDir = (callerPosition - startPosition);
+            auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();
-            linearDistanceFromLastCallPos = startPosition.GetDistance(callerPosition);
+            linearDistanceFromLastCallPos = startPosition.GetDistance(callerHandPosition);
             linearDistanceFromStart = linearDistanceFromLastCallPos;
             float blendTime = (Config::MjolnirArrivingDelay.has_value() ? *Config::MjolnirArrivingDelay : 0.f);
             speed = (linearDistanceFromStart - Config::CatchingTreshold - 100.f) / (Config::ArrivalTime + blendTime);
             if (speed < Config::MinArrivalSpeed) speed = Config::MinArrivalSpeed;
             if (speed > Config::MaxArrivalSpeed) speed = Config::MaxArrivalSpeed;
-            timeToArrive = linearDistanceFromStart / speed;
 
             if (auto spineNode = a_caller->GetNodeByName("NPC Spine2 [Spn2]"); spineNode && arrivingRelativeAngleZ != 0.5f) {
                 auto spineForwardDir = spineNode->world.rotate * RE::NiPoint3(frontVec);
@@ -858,33 +950,32 @@ public:
         }
         ArrivingMjolnir(const Mjolnir* a_parent, RE::Projectile* a_proj, 
             RE::Actor* a_caller, 
-            RE::NiAVObject* a_callerBone, 
+            RE::NiAVObject* a_callerHandBone, 
             RE::NiPoint3& a_startPosition) : parent(a_parent), proj(a_proj),
-            caller(a_caller), callerBone(a_callerBone), startPosition(a_startPosition)
+            caller(a_caller), callerHandBone(a_callerHandBone), startPosition(a_startPosition)
         {
             launchTime = AsyncUtil::GameTime::GetEngineTime();
-            auto callerPosition = callerBone ? callerBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
-            linearArrivingDir = (callerPosition - startPosition);
+            auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();
-            linearDistanceFromLastCallPos = linearDistanceFromStart = startPosition.GetDistance(callerPosition);
-            RE::NiMatrix3 handRot   = callerBone ? callerBone->world.rotate : RE::NiMatrix3();
+            linearDistanceFromLastCallPos = linearDistanceFromStart = startPosition.GetDistance(callerHandPosition);
+            RE::NiMatrix3 handRot   = callerHandBone ? callerHandBone->world.rotate : RE::NiMatrix3();
             RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec);
             RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec);
             const float handSideOffsetMult = 0.3f;
 
             RE::NiPoint3 p0 = startPosition;
-            RE::NiPoint3 p3 = callerPosition;
+            RE::NiPoint3 p3 = callerHandPosition;
             RE::NiPoint3 p1 = p0 + linearArrivingDir * linearDistanceFromStart / 3.f;
             RE::NiPoint3 p2 = p3 + palmDir * (linearDistanceFromLastCallPos / 3.f + 20.f) + handForward * (linearDistanceFromLastCallPos * handSideOffsetMult + 10.f);
             routeResolution = static_cast<uint16_t>(Config::ArrivalTime / *g_deltaTime);
-            arrivingRoute = MathUtil::Algebra::DrawAndMeasureBezier(p0, p1, p2, p3, routeResolution);
-            auto resolutionDistance = arrivingRoute.first[0].GetDistance(arrivingRoute.first[1]);
+            arrivingRoute = MathUtil::Algebra::CalculateAndMeasureBezier(p0, p1, p2, p3, routeResolution);
+            auto resolutionDistance = arrivingRoute.samples[0].point.GetDistance(arrivingRoute.samples[1].point);
             auto speedLimit = resolutionDistance / *g_deltaTime;
             speedLimit -= 1.f;
             spdlog::debug("arrival route resolution is {}, speed limit is {}", routeResolution, speedLimit);
-            speed = arrivingRoute.second / Config::ArrivalTime;
+            speed = arrivingRoute.arcLength / timeToArrive;
             speed = std::clamp(speed, Config::MinArrivalSpeed, Config::MaxArrivalSpeed);//(Config::MaxArrivalSpeed < speedLimit) ? Config::MaxArrivalSpeed : speedLimit);
-            timeToArrive = arrivingRoute.second / speed;
             targets = GetTargets();
         }
     };

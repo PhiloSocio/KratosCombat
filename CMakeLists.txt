@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 # Set your project name. This will be the name of your SKSE .dll file.
-project(KratosCombat VERSION 2.0.8.6 LANGUAGES CXX)
+project(KratosCombat VERSION 2.0.8.7 LANGUAGES CXX)
 
 set(FULL_PROJECT_NAME "Kratos Combat" CACHE STRING "Full project name")
 set(ADD_COMMONLIBSSE_PLUGIN_AUTHOR "AnArchos" CACHE STRING "Plugin author")
@@ -84,7 +84,27 @@ if(DEFINED OUTPUT_FOLDER)
             TARGET "${PROJECT_NAME}"
             POST_BUILD
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_PDB_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>"
+    #        COMMAND "C:/Program Files (x86)/Windows Kits/10/Debuggers/x64/pdbcopy.exe" "$<TARGET_PDB_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>" -p
             VERBATIM
         )
     endif()
+endif()
+
+if (MSVC)
+    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        /Gw
+        /Gy
+        /Zc:inline
+        /ZH:SHA_256
+    )
+
+    target_link_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Debug>:/INCREMENTAL:NO>
+        $<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>
+        $<$<CONFIG:RelWithDebInfo>:/OPT:REF>
+        $<$<CONFIG:RelWithDebInfo>:/OPT:ICF>
+    )
 endif()

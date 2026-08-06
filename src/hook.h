@@ -50,9 +50,7 @@ public:
         _Update             = PlayerCharacterVtbl.write_vfunc(0xAD, Update);
 //      _ProcessEventPC     = PlayerCharacterVtbl.write_vfunc(0x01, ProcessEventPC);
 //      _UnequipItem        = PlayerCharacterVtbl.write_vfunc(0xA1, UnequipItem);
-#ifdef EXPERIMENTAL_SKIP_EQUIP_ANIM
         _OnEquipItem        = PlayerCharacterVtbl.write_vfunc(0xB2, OnEquipItem);
-#endif
     }
 private:
     using EventChecker = RE::BSEventNotifyControl;

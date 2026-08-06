@@ -56,7 +56,7 @@
                 "CMAKE_CXX_COMPILER": "cl.exe"
             },
             "environment": {
-                "COMMONLIBSSE_COMPILER": "/permissive- /Zc:preprocessor /EHsc $penv{CXXFLAGS} /MP",
+                "COMMONLIBSSE_COMPILER": "/permissive- /Zc:preprocessor /EHsc /Z7 $penv{CXXFLAGS} /MP",
                 "COMMONLIBSSE_TEXT": "-DUNICODE -D_UNICODE"
             },
             "vendor": {

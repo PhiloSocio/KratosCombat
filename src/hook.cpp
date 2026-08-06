@@ -227,11 +227,16 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
             //        if (APIs::precision || APIs::Request()) {
             //            APIs::precision->RemoveProjectileCollision(AnArchos->GetHandle(), Levi->collisionDefinition);
             //        }
-                    runtimeData.flags |= pFlag::kDestroyed; 
+                    runtimeData.flags |= pFlag::kDestroyed;
                 //  spdlog::debug("[HOOK] levi destroyed before call"); 
                     return;
                 }
-                if (Levi->LeviathanAxeProjectileA != a_this) Levi->LeviathanAxeProjectileA = a_this;
+                if (Levi->LeviathanAxeProjectileA != a_this) {  //  first frame of the arriving projectile
+                    Levi->LeviathanAxeProjectileA = a_this;
+
+                    Levi->soundData.PlayArrivingStartSounds(projectileNode);
+                    Levi->soundData.PlayArrivingLoopSounds(projectileNode);
+                }
                 if (Levi->GetThrowState() == tState::kCanArrive) Levi->SetThrowState(tState::kArriving);
 
             //  float passedArrTime = livingTime - Levi->throwedTime;
@@ -246,19 +251,10 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 Levi->arrivingLevi.linearArrivingDir = linearArrivingDir;
                 Levi->arrivingLevi.currentDir = linearDir;
 
-            //  speed calculation
-#ifdef NEW_ARRIVING_METHOD
-                float arrSpeed = distance / arrivingTime;//Levi->data.arrivingRoute.second / arrivingTime;
-#else
-                float arrSpeed = distance / arrivingTime;
-#endif
-
             //  set speed limits
-                const bool isCatchable = (distance <= Config::CatchingTreshold) || (distance <= (*g_deltaTime * vel.Length()));
-                if (arrSpeed < Config::MinArrivalSpeed && !isCatchable) arrSpeed = Config::MinArrivalSpeed;
-                else if (arrSpeed > Config::MaxArrivalSpeed)            arrSpeed = Config::MaxArrivalSpeed;
+                Levi->arrivingLevi.isCatchable = (distance <= Config::CatchingTreshold) || (distance <= (*g_deltaTime * vel.Length()));
 
-                if (isCatchable) {
+                if (Levi->arrivingLevi.isCatchable) {
                     if (Levi->GetThrowState() == tState::kArriving) Levi->SetThrowState(tState::kArrived);
                     Levi->Catch();
                     spdlog::debug("Levi proj catched");
@@ -267,31 +263,163 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 if (Levi->IsArriving(a_this)) {
                     auto& aLevi = Levi->arrivingLevi;
                     float aLivingTime = aLevi.GetLivingTime();
-                //    aLevi.timeToArrive = arrSpeed / distance;
-                    const float t = std::clamp(aLivingTime / aLevi.timeToArrive, 0.f, 1.f);
+                    bool isInCallingAnimation = aLevi.IsInCallingAnimation();
                     RE::NiMatrix3 handRot   = targetPoint->world.rotate;
-                    RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec3);
-                    RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec3);
+                    const float alphaHandRot = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
+                    RE::NiMatrix3 smoothedHandRot = 
+                        MathUtil::Algebra::QuaternionToMatrix(MathUtil::Algebra::Slerp(
+                            MathUtil::Algebra::MatrixToQuaternion(targetPoint->previousWorld.rotate),
+                            MathUtil::Algebra::MatrixToQuaternion(targetPoint->world.rotate), alphaHandRot));
+                    RE::NiPoint3 palmDir    = smoothedHandRot * RE::NiPoint3(backVec3);
+                    RE::NiPoint3 handForward= smoothedHandRot * RE::NiPoint3(upVec3);
                     palmDir.Unitize();
                     handForward.Unitize();
-                //    spdlog::debug("Levi proj arriving, t = {}, aLivingTime = {}, aLevi.timeToArrive = {}",
-                //        t, aLivingTime, aLevi.timeToArrive);
 
-                    const float handSideOffsetMult = 0.3f;//MathUtil::Algebra::ParabolicClamp(aLevi.arrivingRelativeAngleZ, 0.f, 0.3f);
+            //        const float handSideOffsetMult = 0.3f;
+                    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(aLevi.arrivingRelativeAngleZ, 0.f, 0.3f);
 
-                    RE::NiPoint3 p0 = aLevi.startPosition;
-                    RE::NiPoint3 p3 = handPos;
-                    RE::NiPoint3 p1 = p0 + linearArrivingDir * aLevi.linearDistanceFromStart / 3.f;
-                    RE::NiPoint3 p2 = p3 + palmDir * (aLevi.linearDistanceFromLastCallPos / 3.f + 20.f) + handForward * (aLevi.linearDistanceFromLastCallPos * handSideOffsetMult + 10.f);
+                    RE::NiPoint3 handVelocity = (targetPoint->world.translate - targetPoint->previousWorld.translate) / *g_deltaTimeRealTime;
+                    const float predictionTime = std::clamp(*g_deltaTimeRealTime, 0.0f, 0.1f);
+                    RE::NiPoint3 predictedHandPos = handPos + handVelocity * predictionTime;
+                    aLevi.bezierControlPoints[3] = predictedHandPos;
+                    aLevi.bezierControlPoints[2] = predictedHandPos + (float)isInCallingAnimation * (palmDir * (aLevi.linearDistanceFromLastCallPos / 3.f + 20.f) + handForward * (aLevi.linearDistanceFromLastCallPos * handSideOffsetMult + 10.f));
 
-                    RE::NiPoint3 cubicBezierPos = MathUtil::Algebra::BezierPoint(t, p0, p1, p2, p3);
-                    RE::NiPoint3 bezierDir = cubicBezierPos - leviPos;
+                    RE::NiPoint3& p0 = aLevi.bezierControlPoints[0];
+                    RE::NiPoint3& p1 = aLevi.bezierControlPoints[1];
+                    RE::NiPoint3& p3 = aLevi.bezierControlPoints[3];
+                    RE::NiPoint3& p2 = aLevi.bezierControlPoints[2];
+
+                    constexpr int kBezierSamples = 64;
+                    aLevi.arrivingRoute = MathUtil::Algebra::CalculateAndMeasureBezier(
+                        p0, p1, p2, p3,
+                        kBezierSamples);
+                    float bestDist2 = FLT_MAX;
+
+                    for (int i = 0; i < aLevi.arrivingRoute.samples.size() - 1; i++)
+                    {
+                        const float d2 = (aLevi.arrivingRoute.samples[i].point - leviPos).SqrLength();
+
+                        if (d2 < bestDist2)
+                        {
+                            bestDist2 = d2;
+                            aLevi.arrivingRouteClosestIndex = i;
+                        }
+                    }
+
+                    const auto& closestSample = aLevi.arrivingRoute.samples[aLevi.arrivingRouteClosestIndex];
+                    const float t = closestSample.t;
+
+                    const float lookAheadDistance = std::clamp(std::abs(aLevi.speed) * 0.15f, 50.f, 200.f);
+                    const float targetDistance = closestSample.distanceFromStart + lookAheadDistance;
+
+                    int targetIndex = aLevi.arrivingRouteClosestIndex;
+                    while (targetIndex + 1 <
+                        static_cast<int>(aLevi.arrivingRoute.samples.size()) &&
+                        aLevi.arrivingRoute.samples[targetIndex].distanceFromStart < targetDistance)
+                    {
+                        targetIndex++;
+                    }
+
+                    RE::NiPoint3 bezierDir = aLevi.arrivingRoute.samples[targetIndex].point - leviPos;
                     bezierDir.Unitize();
-                    aLevi.desiredDir = bezierDir;
 
-                //    aLevi.speed = MathUtil::Algebra::ParabolicClamp(t, Config::MinArrivalSpeed, Config::MinArrivalSpeed + (arrSpeed - Config::MinArrivalSpeed) * 1.5f);
-                    aLevi.speed = aLevi.speed < arrSpeed ? aLevi.speed : arrSpeed;
-                    vel = MathUtil::Angle::BlendVectors(Levi->data.projState == LeviathanAxe::ProjectileState::kLaunched ? Levi->data.lastVelocity : (aLevi.linearArrivingDir * aLevi.speed), aLevi.desiredDir * aLevi.speed, aLivingTime / 0.2f);
+                    const float smoothTime = std::clamp(1.f - t, 0.01f, 0.069f);
+                    const float alpha = 1.f - std::exp(-*g_deltaTime / smoothTime);
+                    aLevi.smoothedDesiredDir += (bezierDir - aLevi.smoothedDesiredDir) * alpha;
+                    aLevi.smoothedDesiredDir.Unitize();
+                    aLevi.desiredDir = aLevi.smoothedDesiredDir;
+
+                    const float minArrivalTime = *g_deltaTime * 2.f;
+                    float remainingRouteLength = aLevi.arrivingRoute.arcLength - closestSample.distanceFromStart;
+                    remainingRouteLength = std::max(remainingRouteLength, distance);
+                    float remainingTimeToArrive = std::max(aLevi.timeToArrive - aLivingTime, minArrivalTime);
+                    const float requiredAverageSpeed = remainingRouteLength / remainingTimeToArrive;
+
+                    if (requiredAverageSpeed < Config::MinArrivalSpeed)
+                        remainingTimeToArrive = std::max(remainingRouteLength / Config::MinArrivalSpeed, minArrivalTime);
+                    else if (requiredAverageSpeed > Config::MaxArrivalSpeed)
+                        remainingTimeToArrive = std::max(remainingRouteLength / Config::MaxArrivalSpeed, minArrivalTime);
+                        
+                    float desiredAcceleration = 2.f * (remainingRouteLength - aLevi.speed * remainingTimeToArrive) / (remainingTimeToArrive * remainingTimeToArrive);
+                    aLevi.speed += desiredAcceleration * *g_deltaTimeRealTime;
+                    aLevi.speed = std::max(aLevi.speed, Config::MinArrivalSpeed);
+            //        spdlog::debug(
+            //            "AFTER ACCEL speed={:.1f}, accel={:.1f}, L={:.1f}, T={:.3f}",
+            //            aLevi.speed,
+            //            desiredAcceleration,
+            //            remainingRouteLength,
+            //            remainingTimeToArrive);
+            //        spdlog::debug(
+            //            "closest={} target={} closestT={:.3f} targetT={:.3f} "
+            //            "closestL={:.1f} targetL={:.1f} routeL={:.1f}",
+            //            aLevi.arrivingRouteClosestIndex,
+            //            targetIndex,
+            //            closestSample.t,
+            //            aLevi.arrivingRoute.samples[targetIndex].t,
+            //            closestSample.distanceFromStart,
+            //            aLevi.arrivingRoute.samples[targetIndex].distanceFromStart,
+            //            aLevi.arrivingRoute.arcLength
+            //        );
+
+/*
+                    const float T = aLevi.timeToArrive;
+                    const float V_min = Config::MinArrivalSpeed;
+                    float tau;
+
+                    if (aLivingTime >= T) {
+                        // Süre dolduysa veya aşıldıysa minimum hızda devam et
+                        aLevi.speed = V_min;
+                    } else {
+                        tau = aLivingTime / T;
+                        
+                        // 1. Güncel Bezier eğrisinin toplam uzunluğunu (L) hesapla
+                        // Not: Eğer 'CalculateAndMeasureBezier' fonksiyonunuz sonuç yapısında (aLevi.arrivingRoute)
+                        // 'totalLength' veya benzeri bir önbelleğe alınmış değer tutuyorsa, bu döngü yerine 
+                        // direkt o değişkeni kullanın (örn: float L = aLevi.arrivingRoute.totalLength;).
+                        // Yoksa aşağıdaki gibi iterasyonla mesafeyi bulabilirsiniz:
+                        float L = 0.f;
+                        const auto& samples = aLevi.arrivingRoute.samples;
+                        for (size_t i = 1; i < samples.size(); ++i) {
+                            L += (samples[i].point - samples[i - 1].point).Length();
+                        }
+
+                        // 2. V_avg (Ortalama Hız) hesapla
+                        const float V_avg = L / T;
+
+                        // 3. Kuadratik fonksiyon ile o anki ideal hızı hesapla
+                        float currentSpeed = (6.f * V_avg - 2.f * V_min) * tau + (3.f * V_min - 6.f * V_avg) * tau * tau;
+                        
+                        // Hedef çok yakınsa formülün matematiği gereği ivmelenmek için ilk anlarda
+                        // negatif hız (geriye gitme) üretebilir. Bunu engellemek için 0'a kelepçeliyoruz.
+                        aLevi.speed = std::max(currentSpeed, 0.0f);
+                    }
+                    spdlog::debug("levi proj arriving, t = {}, tau = {}", t, tau);
+*/
+/*
+                    float T = Config::ArrivalTime - aLevi.GetLivingTime();
+                    float L_total = aLevi.arrivingRoute.arcLength;
+                    float s_current = aLevi.arrivingRoute.samples[aLevi.arrivingRouteClosestIndex].distanceFromStart;
+                    float deltaS = L_total - s_current;
+
+                    float v0 = aLevi.speed;
+                    float vf = Config::MinArrivalSpeed;
+
+                    if (T <= 0.0f || deltaS <= 0.0f) {
+                        aLevi.speed = vf;
+                        vel = aLevi.desiredDir * aLevi.speed;
+                        return;
+                    }
+
+                    float D = (deltaS - v0 * T) / (T * T);
+                    float E = (vf - v0) / T;
+                    float a = 3.0f * D - E;
+                    float acc = 2.0f * a;
+
+                    aLevi.speed += acc * *g_deltaTimeRealTime;
+
+                    if (aLevi.speed < 0.0f) aLevi.speed = 0.0f;
+*/
+                    vel = MathUtil::Angle::BlendVectors((uint_fast8_t)Levi->data.projState < 2U ? Levi->data.lastVelocity : (aLevi.linearArrivingDir * aLevi.speed), aLevi.desiredDir * aLevi.speed, aLivingTime / 0.2f);
                 //    vel = aLevi.desiredDir * (aLevi.speed < arrSpeed ? aLevi.speed : arrSpeed);
                     float height = leviPos.z - AnArchos->GetPosition().z;
 
@@ -322,7 +450,11 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                             targetDir.Unitize();
                             targetDir *= aLevi.speed;
                             height = leviPos.z - aTarget->GetPosition().z;
-                            vel = targetDir;//MathUtil::Angle::BlendVectors(vel, targetDir, (t - 0.2f));
+                            vel = targetDir;
+                        //    if (t < 0.69f)
+                        //        vel = targetDir;
+                        //    else
+                        //        vel = MathUtil::Angle::BlendVectors(vel, targetDir, (1.69f - t));
                         }
                     }// else vel = aLevi.linearArrivingDir * aLevi.speed;
                 //    spdlog::debug("Levi proj arriving, t = {}, speed = {}, distance = {}",
@@ -398,30 +530,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 leviAngle.x = asin(curvyDir.z);
                 leviAngle.z = atan2(curvyDir.x, curvyDir.y);
 
-                if (auto spineNode = AnArchos->GetNodeByName("NPC Spine2 [Spn2]"); spineNode && !isCatchable && distance > 100.f) {
-                    auto spineForwardDir = spineNode->world.rotate * RE::NiPoint3(frontVec);
-                    spineForwardDir.z = 0.f;  //  ignore vertical direction
-                    spineForwardDir.Unitize();
-
-                    RE::NiPoint3 linearDir2D(linearArrivingDir.x, linearArrivingDir.y, 0.f);
-                    float dot = spineForwardDir.Dot(linearDir2D);
-                    float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
-                    auto& arrivingRelativeAngle = Levi->arrivingLevi.arrivingRelativeAngleZ;
-                    arrivingRelativeAngle = atan2(det, dot);  //  angle between spine forward direction and axe direction
-                    arrivingRelativeAngle = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngle);  //  normalize angle to [0, PI]
-                    arrivingRelativeAngle = MathUtil::Angle::RadianToDegree(arrivingRelativeAngle) / 360.f;  //  normalize angle to [0, 1]
-                    std::vector<float> targets = {0.f, 0.25f, 0.5f, 0.75f, 1.f};
-                    float snapStrength = Config::ArrivalAngleSnap;
-                //    if ((arrivingRelativeAngle < 0.124f || arrivingRelativeAngle > 0.876f) && snapStrength < 0.8f) snapStrength += 0.1f;
-                    arrivingRelativeAngle = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngle, targets, snapStrength);    //  for helping to the blender generator 
-                //    float previousAngle; AnArchos->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle);
-                //    spdlog::debug("arrivingRelativeAngle: {}, previousAngle: {}", arrivingRelativeAngle, previousAngle);
-                //    float maxDelta = PI2 * (*g_deltaTime);
-                //    float delta = arrivingRelativeAngle - previousAngle;
-                //    delta = delta < 0.6f ? std::clamp(delta, -maxDelta, maxDelta) : delta;
-                //    arrivingRelativeAngle = previousAngle + delta;
-                    AnArchos->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngle);
-                }
+                Levi->arrivingLevi.UpdateArrivingDirection();
             //  MathUtil::Algebra::SetRotationMatrix(projectileNode->local.rotate, -curvyDir.x, curvyDir.y, curvyDir.z);
             //
             //  float xRot  = Config::ArrivalRotationX * livingTime;
@@ -478,7 +587,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
             auto mjolnir = Mjolnir::GetSingleton();
             if (a_this != mjolnir->LastMjolnirProjectile) mjolnir->LastMjolnirProjectile = a_this;
             mjolnir->MjolnirProjectileT = a_this;
-            mjolnir->data.model.reset(projectileNode);
+            mjolnir->data.model.reset(a_this->Get3D());
 
             if (livingTime > 0.3f && mjolnir->GetThrowState() == tStateM::kThrown) mjolnir->SetThrowState(tStateM::kCanArrive);
 
@@ -610,7 +719,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         aMjolnir.lastVelocity = vel;
                         float aLivingTime = aMjolnir.GetLivingTime();
                         const float blendTime = 0.f;
-                    //    aMjolnir.timeToArrive = arrSpeed / distance;
+                    //    aMjolnir.timeToArrive = distance / arrSpeed;
                         const float t = std::clamp(aLivingTime / (aMjolnir.timeToArrive + blendTime), 0.f, 1.f);
                         RE::NiMatrix3 handRot   = targetPoint->world.rotate;
                         RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec3);
@@ -651,12 +760,20 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         aMjolnir.desiredDir = bezierDir;
                         aMjolnir.desiredVelocity = bezierDir * aMjolnir.speed;
 
-                        vel = MathUtil::Angle::BlendVectors(aMjolnir.startVelocity, aMjolnir.desiredVelocity, 1.f /*aLivingTime / blendTime*/);
+                        vel = MathUtil::Angle::BlendVectors(aMjolnir.startVelocity, aMjolnir.desiredVelocity, aLivingTime / blendTime);
                     //    vel = aMjolnir.desiredDir * (aMjolnir.speed < arrSpeed ? aMjolnir.speed : arrSpeed);
                         float height = mjolnirPos.z - AnArchos->GetPosition().z;
                     //    RE::NiPoint3 targetVelocity; AnArchos->GetLinearVelocity(targetVelocity);
                     //    vel += targetVelocity;
 
+                //        if (mjolnir->data.model && WeaponIdentify::WeaponBone) {
+                //            auto& worldRotation = mjolnir->data.model->world.rotate;
+                //            auto& localRotation = mjolnir->data.model->local.rotate;
+                //            auto targetWorldRotation = WeaponIdentify::WeaponBone->world.rotate;
+                //            auto targetLocalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);//targetWorldRotation * RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
+                //            MathUtil::Algebra::InterpolateRotation(worldRotation, targetWorldRotation, t);
+                //            MathUtil::Algebra::InterpolateRotation(localRotation, targetLocalRotation, t);
+                //        }
                         if (!Config::DontDamageWhileArrive && t < 0.99f/*aLevi.timeToArrive > 0.1f*/) {
                             if (auto aTarget = aMjolnir.GetNextTarget(mjolnirPos); aTarget) {
                                 auto targetPos = aTarget->GetPosition() + (aTarget->GetBoundMax() + aTarget->GetBoundMin()) * 0.75f;
@@ -704,7 +821,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     RE::NiPoint3 curvyDir = vel;
                     curvyDir.Unitize();
                     mjolnirAngle = mjolnir->data.lastEulerAngles;  //  keep last angle
-                    mjolnirAngle.x = asin(curvyDir.z);
+                    mjolnirAngle.x = asin(curvyDir.z) + PI2;
                     mjolnirAngle.z = atan2(curvyDir.x, curvyDir.y);
                     mjolnir->data.lastEulerAngles = mjolnirAngle;
                 }
@@ -1247,14 +1364,7 @@ void PlayerHook::OnEquipItem(RE::PlayerCharacter* a_this, bool a_playAnim)
 }
 bool PlayerHook::SkipAnim(RE::PlayerCharacter* a_this, bool a_playAnim)
 {
-    if (a_this) {
-        WeaponIdentify::WeaponCheck();
-
-    //    if (auto kratos = Kratos::GetSingleton(); !a_playAnim && !WeaponIdentify::skipEquipAnim && WeaponIdentify::isLeviathanAxe && kratos->IsCanCallAxe()) {
-    //        a_this->SetGraphVariableBool("SkipEquipAnimation", _skipEquipAnim);
-    //        return false;
-    //    }
-    }
+    WeaponIdentify::WeaponCheck();
     return !a_playAnim;
 }
 
