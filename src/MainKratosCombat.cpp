@@ -475,6 +475,7 @@ void WeaponIdentify::WeaponCheck(const bool a_specialityCheck)
 
     WeaponBone = AnArchos->GetNodeByName("Weapon");
     ShieldBone = AnArchos->GetNodeByName("Shield");
+    AnimObjectRBone = AnArchos->GetNodeByName("AnimObjectR");
     //  spdlog::debug("Right hand bone is {}", RHandBone->name);
 
     auto pcSkillArchery = AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kArchery);
@@ -1166,7 +1167,8 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 }
 void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const bool isHoming, RE::Actor* a_actor)
 {
-    if (!a_actor) {spdlog::warn("LeviathanAxe::Throw - a_actor is null"); return;}
+    if (!a_actor) {spdlog::error("LeviathanAxe::Throw - a_actor is null"); return;}
+    if (!WeaponIdentify::RHandBone) {spdlog::error("LeviathanAxe::Throw - RHandBone is null"); return;}
 
     trailRemoveUpdate.Done();
 
@@ -1194,16 +1196,18 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         if (throwChargeDamageMult > 2.f) throwChargeDamageMult = 2.f;
         mag *= throwChargeDamageMult;
 
-    if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff && leviProjBaseEff->data.projectileBase) {
-    //  //  leviProjBaseEff->data.projectileBase->data.defaultWeaponSource = WeaponIdentify::LeviathanAxe;
-    //  //  leviProjBaseEff->data.associatedForm = WeaponIdentify::LeviathanAxe;
-        auto& pbData = leviProjBaseEff->data.projectileBase->data;
-        pbData.speed = !justContinue ? Config::ThrowSpeed * std::clamp(throwChargeDamageMult / 2.f, 1.f, 1.25f) : pbData.speed * 0.7f;
-        pbData.force = mag;
-        pbData.gravity = 3.21f;
-    } else spdlog::warn("not found Levi throwing effect!");
+        if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff && leviProjBaseEff->data.projectileBase) {
+        //  //  leviProjBaseEff->data.projectileBase->data.defaultWeaponSource = WeaponIdentify::LeviathanAxe;
+        //  //  leviProjBaseEff->data.associatedForm = WeaponIdentify::LeviathanAxe;
+            auto& pbData = leviProjBaseEff->data.projectileBase->data;
+            pbData.speed = !justContinue ? Config::ThrowSpeed * std::clamp(throwChargeDamageMult / 2.f, 1.f, 1.25f) : pbData.speed * 0.7f;
+            pbData.force = mag;
+            pbData.gravity = 3.21f;
+        } else spdlog::warn("not found Levi throwing effect!");
 
         if (!justContinue) {
+            soundData.PlayThrowingSounds(WeaponIdentify::RHandBone);
+
             data.gravity = 3.21f;
             data.gravity /= (std::powf(data.throwingChargeDuration + 1.f, 3.f));
             data.gravity = std::max(data.gravity, 0.5f);
@@ -1300,6 +1304,8 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
         trailUpdate.Done();
         trailRemoveUpdate.Done();
         data.model.reset();
+
+        soundData.PlayCallingHandSounds(WeaponIdentify::RHandBone);
 
         auto stuckedLevi =  LastLeviProjectile ? LastLeviProjectile : nullptr;
         if (!stuckedLevi)   stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : (LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
@@ -1427,8 +1433,9 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         if (auto handEffect = kratos->VFXeffect.handFrost; handEffect) 
             a_actor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
 
-        if (auto catchSound = kratos->soundEffect.catchLevi; catchSound) 
-            ObjectUtil::Sound::PlaySound(catchSound, WeaponIdentify::RHandBone, 2.f);
+        soundData.PlayCatchingSounds(WeaponIdentify::RHandBone);
+    //    if (auto catchSound = kratos->soundEffect.catchLevi; catchSound) 
+    //        ObjectUtil::Sound::PlaySound(catchSound, WeaponIdentify::RHandBone, 2.f);
 
         if (WeaponIdentify::LeviathanAxe) {
             WeaponIdentify::unequipWhenAnimEnds = false;
@@ -1446,8 +1453,8 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         data.lastHitActors.clear();
         data.lastHitForms.clear();
 
-        if (WeaponIdentify::WeaponBone && WeaponIdentify::WeaponBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
-            WeaponIdentify::WeaponBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
+        if (WeaponIdentify::AnimObjectRBone && WeaponIdentify::AnimObjectRBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
+            WeaponIdentify::AnimObjectRBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
             data.replacedProjectileModel->parent->local.translate = RE::NiPoint3();
             data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(NI_HALF_PI, 0.f, NI_HALF_PI);
         }
@@ -1634,8 +1641,8 @@ void LeviathanAxe::DeleteProjectileTrail()
         data.replacedProjectileModel->DetachChild(trailParentBone);
     //    if (data.replacedProjectileModel->parent)
     //        data.replacedProjectileModel->parent->DetachChild(data.replacedProjectileModel.get());
-        if (WeaponIdentify::WeaponBone) {
-            WeaponIdentify::WeaponBone->AsNode()->DetachChild(data.replacedProjectileModel->parent);
+        if (WeaponIdentify::AnimObjectRBone) {
+            WeaponIdentify::AnimObjectRBone->AsNode()->DetachChild(data.replacedProjectileModel->parent);
         }
         spdlog::debug("projectile trail deleted");
     }
@@ -1814,7 +1821,8 @@ void LeviathanAxe::SoundData::StopAllSounds()
     if (ArrivingLoop2SH) ArrivingLoop2SH->Stop();
     if (ArrivingNearSH) ArrivingNearSH->Stop();
     if (CatchSH) CatchSH->Stop();
-}void LeviathanAxe::SoundData::FadeAllSounds(const uint16_t a_durationMS)
+}
+void LeviathanAxe::SoundData::FadeAllSounds(const uint16_t a_durationMS)
 {
     if (CallStartSH) CallStartSH->FadeOutAndRelease(a_durationMS);
     if (ArrivingStartSH) ArrivingStartSH->FadeOutAndRelease(a_durationMS);
@@ -1836,12 +1844,12 @@ void LeviathanAxe::SoundData::PlayArrivingStartSounds(RE::NiAVObject* a_source)
 }
 void LeviathanAxe::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
 {
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect)
-        ArrivingLoop0SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect)
-        ArrivingLoop1SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect)
-        ArrivingLoop2SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect && (!ArrivingLoop0SH ||!ArrivingLoop0SH->IsPlaying()))
+        ArrivingLoop0SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f, nullptr, 0.2f);
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect && (!ArrivingLoop1SH ||!ArrivingLoop1SH->IsPlaying()))
+        ArrivingLoop1SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f, nullptr, 0.2f);
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect && (!ArrivingLoop2SH ||!ArrivingLoop2SH->IsPlaying()))
+        ArrivingLoop2SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f, nullptr, 0.2f);
 }
 void LeviathanAxe::SoundData::PlayArrivingNearSounds(RE::NiAVObject* a_source)
 {
@@ -1860,11 +1868,11 @@ void LeviathanAxe::SoundData::PlayThrowingSounds(RE::NiAVObject* a_source)
 }
 void LeviathanAxe::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
 {
-//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect)
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect && (!ThrowingLoop0SH ||!ThrowingLoop0SH->IsPlaying()))
 //        ThrowingLoop0SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
-//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect)
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect && (!ThrowingLoop1SH ||!ThrowingLoop1SH->IsPlaying()))
 //        ThrowingLoop1SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
-//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop2; soundEffect)
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop2; soundEffect && (!ThrowingLoop2SH ||!ThrowingLoop2SH->IsPlaying()))
 //        ThrowingLoop2SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
 }
 void LeviathanAxe::SoundData::FadeArrivingLoopSounds(const uint16_t a_durationMS)
@@ -2692,8 +2700,8 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         data.lastHitActors.clear();
         data.lastHitForms.clear();
 
-        if (WeaponIdentify::WeaponBone && WeaponIdentify::WeaponBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
-            WeaponIdentify::WeaponBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
+        if (WeaponIdentify::AnimObjectRBone && WeaponIdentify::AnimObjectRBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
+            WeaponIdentify::AnimObjectRBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
             data.replacedProjectileModel->parent->local.translate = RE::NiPoint3();
             data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(NI_HALF_PI, 0.f, NI_HALF_PI);
         }
@@ -2782,8 +2790,8 @@ void Mjolnir::DeleteProjectileTrail()
         data.replacedProjectileModel->DetachChild(trailParentBone);
     //    if (data.replacedProjectileModel->parent)
     //        data.replacedProjectileModel->parent->DetachChild(data.replacedProjectileModel.get());
-        if (WeaponIdentify::WeaponBone) {
-            WeaponIdentify::WeaponBone->AsNode()->DetachChild(data.replacedProjectileModel->parent);
+        if (WeaponIdentify::AnimObjectRBone) {
+            WeaponIdentify::AnimObjectRBone->AsNode()->DetachChild(data.replacedProjectileModel->parent);
         }
         spdlog::debug("projectile trail deleted");
     }

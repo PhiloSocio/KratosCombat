@@ -142,6 +142,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 Levi->data.lastVelocity = vel;
                 Levi->data.throwedTime = livingTime;
                 Levi->data.projState = LeviathanAxe::ProjectileState::kLaunched;
+                Levi->soundData.PlayThrowingLoopSounds(Levi->data.model.get());
 
                 if (Levi->IsHoming(a_this)) {
                     auto& hLevi = Levi->homingLevi;
@@ -234,15 +235,15 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 if (Levi->LeviathanAxeProjectileA != a_this) {  //  first frame of the arriving projectile
                     Levi->LeviathanAxeProjectileA = a_this;
 
-                    Levi->soundData.PlayArrivingStartSounds(projectileNode);
-                    Levi->soundData.PlayArrivingLoopSounds(projectileNode);
+                    Levi->soundData.PlayArrivingStartSounds(Levi->data.model.get());
+                    Levi->soundData.PlayArrivingLoopSounds(Levi->data.model.get());
                 }
                 if (Levi->GetThrowState() == tState::kCanArrive) Levi->SetThrowState(tState::kArriving);
 
             //  float passedArrTime = livingTime - Levi->throwedTime;
             //  if (passedArrTime < 0.f) passedArrTime = livingTime;
-                float arrivingTime = Config::ArrivalTime - livingTime;//passedArrTime;
-                if (arrivingTime < *g_deltaTime * 2.f) arrivingTime = *g_deltaTime * 2.f;
+        //        float arrivingTime = Config::ArrivalTime - livingTime;//passedArrTime;
+        //        if (arrivingTime < *g_deltaTime * 2.f) arrivingTime = *g_deltaTime * 2.f;
 
                 const float distance = handPos.GetDistance(leviPos);
                 Levi->arrivingLevi.linearDistance = distance;
@@ -339,10 +340,17 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         remainingTimeToArrive = std::max(remainingRouteLength / Config::MinArrivalSpeed, minArrivalTime);
                     else if (requiredAverageSpeed > Config::MaxArrivalSpeed)
                         remainingTimeToArrive = std::max(remainingRouteLength / Config::MaxArrivalSpeed, minArrivalTime);
-                        
+
                     float desiredAcceleration = 2.f * (remainingRouteLength - aLevi.speed * remainingTimeToArrive) / (remainingTimeToArrive * remainingTimeToArrive);
                     aLevi.speed += desiredAcceleration * *g_deltaTimeRealTime;
                     aLevi.speed = std::max(aLevi.speed, Config::MinArrivalSpeed);
+
+                    remainingTimeToArrive = remainingRouteLength / aLevi.speed;
+                    const bool isAlmostArrived = remainingTimeToArrive < (0.269f < aLevi.timeToArrive ? 0.269f : aLevi.timeToArrive * 0.69f);
+                    if (isAlmostArrived) {
+                        Levi->soundData.FadeArrivingLoopSounds();
+                        Levi->soundData.PlayArrivingNearSounds(projectileNode);
+                    }
             //        spdlog::debug(
             //            "AFTER ACCEL speed={:.1f}, accel={:.1f}, L={:.1f}, T={:.3f}",
             //            aLevi.speed,
@@ -1187,6 +1195,7 @@ void ProjectileHook::LeviAndDraupnirImpactData(RE::Projectile::ImpactData* impac
             auto Levi = LeviathanAxe::GetSingleton();
             Levi->trailUpdate.Done();
             Levi->LastLeviProjectile = proj;
+            Levi->soundData.FadeThrowingLoopSounds();
             if (isTargetActor)  {Levi->data.lastHitActors.insert(Levi->data.lastHitActors.begin(), ActorTarget); if (Levi->data.lastHitActors.size() > 4) Levi->data.lastHitActors.pop_back();}
             else if (a_target)  {Levi->data.lastHitForms.insert(Levi->data.lastHitForms.begin(), a_target); if (Levi->data.lastHitForms.size() > 4) Levi->data.lastHitForms.pop_back();}
             if (projBase == Levi->LeviProjBaseA) {

@@ -269,6 +269,7 @@ public:
     static inline RE::NiAVObject* LHandBone         = nullptr;
     static inline RE::NiAVObject* WeaponBone        = nullptr;
     static inline RE::NiAVObject* ShieldBone        = nullptr;
+    static inline RE::NiAVObject* AnimObjectRBone   = nullptr;
     static inline RE::TESObjectWEAP* LeviathanAxe   = nullptr;
     static inline RE::TESObjectWEAP* BladeOfChaos   = nullptr;
     static inline RE::TESObjectWEAP* BladeOfChaosL  = nullptr;
