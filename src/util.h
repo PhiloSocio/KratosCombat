@@ -1,9 +1,9 @@
 #pragma once
 
-
+#define TWO_PI 6.2831853071795865f
+#define ONEANDHALF_PI 4.71238898038469f
 #define PI 3.1415926535897932f
 #define TWOTHIRDS_PI 2.0943951023931955f
-#define TWO_PI 6.2831853071795865f
 #define PI2 1.5707963267948966f
 #define PI3 1.0471975511965977f
 #define PI4 0.7853981633974483f
@@ -24,9 +24,14 @@ inline constexpr RE::NiPoint3 backVec3(backVec);
 inline constexpr RE::NiPoint3 rightVec3(rightVec);
 inline constexpr RE::NiPoint3 leftVec3(leftVec);
 
+inline constexpr float havokWorldScale = 0.0142857142857143f;
+
 static float* g_deltaTime = (float*)RELOCATION_ID(523660, 410199).address();            //  sensitive to slow time spell
 static float* g_deltaTimeRealTime = (float*)RELOCATION_ID(523661, 410200).address();    //  const
 static float* g_engineTime = (float*)RELOCATION_ID(517597, 404125).address();           //  credits to https://github.com/jarari
+
+static inline bool _skipEquipAnim, _skipLoad3D;
+static inline int _load3Ddelay;
 
 using namespace RE;
 
@@ -281,17 +286,17 @@ namespace MathUtil
 {
     struct Angle 
     {
-        [[nodiscard]] constexpr static float DegreeToRadian(float a_angle)
+        [[nodiscard]] constexpr static float DegreeToRadian(const float a_angle)
         {
             return a_angle * 0.017453292f;
         }
 
-        [[nodiscard]] constexpr static float RadianToDegree(float a_radian)
+        [[nodiscard]] constexpr static float RadianToDegree(const float a_radian)
         {
             return a_radian * 57.295779513f;
         }
 
-        static NiPoint3 ToRadianVector(float x, float y, float z)
+        static NiPoint3 ToRadianVector(const float x, const float y, const float z)
         {
             RE::NiPoint3 rotationVector{ 0.f, 0.f, 0.f };
 
@@ -308,8 +313,6 @@ namespace MathUtil
             while (a_angle > TWO_PI)
                 a_angle -= TWO_PI;
             return a_angle;
-
-            // return fmod(a_angle, TWO_PI) >= 0 ? a_angle : (a_angle + TWO_PI);
         }
 
         static float NormalRelativeAngle(float a_angle)
@@ -319,11 +322,18 @@ namespace MathUtil
             while (a_angle < -PI)
                 a_angle += TWO_PI;
             return a_angle;
-
-            // return fmod(a_angle, TWO_PI) >= 0 ? (a_angle < PI) ? a_angle : a_angle - TWO_PI : (a_angle >= -PI) ? a_angle : a_angle + TWO_PI;
         }
 
-        static NiPoint3 BlendVectors(const NiPoint3 a, const NiPoint3 b, float a_to_b_ratio, const bool a_normalize = false)
+        static float NormalizeSignedAngle(float a_angle)
+        {
+            while (a_angle < -PI)
+                a_angle += TWO_PI;
+            while (a_angle > PI)
+                a_angle -= TWO_PI;
+            return a_angle;
+        }
+
+        static NiPoint3 BlendVectors(const NiPoint3& a, const NiPoint3& b, float a_to_b_ratio, const bool a_normalize = false)
         {
             a_to_b_ratio = std::clamp(a_to_b_ratio, 0.0f, 1.0f);
 
@@ -336,7 +346,7 @@ namespace MathUtil
 
     struct Algebra
     {
-        [[nodiscard]] inline static RE::NiPoint3 RotateVectorRodrigues(const RE::NiPoint3& v, const RE::NiPoint3& rotatingAxis, float theta)
+        [[nodiscard]] inline static RE::NiPoint3 RotateVectorRodrigues(const RE::NiPoint3& v, const RE::NiPoint3& rotatingAxis, const float theta)
         {
             float cosTheta = std::cos(theta);
             float sinTheta = std::sin(theta);
@@ -345,7 +355,7 @@ namespace MathUtil
                 rotatingAxis.Cross(v) * sinTheta +
                 rotatingAxis * (rotatingAxis.Dot(v)) * (1.f - cosTheta);
         }
-        [[nodiscard]] inline static RE::NiQuaternion QuaternionWithAngleAxis(float angleRadians, const RE::NiPoint3& axis)
+        [[nodiscard]] inline static RE::NiQuaternion QuaternionWithAngleAxis(const float angleRadians, const RE::NiPoint3& axis)
         {
             RE::NiPoint3 normalizedAxis = axis;
             normalizedAxis.Unitize();
@@ -361,7 +371,7 @@ namespace MathUtil
                 normalizedAxis.z * sinHalf  // z
             };
         }
-        [[nodiscard]] inline static RE::NiQuaternion QuaternionWithAngleAxis(float angleRadians, float x, float y, float z)
+        [[nodiscard]] inline static RE::NiQuaternion QuaternionWithAngleAxis(const float angleRadians, const float x, const float y, const float z)
         {
             return QuaternionWithAngleAxis(angleRadians, RE::NiPoint3{ x, y, z });
         }
@@ -466,7 +476,7 @@ namespace MathUtil
                 a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w                  // z
             };
         }
-        [[nodiscard]] inline static RE::NiQuaternion Slerp(const RE::NiQuaternion& a, const RE::NiQuaternion& b, float t) {
+        [[nodiscard]] inline static RE::NiQuaternion Slerp(const RE::NiQuaternion& a, const RE::NiQuaternion& b, const float t) {
             float dot = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z;
             RE::NiQuaternion qb = b;
             if (dot < 0.0f) {
@@ -502,7 +512,7 @@ namespace MathUtil
             return result;
         }
 
-        [[nodiscard]] inline static float ParabolicClamp(float t, float minVal, float maxVal) {
+        [[nodiscard]] inline static float ParabolicClamp(const float t, const float minVal, const float maxVal) {
             float factor = 4.0f * t * (1.0f - t); // t = 0 and t = 1 min, t = 0.5 max
             return minVal + (maxVal - minVal) * factor;
         }
@@ -513,14 +523,15 @@ namespace MathUtil
             RE::NiPoint3 tangent;
             float t;
             float distanceFromStart;
-            BezierSample(const RE::NiPoint3& a_point, const RE::NiPoint3& a_tangent, float a_t, float a_distanceFromStart) : point(a_point), tangent(a_tangent), t(a_t), distanceFromStart(a_distanceFromStart) {};
+            BezierSample() = default;
+            BezierSample(const RE::NiPoint3& a_point, const RE::NiPoint3& a_tangent, const float a_t, const float a_distanceFromStart) : point(a_point), tangent(a_tangent), t(a_t), distanceFromStart(a_distanceFromStart) {};
         };
         struct BezierCurve
         {
             std::vector<BezierSample> samples;
             float arcLength;
             BezierCurve() = default;
-            BezierCurve(std::vector<BezierSample>&& a_samples, float a_arcLength) : samples(std::move(a_samples)), arcLength(a_arcLength) {};
+            BezierCurve(std::vector<BezierSample>&& a_samples, const float a_arcLength) : samples(std::move(a_samples)), arcLength(a_arcLength) {};
         };
         [[nodiscard]] inline static RE::NiPoint3 BezierPoint(
             float t, 
@@ -563,7 +574,7 @@ namespace MathUtil
             const RE::NiPoint3& P1, 
             const RE::NiPoint3& P2, 
             const RE::NiPoint3& P3, 
-            const int subdivisions)
+            const uint16_t subdivisions)
         {
             if (subdivisions <= 0)
                 return 0.0f;
@@ -583,7 +594,7 @@ namespace MathUtil
         }
 
         [[nodiscard]] static BezierCurve
-        CalculateAndMeasureBezier(const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3, int subdivisions)
+        CalculateAndMeasureBezier(const RE::NiPoint3& P0, const RE::NiPoint3& P1, const RE::NiPoint3& P2, const RE::NiPoint3& P3, const uint16_t subdivisions)
         {
             std::vector<BezierSample> samples;
             samples.reserve(subdivisions + 1);
@@ -606,15 +617,28 @@ namespace MathUtil
             return BezierCurve(std::move(samples), length);
         }
 
-        [[nodiscard]] static float AttractToNearest(const float value, const std::vector<float>& targets, const float strength)
+        template <std::size_t n>
+        [[nodiscard]] static float AttractToNearest(
+            const float value,
+            const std::array<float, n>& targets,
+            const float strength)
         {
-            if (targets.empty()) return value;
+            if constexpr (n == 0)
+                return value;
 
             float closest = targets[0];
-            float minDist = std::abs(value - closest);
 
-            for (float target : targets) {
-                float dist = std::abs(value - target);
+            auto circularDistance = [](const float a, const float b) {
+                const float diff = std::abs(a - b);
+                return std::min(diff, TWO_PI - diff);
+            };
+
+            float minDist = circularDistance(value, closest);
+
+            for (std::size_t i = 1; i < n; ++i) {
+                const float target = targets[i];
+                const float dist = circularDistance(value, target);
+
                 if (dist < minDist) {
                     closest = target;
                     minDist = dist;
@@ -622,7 +646,16 @@ namespace MathUtil
             }
 
             const float t = std::clamp(strength, 0.f, 1.f);
-            return value * (1.f - t) + closest * t;
+
+            // Circular interpolation toward the closest target.
+            float delta = closest - value;
+
+            if (delta > PI)
+                delta -= TWO_PI;
+            else if (delta < -PI)
+                delta += TWO_PI;
+
+            return value + delta * t;
         }
 
         [[nodiscard]] static RE::Projectile::ProjectileRot VectorToPitchYaw(const float x, const float y, const float z) noexcept
@@ -639,7 +672,7 @@ namespace MathUtil
             return angles;
         }
 
-        [[nodiscard]] static RE::Projectile::ProjectileRot VectorToPitchYaw(const RE::NiPoint3 a_oriention) noexcept
+        [[nodiscard]] static RE::Projectile::ProjectileRot VectorToPitchYaw(const RE::NiPoint3& a_oriention) noexcept
         {
             return VectorToPitchYaw(a_oriention.x, a_oriention.y, a_oriention.z);
         }
@@ -653,12 +686,12 @@ namespace MathUtil
             return RE::NiPoint3(cp * sy, cp * cy, -sp);
         }
 
-        [[nodiscard]] static RE::NiPoint3 PitchYawToVector(const RE::Projectile::ProjectileRot a_rotation) noexcept
+        [[nodiscard]] static RE::NiPoint3 PitchYawToVector(const RE::Projectile::ProjectileRot& a_rotation) noexcept
         {
             return PitchYawToVector(a_rotation.x, a_rotation.z);
         }
 
-        static inline RE::NiPoint3 GetForwardVector(RE::Actor* a_actor)
+        static inline RE::NiPoint3 GetForwardVector(const RE::Actor* a_actor)
         {
             RE::NiPoint3 forwardVector;
             if (a_actor) {
@@ -713,7 +746,7 @@ namespace MathUtil
                 return;
             }
         }
-        static void RotateMatrixAroundAxisses(NiMatrix3& a_matrix, float angleRadX, float angleRadY, float angleRadZ) {
+        static void RotateMatrixAroundAxisses(NiMatrix3& a_matrix, const float angleRadX, const float angleRadY, const float angleRadZ) {
             float cosX = std::cos(angleRadX);
             float sinX = std::sin(angleRadX);
             float cosY = std::cos(angleRadY);
@@ -774,7 +807,7 @@ namespace MathUtil
     //        return matrix;
     //    }
         //http://www.iquilezles.org/www/articles/minispline/minispline.html
-        [[nodiscard]] static RE::NiPoint3 CatmullRom(const RE::NiPoint3& a_p0, const RE::NiPoint3& a_p1, const RE::NiPoint3& a_p2, const RE::NiPoint3& a_p3, float a_t)
+        [[nodiscard]] static RE::NiPoint3 CatmullRom(const RE::NiPoint3& a_p0, const RE::NiPoint3& a_p1, const RE::NiPoint3& a_p2, const RE::NiPoint3& a_p3, const float a_t)
         {
             RE::NiPoint3 a = a_p1 * 2.f;
             RE::NiPoint3 b = a_p2 - a_p0;
@@ -785,13 +818,31 @@ namespace MathUtil
             return ret;
         }
         [[nodiscard]] static RE::NiPoint3 HkVectorToNiPoint(const RE::hkVector4& vec) { return { vec.quad.m128_f32[0], vec.quad.m128_f32[1], vec.quad.m128_f32[2] }; }
-        [[nodiscard]] inline static RE::NiMatrix3 InterpolateRotation(const RE::NiMatrix3& from, const RE::NiMatrix3& to, float t) {
+        [[nodiscard]] static RE::NiMatrix3 HKMatrixToNiMatrix(const RE::hkMatrix3& hkMat)
+        {
+            RE::NiMatrix3 niMat;
+
+            niMat.entry[0][0] = hkMat.col0.quad.m128_f32[0];
+            niMat.entry[1][0] = hkMat.col0.quad.m128_f32[1];
+            niMat.entry[2][0] = hkMat.col0.quad.m128_f32[2];
+
+            niMat.entry[0][1] = hkMat.col1.quad.m128_f32[0];
+            niMat.entry[1][1] = hkMat.col1.quad.m128_f32[1];
+            niMat.entry[2][1] = hkMat.col1.quad.m128_f32[2];
+
+            niMat.entry[0][2] = hkMat.col2.quad.m128_f32[0];
+            niMat.entry[1][2] = hkMat.col2.quad.m128_f32[1];
+            niMat.entry[2][2] = hkMat.col2.quad.m128_f32[2];
+
+            return niMat;
+        }
+        [[nodiscard]] inline static RE::NiMatrix3 InterpolateRotation(const RE::NiMatrix3& from, const RE::NiMatrix3& to, const float t) {
             auto qFrom = MatrixToQuaternion(from);
             auto qTo   = MatrixToQuaternion(to);
             auto qBlend = Slerp(qFrom, qTo, t);
             return QuaternionToMatrix(qBlend);
         }
-        inline static void InterpolateRotation(RE::NiMatrix3& matrix, const RE::NiMatrix3& target, float t) {
+        inline static void InterpolateRotation(RE::NiMatrix3& matrix, const RE::NiMatrix3& target, const float t) {
             auto qFrom = MatrixToQuaternion(matrix);
             auto qTo   = MatrixToQuaternion(target);
             auto qBlend = Slerp(qFrom, qTo, t);
@@ -810,6 +861,68 @@ namespace ObjectUtil
 
     struct Node
     {
+        struct Collision
+        {
+            
+            [[nodiscard]] static RE::bhkRigidBody* GetRigidBody(RE::NiAVObject* a_object)
+            {
+                auto collisionObject = a_object->GetCollisionObject();
+                if (collisionObject) {
+                    return collisionObject->GetRigidBody();
+                }
+                return nullptr;
+            }
+            static bool ToggleMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
+            {
+                constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flag::kNoCollision);
+                        if (root && world) {
+                            
+                                RE::BSWriteLockGuard locker(world->worldLock);
+
+                                RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
+                                    if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
+                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo;
+                                        if (!collisionState) {
+                                            filter |= no_collision_flag;
+                                        } else {
+                                            filter &= ~no_collision_flag;
+                                        }
+                                    }
+                                    return RE::BSVisit::BSVisitControl::kContinue;
+                                });
+                        }
+                        else 
+                        {
+                            return false;
+                        }
+                return true;
+            }
+            static bool RemoveMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
+            {
+                constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flag::kNoCollision);
+                        if (root && world) {
+                            
+                                RE::BSWriteLockGuard locker(world->worldLock);
+
+                                RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
+                                    if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
+                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo;
+                                        if (!collisionState) {
+                                            filter |= no_collision_flag;
+                                        } else {
+                                            filter &= ~no_collision_flag;
+                                        }
+                                    }
+                                    return RE::BSVisit::BSVisitControl::kContinue;
+                                });
+                        }
+                        else 
+                        {
+                            return false;
+                        }
+                return true;
+            }
+        };
         static float GetLength(RE::NiAVObject* a_node)
         {
             float length = 0.f;
@@ -862,6 +975,95 @@ namespace ObjectUtil
 
             return false;
         }
+
+        [[nodiscard]] inline static RE::NiTransform GetHavokBHKRigidBodyWorldTransform(RE::NiAVObject* a_object)
+        {
+            if (!a_object)
+                return {};
+
+            for (RE::NiAVObject* current = a_object; current; current = current->parent) {
+                if (!current->collisionObject)
+                    continue;
+
+                auto* collisionObject =
+                    skyrim_cast<RE::bhkCollisionObject*>(current->collisionObject.get());
+
+                if (!collisionObject)
+                    continue;
+
+                auto* rigidBody = collisionObject->GetRigidBody();
+
+                if (!rigidBody)
+                    continue;
+
+                RE::hkTransform hkTransform;
+                rigidBody->GetTransform(hkTransform);
+
+                RE::NiTransform result{};
+
+                result.rotate.entry[0][0] =
+                    hkTransform.rotation.col0.quad.m128_f32[0];
+                result.rotate.entry[1][0] =
+                    hkTransform.rotation.col0.quad.m128_f32[1];
+                result.rotate.entry[2][0] =
+                    hkTransform.rotation.col0.quad.m128_f32[2];
+
+                result.rotate.entry[0][1] =
+                    hkTransform.rotation.col1.quad.m128_f32[0];
+                result.rotate.entry[1][1] =
+                    hkTransform.rotation.col1.quad.m128_f32[1];
+                result.rotate.entry[2][1] =
+                    hkTransform.rotation.col1.quad.m128_f32[2];
+
+                result.rotate.entry[0][2] =
+                    hkTransform.rotation.col2.quad.m128_f32[0];
+                result.rotate.entry[1][2] =
+                    hkTransform.rotation.col2.quad.m128_f32[1];
+                result.rotate.entry[2][2] =
+                    hkTransform.rotation.col2.quad.m128_f32[2];
+
+                result.translate.x =
+                    hkTransform.translation.quad.m128_f32[0];
+
+                result.translate.y =
+                    hkTransform.translation.quad.m128_f32[1];
+
+                result.translate.z =
+                    hkTransform.translation.quad.m128_f32[2];
+
+                result.scale = 1.0f;
+
+                return result;
+            }
+
+            return {};
+        }
+        [[nodiscard]] inline static RE::NiTransform GetHavokHKPRigidBodyWorldTransform(RE::NiAVObject* a_object)
+        {
+            if (!a_object)
+                return {};
+
+            for (RE::NiAVObject* current = a_object; current; current = current->parent) {
+                if (!current->collisionObject)
+                    continue;
+
+                auto* collisionObject = Collision::GetRigidBody(current);
+
+                if (!collisionObject)
+                    continue;
+
+                auto* rigidBody = collisionObject->GetRigidBody();
+
+                if (!rigidBody)
+                    continue;
+
+                RE::NiTransform niTransform;
+                rigidBody->GetUserData()->GetTransform(niTransform);
+                return niTransform;
+            }
+
+            return {};
+        }
     };
 
     struct Projectile
@@ -902,7 +1104,7 @@ namespace ObjectUtil
 
     struct Actor
     {
-        static void PushActorAway(RE::Actor* a_target, float a_force, RE::NiPoint3 a_direction = RE::NiPoint3()) {
+        static void PushActorAway(RE::Actor* a_target, const float a_force, const RE::NiPoint3& a_direction) {
             if (a_target && !a_target->IsDead() && a_target->Is3DLoaded()) {
                 auto process = a_target->GetActorRuntimeData().currentProcess;
                 if (process && process->InHighProcess()) {
@@ -910,7 +1112,7 @@ namespace ObjectUtil
                 }
             }
         }
-        static void PushActorAwayImpl(RE::AIProcess* a_AIprocess, RE::Actor* a_target, RE::NiPoint3 a_direction, float a_force) 
+        static void PushActorAwayImpl(RE::AIProcess* a_AIprocess, RE::Actor* a_target, const RE::NiPoint3& a_direction, const float a_force) 
         {
             using func_t = decltype(&PushActorAwayImpl);
             REL::Relocation<func_t> func{ RELOCATION_ID(38858, 39895) };
@@ -926,6 +1128,16 @@ namespace ObjectUtil
                 a_this->SetGraphVariableInt("LoadBoundObjectDelay", a_load3dDelayMS);
                 a_this->SetGraphVariableBool("Skip3DLoading", a_skip3DLoading);
             }
+        }
+        static void ResetEquipAnimationAfter(int a_delayMS, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton())
+        {
+            if (a_delayMS == 0) {SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D); return;}
+            if (a_delayMS < (int)(*g_deltaTimeRealTime * 2.f * 1000.f)) a_delayMS = (int)(*g_deltaTimeRealTime * 2.f * 1000.f);
+            std::jthread DisableEquipAnim([=]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(a_delayMS));
+                SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D);
+            });
+            DisableEquipAnim.detach();
         }
         static void SendAnimationEvent(RE::Actor* a_this, const RE::BSFixedString a_tag, const RE::BSFixedString a_payload = "")
         {
@@ -1351,22 +1563,35 @@ namespace ObjectUtil
 
     struct Sound
     {
-        static RE::BSSoundHandle* PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::NiAVObject* a_source, const float a_volume = 1.f, RE::BSSoundHandle* a_handle = nullptr, const uint16_t a_fadeInDuration = 0)
+        static RE::BSSoundHandle PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::NiAVObject* a_source, const float a_volume = 1.f, const uint16_t a_fadeInDuration = 0)
+        {
+            RE::BSSoundHandle handle;
+            if (a_sound && a_source) {
+                auto audioManager = RE::BSAudioManager::GetSingleton();
+                if (audioManager)
+                    audioManager->BuildSoundDataFromDescriptor(handle, a_sound->soundDescriptor);
+                handle.SetObjectToFollow(a_source);
+                handle.SetVolume(a_volume);
+                if (a_fadeInDuration != 0u)
+                    handle.FadeInPlay(a_fadeInDuration);
+                else
+                    handle.Play();
+            }
+            return handle;
+        }
+        static void PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::BSSoundHandle& a_handle, RE::NiAVObject* a_source, const float a_volume = 1.f, const uint16_t a_fadeInDuration = 0)
         {
             if (a_sound && a_source) {
                 auto audioManager = RE::BSAudioManager::GetSingleton();
-                RE::BSSoundHandle handle;
-                RE::BSSoundHandle& refHandle = a_handle ? *a_handle : handle;
-                audioManager->BuildSoundDataFromDescriptor(refHandle, a_sound->soundDescriptor);
-                refHandle.SetObjectToFollow(a_source);
-                refHandle.SetVolume(a_volume);
+                if (audioManager)
+                    audioManager->BuildSoundDataFromDescriptor(a_handle, a_sound->soundDescriptor);
+                a_handle.SetObjectToFollow(a_source);
+                a_handle.SetVolume(a_volume);
                 if (a_fadeInDuration != 0u)
-                    refHandle.FadeInPlay(a_fadeInDuration);
+                    a_handle.FadeInPlay(a_fadeInDuration);
                 else
-                    refHandle.Play();
-                return &refHandle;
+                    a_handle.Play();
             }
-            return nullptr;
         }
     };
 
@@ -1567,68 +1792,6 @@ namespace NifUtil
                 node->AttachChild(obj, true);
                 SKSE::log::info("Object Attached");
             }
-        }
-    };
-    struct Collision
-    {
-        
-        [[nodiscard]] static RE::bhkRigidBody* GetRigidBody(RE::NiAVObject* a_object)
-        {
-            auto collisionObject = a_object->GetCollisionObject();
-            if (collisionObject) {
-                return collisionObject->GetRigidBody();
-            }
-            return nullptr;
-        }
-        static bool ToggleMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
-        {
-            constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flag::kNoCollision);
-                    if (root && world) {
-                        
-                            RE::BSWriteLockGuard locker(world->worldLock);
-
-                            RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
-                                if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
-                                    auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo;
-                                    if (!collisionState) {
-                                        filter |= no_collision_flag;
-                                    } else {
-                                        filter &= ~no_collision_flag;
-                                    }
-                                }
-                                return RE::BSVisit::BSVisitControl::kContinue;
-                            });
-                    }
-                    else 
-                    {
-                        return false;
-                    }
-            return true;
-        }
-        static bool RemoveMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
-        {
-            constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flag::kNoCollision);
-                    if (root && world) {
-                        
-                            RE::BSWriteLockGuard locker(world->worldLock);
-
-                            RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
-                                if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
-                                    auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo;
-                                    if (!collisionState) {
-                                        filter |= no_collision_flag;
-                                    } else {
-                                        filter &= ~no_collision_flag;
-                                    }
-                                }
-                                return RE::BSVisit::BSVisitControl::kContinue;
-                            });
-                    }
-                    else 
-                    {
-                        return false;
-                    }
-            return true;
         }
     };
 }

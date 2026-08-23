@@ -2,51 +2,7 @@
 //#include "API/TrueDirectionalMovementAPI.h"
 
 using namespace Util;
-using tState = LeviathanAxe::ThrowState;
-using tStateM = Mjolnir::ThrowState;
-using wStateB = BladeOfChaos::WeaponState;
 
-static void DelayedCast(RE::Actor* a_caster, RE::SpellItem* a_spell, RE::NiNode* a_target, const float a_delaySec)
-{
-    if (!a_spell) return;
-    if (!a_caster) return;
-    int delay = static_cast<int>(a_delaySec * 1000.f);
-    spdlog::debug("draupnir's call start...");
-    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
-    if (!a_spell) return;
-    if (!a_caster) return;
-    spdlog::debug("draupnir's call triggered!");
-//  a_caster->GetMagicCaster(RE::MagicSystem::CastingSource::kRightHand)->CastSpellImmediate(a_spell, false, nullptr, 1.f, false, 10.f, a_caster);
-    
-    if (!a_target) return;
-    RE::ProjectileHandle pHandle;
-    RE::NiPoint3 startPoint = a_target->world.translate + RE::NiPoint3(0.f, 0.f, 128.f);
-    RE::Projectile::ProjectileRot pRot = {a_caster->GetAimAngle(), a_caster->GetAimHeading()};
-    RE::Projectile::LaunchSpell(&pHandle, a_caster, a_spell, startPoint, pRot);
-    spdlog::debug("draupnir's call end!");
-}
-static void SkipEquipAnimationDuring(int a_durationMS, RE::Actor* a_actor, int a_load3dDelayMS = (int)(*g_deltaTimeRealTime * 1000.f), const bool a_skip3DLoading = false)
-{
-    if (a_actor) {
-        ObjectUtil::Actor::SkipEquipAnimation(a_actor, true, a_load3dDelayMS, a_skip3DLoading);
-        if (a_durationMS < (int)(*g_deltaTimeRealTime * 2.f * 1000.f)) a_durationMS = (int)(*g_deltaTimeRealTime * 2.f * 1000.f);
-        std::jthread DisableEquipAnim([=]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(a_durationMS));
-            ObjectUtil::Actor::SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D);
-        });
-        DisableEquipAnim.detach();
-    }
-}
-static void ResetEquipAnimationAfter(int a_delayMS, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton())
-{
-    if (a_delayMS == 0) {ObjectUtil::Actor::SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D); return;}
-    if (a_delayMS < (int)(*g_deltaTimeRealTime * 2.f * 1000.f)) a_delayMS = (int)(*g_deltaTimeRealTime * 2.f * 1000.f);
-    std::jthread DisableEquipAnim([=]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(a_delayMS));
-        ObjectUtil::Actor::SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D);
-    });
-    DisableEquipAnim.detach();
-}
 #pragma region Weapon_Identification
 void WeaponIdentify::Initialize(RE::Actor* a_actor)
 {
@@ -184,11 +140,6 @@ void WeaponIdentify::WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_R
             Levi->data.poison   = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
 #endif
             Levi->data.damage   = static_cast<float>(LeviathanAxe->attackDamage);
-#ifdef EXPERIMENTAL_LEVIATHAN_MODEL
-            Levi->LeviProjBaseL->model = LeviathanAxe->model;
-            Levi->LeviProjBaseH->model = LeviathanAxe->model;
-            Levi->LeviProjBaseA->model = LeviathanAxe->model;
-#endif
             if (WeaponIdentify::LeviathanAxe->HasWorldModel()) {
                 spdlog::debug("Levi is throwable");
                 Levi->SetThrowState(tState::kThrowable);
@@ -563,7 +514,7 @@ bool WeaponIdentify::IsRelic(RE::BGSProjectile *a_baseProj, Kratos::Relic a_reli
     }
 }
 #pragma endregion
-#pragma region Kratos
+#pragma region KRATOS
 void Kratos::Update(RE::Actor* a_actor, const float a_delta)
 {
     if (IsInRage()) RestoreRage(a_actor, -(*values.rageDamageAmount * (*g_deltaTimeRealTime)));
@@ -609,6 +560,8 @@ bool Kratos::Initialize()
     soundEffect.arrivingLeviLoop2   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x85D, Config::KratosCombatESP);
     soundEffect.arrivingLeviNear    = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x86C, Config::KratosCombatESP);
     soundEffect.catchLevi   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x84E, Config::KratosCombatESP);
+    soundEffect.throwingLeviLoop0   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x863, Config::KratosCombatESP);
+    soundEffect.throwingLeviLoop1   = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x864, Config::KratosCombatESP);
     soundEffect.chargeLevi  = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3EDD5, "Skyrim.esm");
     soundEffect.chargeLeviLoop  = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3E5CB, "Skyrim.esm");
     soundEffect.chargeLeviEndT  = dataHandler->LookupForm<RE::BGSSoundDescriptorForm>(0x3EDD5, "Skyrim.esm");
@@ -960,7 +913,7 @@ void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Act
             if (WeaponIdentify::GuardianShield && !WeaponIdentify::isGuardianShield)
                 ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::GuardianShield, true);
 
-            ResetEquipAnimationAfter(100, a_actor);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
             break;
         case Kratos::Rage::kValor:
             if (a_justAnim) {
@@ -981,7 +934,7 @@ void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Act
             //    }
                 if (VFXeffect.legacy) a_actor->ApplyArtObject(VFXeffect.legacy, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
                 ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::BladeOfOlympus);
-                ResetEquipAnimationAfter(100, a_actor);
+                ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
             }
             break;
         default:
@@ -1006,13 +959,13 @@ void Kratos::EndRage(const Kratos::Rage a_rage, const bool a_fromAnnotation, con
             if (auto mTarget = a_actor->GetMagicTarget(); mTarget) {
                 auto aHandle = a_actor->GetHandle();
                 mTarget->DispelEffect(SpellSpartanRage, aHandle);
-                ResetEquipAnimationAfter(0, a_actor);
+                ObjectUtil::Actor::ResetEquipAnimationAfter(0, a_actor);
                 RestoreRage(a_actor, -(*values.rageDamageAmount * 3.f), true);
                 if (_LastEquippedObjectR)
                     ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectR, true);
                 if (_LastEquippedObjectL)
                     ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectL, true);
-                ResetEquipAnimationAfter(100, a_actor);
+                ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
             }
             break;
         case Kratos::Rage::kValor:
@@ -1031,14 +984,14 @@ void Kratos::EndRage(const Kratos::Rage a_rage, const bool a_fromAnnotation, con
                 _isWantFinishRage = false;
                 if (a_justAnim) return;
             }
-            ResetEquipAnimationAfter(0, a_actor);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(0, a_actor);
             if (_LastEquippedObjectR)
                 ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectR, true);
             else if (WeaponIdentify::EquippedObjR) 
                 ObjectUtil::Actor::UnEquipItem(a_actor, false, false, false, false, true, true);
             if (_LastEquippedObjectL)
                 ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectL, true);
-            ResetEquipAnimationAfter(100, a_actor);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
             break;
 
         default:
@@ -1051,7 +1004,7 @@ void Kratos::EndRage(const Kratos::Rage a_rage, const bool a_fromAnnotation, con
     }
 }
 #pragma endregion
-#pragma region Leviathan_Axe
+#pragma region LEVIATHAN_AXE
 LeviathanAxe* LeviathanAxe::GetSingleton()              {static LeviathanAxe singleton; return &singleton;}
 bool LeviathanAxe::Initialize()
 {
@@ -1103,6 +1056,10 @@ void LeviathanAxe::Update(const float a_delta) {
 
             if (animatedNode) {
                 animatedNode->AttachChild(data.replacedProjectileModel.get(), false);
+            //    auto oldWorld = data.transformW;
+            //    oldWorld.translate *= 70.f;
+            //    oldWorld.scale = data.replacedProjectileModel.get()->world.scale;
+            //    data.replacedProjectileModel.get()->local = ObjectUtil::Node::GetLocalTransform(data.replacedProjectileModel.get(), oldWorld);
                 projectileUpdate.Done();
                 data.projTrail.reset();
                 trailUpdate.RegisterForUpdate(a_delta * 2.f, false);
@@ -1110,31 +1067,54 @@ void LeviathanAxe::Update(const float a_delta) {
             } else spdlog::warn("animated node or levinode null");
         } else spdlog::warn("proj or proj->Get3D2() null");
     }
+    if (soundData.arrivingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopArrivingLoopSounds();}
+    if (soundData.throwingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopThrowingLoopSounds();}
     if (Config::DrawTrails) {
         AddProjectileTrail(a_delta);
         FadeProjectileTrail(a_delta);
     }
+//    if (data.replacedProjectileModel) {
+//        auto projNiTransform = data.replacedProjectileModel->world;
+//        auto projBHKTransform = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(data.replacedProjectileModel.get());
+//        auto projHKPTransform = ObjectUtil::Node::GetHavokHKPRigidBodyWorldTransform(data.replacedProjectileModel.get());
+//        spdlog::debug(
+//            "NI: ({}, {}, {})  BHK: ({}, {}, {})",
+//            projNiTransform.translate.x,
+//            projNiTransform.translate.y,
+//            projNiTransform.translate.z,
+//            projBHKTransform.translate.x * 70.f,
+//            projBHKTransform.translate.y * 70.f,
+//            projBHKTransform.translate.z * 70.f
+//        );
+    //    spdlog::debug(
+    //        "NI - BHK: ({}, {}, {})",
+    //        projNiTransform.translate.x - projBHKTransform.translate.x * 70.f,
+    //        projNiTransform.translate.y - projBHKTransform.translate.y * 70.f,
+    //        projNiTransform.translate.z - projBHKTransform.translate.z * 70.f
+    //    );
+//    }
 }
 tState LeviathanAxe::GetThrowState()     const          {return throwState;}
 void LeviathanAxe::SetThrowState(ThrowState a_state)    {throwState = a_state;}
 void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 {
     if (!a_actor) return;
-//    auto stuckedLevi =  LastLeviProjectile;
-//    if (!stuckedLevi) stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : LeviathanAxeProjectileH);
-//    if (stuckedLevi) {// && !(stuckedLevi->GetProjectileRuntimeData().flags & pFlag::kDestroyed)) {
-//        a_point = stuckedLevi->data.location;
-//    } else spdlog::debug("we can't get leviathan's proj!");
-
-    if (LastLeviProjectile)
+    if (data.model) {
+        data.transformPW = data.model->world;
+        data.transformPL = data.model->local;
+    }
+    if (LastLeviProjectile) {
         LastLeviProjectile->GetProjectileRuntimeData().flags |= pFlag::kDestroyed;
+    }
     if (data.replacedProjectileModel) {
-        a_point = data.replacedProjectileModel->worldBound.center;
+        data.transformW = GetWorldTransform();
+        a_point = data.transformW.translate * 70.f;
+    //    a_point = data.replacedProjectileModel->worldBound.center;
         spdlog::debug("leviathan coming from weapon model location.");
     } else spdlog::debug("we can't get leviathan's weapon model!");
 
     if (data.stuckedBone) {
-        a_point = data.stuckedBone->world.translate;
+        a_point = data.replacedProjectileModel ? data.transformW.translate : data.stuckedBone->world.translate;
         data.stuckedBone.reset();
 
         if (data.stuckedActor) {
@@ -1150,15 +1130,18 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 
     if (GetThrowState() == tState::kThrowable) {
         if (auto backWeaponSheathe = a_actor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
-            a_point = backWeaponSheathe->world.translate;
+            const auto& backSheatheTransform = backWeaponSheathe->world;
+            a_point = backSheatheTransform.translate;
+            const auto& rightDir = backSheatheTransform.rotate * rightVec3;
+            const auto& backDir = backSheatheTransform.rotate * backVec3;
+            data.lastVelocity = (0.69f * rightDir + 0.31f * backDir) * 2400.f;
+            spdlog::debug("levi is coming from your back sheathe");
         }
     } else {
-        auto pcCell = a_actor->parentCell;
-        auto bound = pcCell->GetRuntimeData().cellData.exterior->worldX;
         auto pcPos = a_actor->GetPosition();
         float dist = pcPos.GetDistance(a_point);
         if (dist > 36000.f) {   // ~42000 is limit
-            spdlog::info("levi too far from you! ({} m)", (int)dist / 100);
+            spdlog::info("levi is too far away from you! ({} m)", (int)dist / 100);
             auto dir = a_point - pcPos;
             dir.Unitize();
             a_point = pcPos + dir * 36000.f;
@@ -1238,14 +1221,18 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
             const auto root = a_actor->Get3D1(false);
             auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
             auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
-            copyWeaponModel->RemoveExtraData("BSXFlags");
-            copyWeaponModel->GetCollisionObject()->flags &= RE::bhkCollisionObject::Flag::kActive;
-            copyWeaponModel->collisionObject.reset();
-            auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-            data.weaponModelCopy.reset(copyWeaponModelNode);
-            if (data.weaponModelCopy) {
-                data.weaponModelCopy->local = RE::NiTransform();
-                data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            if (copyWeaponModel) {
+                copyWeaponModel->RemoveExtraData("BSX");
+                copyWeaponModel->RemoveExtraData("BSXFlags");
+                if (copyWeaponModel->GetCollisionObject())
+                    copyWeaponModel->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
+                copyWeaponModel->collisionObject.reset();
+                auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
+                data.weaponModelCopy.reset(copyWeaponModelNode);
+                if (data.weaponModelCopy) {
+                    data.weaponModelCopy->local = RE::NiTransform();
+                    data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+                }
             }
         }
 
@@ -1265,7 +1252,7 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
             ResetCharge(data.enchMag, data.defaultEnchMag, true);
             WeaponIdentify::skipEquipAnim = true;
             ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, true);
-            ResetEquipAnimationAfter(100, a_actor);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
             spdlog::debug("Leviathan unequipped after throwing");
         } else {
             WeaponIdentify::isLeviathanAxe = false;
@@ -1286,7 +1273,7 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         WeaponIdentify::EquippedObjR = nullptr;
         WeaponIdentify::lastThrownRelic = Kratos::Relic::kLeviathanAxe;
             spdlog::info("Leviathan Axe throwed, raw damage is: {}", mag);
-        //  reset the last throw's traces
+        data.throwingChargeDuration = 0.f;
         if (data.stuckedBone)   data.stuckedBone    = nullptr;
         if (data.stuckedActor)  data.stuckedActor   = nullptr;
         data.lastHitActors.clear();
@@ -1303,9 +1290,28 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
 
         trailUpdate.Done();
         trailRemoveUpdate.Done();
-        data.model.reset();
 
-        soundData.PlayCallingHandSounds(WeaponIdentify::RHandBone);
+        if (data.model) {
+            data.transformPW = data.model->world;
+            data.transformPL = data.model->local;
+        }
+        data.model.reset();
+    //    if (data.replacedProjectileModel) {
+    //        if (data.projState == ProjectileState::kHavok && data.replacedProjectileModel->collisionObject && data.replacedProjectileModel->collisionObject->AsBhkRigidBody()) {
+    //            RE::hkTransform rbTransform;
+    //            data.replacedProjectileModel->collisionObject->AsBhkRigidBody()->GetTransform(rbTransform);
+    //            RE::NiTransform niTransform;
+    //            niTransform.translate = MathUtil::Algebra::HkVectorToNiPoint(rbTransform.translation);
+    //            niTransform.rotate = MathUtil::Algebra::HKMatrixToNiMatrix(rbTransform.rotation);
+    //            data.transformW = niTransform;
+    //            data.transformL = niTransform;
+    //        } else {
+    //            data.transformW = data.replacedProjectileModel->world;
+    //            data.transformL = data.replacedProjectileModel->local;
+    //        }
+    //    }
+
+        soundData.FadeThrowingLoopSounds(369);
 
         auto stuckedLevi =  LastLeviProjectile ? LastLeviProjectile : nullptr;
         if (!stuckedLevi)   stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : (LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
@@ -1356,25 +1362,8 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             RE::NiPoint3 startPoint = data.position;
             RE::NiPoint3  targetPoint = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
             if (!a_justContinue) {
+                soundData.PlayCallingHandSounds(WeaponIdentify::RHandBone);
                 GetPosition(startPoint, AnArchos);
-    //            arrivingLevi.arrivingRelativeAngleZ = 0.5f;
-    //            a_actor->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingLevi.arrivingRelativeAngleZ);
-            //    RE::NiMatrix3 handRot = WeaponIdentify::RHandBone->world.rotate;
-            //    RE::NiPoint3 palmDir    = handRot * RE::NiPoint3(backVec);
-            //    RE::NiPoint3 handForward= handRot * RE::NiPoint3(upVec);
-            //    palmDir.Unitize();
-            //    handForward.Unitize();
-            //    RE::NiPoint3 p0 = arrivingLevi.startPosition;
-            //    RE::NiPoint3 p3 = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
-            //    RE::NiPoint3 linearArrivingDir = p3 - p0;
-            //    linearArrivingDir.Unitize();
-            //    const float distanceFromStart = p0.GetDistance(p3);
-            //    RE::NiPoint3 p1 = p0 + linearArrivingDir * distanceFromStart / 3.f;
-            //    RE::NiPoint3 p2 = p3 + palmDir * (distanceFromStart / 3.f + 50.f) + handForward * (distanceFromStart / 3.f + 50.f);
-            //    float charZ = AnArchos->GetPosition().z;
-            //    if (p2.z < charZ) p2.z = charZ;
-            //    float segmentCount = Config::ArrivalTime / *g_deltaTimeRealTime;
-            //    data.arrivingRoute = MathUtil::Algebra::DrawAndMeasureBezier(p0, p1, p2, p3, (int)segmentCount);
             }
             RE::ProjectileHandle pHandle;
             RE::Projectile::ProjectileRot pRot(MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation));
@@ -1397,11 +1386,9 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             projectileUpdate.RegisterForUpdate(0.0f, false);
 
             if (a_justContinue) {
-                arrivingLevi.proj = pHandle.get();
-                arrivingLevi.linearDistanceFromLastCallPos = startPoint.GetDistance(targetPoint);
-            //    arrivingLevi.timeToArrive = arrivingLevi.linearDistanceFromLastCallPos / arrivingLevi.speed;
+                arrivingLevi = ArrivingWeapon(arrivingLevi, pHandle.get().get(), startPoint);
             } else {
-                arrivingLevi = ArrivingLeviathan(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
+                arrivingLevi = ArrivingWeapon(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
                 spdlog::debug("Levi call is started");
             }
             SetThrowState(ThrowState::kArriving);
@@ -1433,9 +1420,10 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         if (auto handEffect = kratos->VFXeffect.handFrost; handEffect) 
             a_actor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
 
+        soundData.FadeArrivingNearSounds(469);
+    //    soundData.FadeArrivingLoopSounds(469);
+        soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
         soundData.PlayCatchingSounds(WeaponIdentify::RHandBone);
-    //    if (auto catchSound = kratos->soundEffect.catchLevi; catchSound) 
-    //        ObjectUtil::Sound::PlaySound(catchSound, WeaponIdentify::RHandBone, 2.f);
 
         if (WeaponIdentify::LeviathanAxe) {
             WeaponIdentify::unequipWhenAnimEnds = false;
@@ -1443,8 +1431,8 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
             a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
             kratos->DoKratosAction(Kratos::Action::kWeaponCharge);
             ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::LeviathanAxe, WeaponIdentify::skipEquipAnim);//, 1U, true, false, false, true);
-            ResetEquipAnimationAfter(100, a_actor);
-        //    WeaponIdentify::WeaponCheck();
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
+            RE::ShakeCamera(0.3f, data.position, 0.5f);
             if (WeaponIdentify::skipEquipAnim) WeaponIdentify::skipEquipAnim = false;
         } else spdlog::warn("you not have the leviathan axe");
 
@@ -1456,7 +1444,7 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         if (WeaponIdentify::AnimObjectRBone && WeaponIdentify::AnimObjectRBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
             WeaponIdentify::AnimObjectRBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
             data.replacedProjectileModel->parent->local.translate = RE::NiPoint3();
-            data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(NI_HALF_PI, 0.f, NI_HALF_PI);
+            data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(PI2, 0.f, PI2);
         }
         trailUpdate.Done();
         data.model.reset();
@@ -1622,7 +1610,7 @@ void LeviathanAxe::FadeProjectileTrail(const float a_delta)
                 auto velocity = (data.replacedProjectileModel->world.translate - data.replacedProjectileModel->previousWorld.translate) / *g_deltaTime;
                 auto speed = velocity.Length();//rtData.linearVelocity.Length();
                 spdlog::debug("projectile trail fading... current speed: {}", speed);
-                if (speed != 0.f && speed < 269.f) {
+                if (speed != 0.f && speed < 669.f) {
                     DeleteProjectileTrail();
                     trailRemoveUpdate.Done();
                 }
@@ -1807,59 +1795,447 @@ void LeviathanAxe::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
         kratos->_soundHandle.Stop();
-        ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeLeviLoop, WeaponIdentify::RHandBone, 5.f, &kratos->_soundHandle);
+        ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeLeviLoop, kratos->_soundHandle, WeaponIdentify::RHandBone, 5.f);
         a_actor->ApplyArtObject(kratos->VFXeffect.handFrostBright, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
     }
 }
+RE::NiTransform LeviathanAxe::GetWorldTransform()
+{
+    if (data.replacedProjectileModel) {
+        data.transformW = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(data.replacedProjectileModel.get());
+        return data.transformW;
+    } else return data.transformPW;
+    return {};
+}
+RE::NiTransform LeviathanAxe::GetLocalTransform()
+{
+    RE::NiTransform ret;
+    if (data.replacedProjectileModel) {
+        data.transformL = data.replacedProjectileModel->local;
+        ret = data.transformL;
+    } else ret = data.transformPL;
+    return ret;
+}
+#pragma region Arriving
+void LeviathanAxe::ArrivingWeapon::UpdateRotation()
+{
+    if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent && WeaponIdentify::WeaponBone) {
+        auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
+        auto& localRotation = replacedPMParent->local.rotate;
+        RE::NiMatrix3 targetLocalRotation;
+    //    float targetAngleZ;
+        if (replacedPMParent->parent) {
+            targetLocalRotation = replacedPMParent->parent->world.rotate.Transpose() * WeaponIdentify::WeaponBone->world.rotate;
+        //    targetAngleZ = std::atan2(
+        //        targetLocalRotation.entry[0][1],
+        //        targetLocalRotation.entry[0][0]
+        //    );
+        } else {
+            targetLocalRotation = WeaponIdentify::WeaponBone->world.rotate;
+        //    targetAngleZ = std::atan2(
+        //        targetLocalRotation.entry[0][1],
+        //        targetLocalRotation.entry[0][0]
+        //    );
+        }
+        const float angleZ = livingTime * rotationSpeed;
+        MathUtil::Angle::NormalAbsoluteAngle(angleZ);
+        arrivalSpin = (int)(std::floor(1 + (livingTime + remainingTimeToArrive) * rotationSpeed / TWO_PI)) * TWO_PI;
+        const float blendZ = std::lerp(angleZ, arrivalSpin, tReal);
+        const auto& startRotationC = startRotation;
+        localRotation = MathUtil::Algebra::InterpolateRotation(startRotationC, targetLocalRotation, tReal);
+        localRotation = localRotation * RE::NiMatrix3(0.f, 0.f, blendZ);
+    //    spdlog::debug("target angle: {} calculated target angle: {} blended angle: {} tau: {}", angleZ, arrivalSpin, blendZ, tReal);
+    }
+//    leviAngle.x = asin(desiredDir.z);
+//    leviAngle.z = atan2(desiredDir.x, desiredDir.y);
+//    if (leviAngle.z < 0.0) {
+//        leviAngle.z += PI;
+//    }
+//    if (desiredDir.x < 0.0) {
+//        leviAngle.z += PI;
+//    }
+}
+void LeviathanAxe::ArrivingWeapon::UpdateAI(RE::NiPoint3& a_outVel)
+{
+    float height = position.z - caller->GetPosition().z;
+    if (!Config::DontDamageWhileArrive && tReal < 0.69f) {
+        if (auto aTarget = GetNextTarget(position); aTarget) {
+            auto targetPos = aTarget->GetPosition() + (aTarget->GetBoundMax() + aTarget->GetBoundMin()) * 0.75f;
+            auto targetDir = (targetPos - position);
+            targetDir.Unitize();
+            height = position.z - aTarget->GetPosition().z;
+            a_outVel = targetDir * speed;
+        }
+    }
+}
+void LeviathanAxe::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
+{
+    if (caller && parent && callerBreastBone) {
+        if (parent->GetThrowState() == ThrowState::kThrowable || isCatchable) {
+
+        } else if (a_initial || linearDistance > 100.f) {
+            RE::NiPoint3  spineForwardDir = callerBreastBone->world.rotate * RE::NiPoint3(frontVec3);
+            spineForwardDir.z = 0.f;  //  ignore vertical direction
+            spineForwardDir.Unitize();
+
+            RE::NiPoint3 linearDir2D(linearArrivingDir.x, linearArrivingDir.y, 0.f);
+            linearDir2D.Unitize();
+
+            float dot = spineForwardDir.Dot(linearDir2D);
+            float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
+
+            arrivingRelativeAngleZ = atan2(det, dot);  //  angle between spine forward direction and arriving weapon direction
+            arrivingRelativeAngleZ = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, 2PI]
+
+            float snapStrength = arrivingRelativeAngleSnapStrength;
+            if (a_initial) snapStrength = 1.f;
+            else if ((arrivingRelativeAngleZ < PI4 || arrivingRelativeAngleZ > ONEANDHALF_PI) && snapStrength < 0.69f) snapStrength += 0.69f;
+            snapStrength = std::min(snapStrength, 1.f);
+            if (snapStrength > 0.f) {
+                arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);    //  for helping to the blender generator
+            }
+
+            if (!a_initial) {
+                float previousAngle; caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle); previousAngle *= TWO_PI;
+                const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
+                constexpr float smoothTime = 0.369f;
+                const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
+                float smoothedArrivingRelativeAngle = previousAngle;
+                smoothedArrivingRelativeAngle += delta * alpha;
+                arrivingRelativeAngleZ = smoothedArrivingRelativeAngle;
+                
+            }
+            arrivingRelativeAngleZ /= TWO_PI;
+        }
+        caller->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
+    }
+}
+void LeviathanAxe::ArrivingWeapon::UpdateArrivingRoute()
+{
+    RE::NiMatrix3 handRot   = callerHandBone->world.rotate;
+    const float alphaHandRot = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
+    RE::NiMatrix3 smoothedHandRot = 
+        MathUtil::Algebra::QuaternionToMatrix(MathUtil::Algebra::Slerp(
+            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->previousWorld.rotate),
+            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->world.rotate), alphaHandRot));
+    RE::NiPoint3 palmDir    = smoothedHandRot * RE::NiPoint3(backVec3);
+    RE::NiPoint3 handForward= smoothedHandRot * RE::NiPoint3(upVec3);
+    palmDir.Unitize();
+    handForward.Unitize();
+
+    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.25f);
+
+    RE::NiPoint3 handVelocity = (callerHandBone->world.translate - callerHandBone->previousWorld.translate) / *g_deltaTimeRealTime;
+    const float predictionTime = std::clamp(*g_deltaTimeRealTime, 0.0f, 0.1f);
+    RE::NiPoint3 predictedHandPos = handPosition + handVelocity * predictionTime;
+    bezierControlPoints[3] = predictedHandPos;
+    bezierControlPoints[2] = predictedHandPos + (float)IsInCallingAnimation() * (palmDir * (linearDistanceFromLastCallPos * 0.33f + 20.f) + handForward * (linearDistanceFromLastCallPos * handSideOffsetMult + 10.f));
+
+    RE::NiPoint3& p0 = bezierControlPoints[0];
+    RE::NiPoint3& p1 = bezierControlPoints[1];
+    RE::NiPoint3& p3 = bezierControlPoints[3];
+    RE::NiPoint3& p2 = bezierControlPoints[2];
+
+    arrivingRoute = MathUtil::Algebra::CalculateAndMeasureBezier(
+        p0, p1, p2, p3,
+        routeResolution);
+    float bestDist2 = FLT_MAX;
+
+    for (int i = 0; i < arrivingRoute.samples.size() - 1; i++) {
+        const float d2 = (arrivingRoute.samples[i].point - position).SqrLength();
+        if (d2 < bestDist2)
+        {
+            bestDist2 = d2;
+            arrivingRouteClosestIndex = i;
+        }
+    }
+
+    closestSample = arrivingRoute.samples[arrivingRouteClosestIndex];
+    const float t = closestSample.t;
+
+    const float lookAheadDistance = std::clamp(std::abs(speed) * 0.15f, 50.f, 200.f);
+    const float targetDistance = closestSample.distanceFromStart + lookAheadDistance;
+
+    int targetIndex = arrivingRouteClosestIndex;
+    while (targetIndex + 1 <
+        static_cast<int>(arrivingRoute.samples.size()) &&
+        arrivingRoute.samples[targetIndex].distanceFromStart < targetDistance)
+    {
+        targetIndex++;
+    }
+
+    bezierDir = arrivingRoute.samples[targetIndex].point - position;
+    bezierDir.Unitize();
+}
+void LeviathanAxe::ArrivingWeapon::Update(const float a_delta)
+{
+    if (!parent) return;
+
+    model = parent->data.model;
+    if (!model) return;
+
+    if (!callerHandBone) return;
+    handPosition = callerHandBone->world.translate;
+
+    if (!proj) return;
+    auto& rtData = proj->GetProjectileRuntimeData();
+    auto& vel = rtData.linearVelocity;
+
+    currentDir = vel;
+    currentDir.Unitize();
+
+    position = proj->data.location;
+
+    linearDistance = handPosition.GetDistance(position);
+    linearArrivingDir = handPosition - position;
+    linearArrivingDir.Unitize();
+
+    isCatchable = (linearDistance <= Config::CatchingTreshold) || (linearDistance <= (*g_deltaTime * vel.Length()));
+
+    if (parent->LeviathanAxeProjectileA != proj.get()) {  //  first frame of the arriving projectile
+        parent->LeviathanAxeProjectileA = proj.get();
+
+        if (!isCatchable) {
+            parent->soundData.PlayArrivingStartSounds(model.get());
+            parent->soundData.PlayArrivingLoopSounds(model.get());
+        }
+    }
+    if (isCatchable) {
+        if (parent->GetThrowState() == tState::kArriving) parent->SetThrowState(tState::kArrived);
+        parent->Catch();
+        spdlog::debug("Levi proj catched");
+    }
+    if (false && startRotation == RE::NiMatrix3()) {
+        if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent) {
+            model.get()->world = parent->data.transformPW;
+            model.get()->local = parent->data.transformPL;
+            auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
+            auto parentWorldInverse = replacedPMParent->world.Invert();
+            auto previousWorld = parent->data.transformW;
+            auto& localRotation = replacedPMParent->local.rotate;
+            auto& localPosition = replacedPMParent->local.translate;
+            if (replacedPMParent->parent) {
+                localRotation = parentWorldInverse.rotate * previousWorld.rotate;
+            //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
+            } else {
+                localRotation = previousWorld.rotate;
+            //    localPosition = previousWorld.translate;
+            }
+            startRotation = localRotation;
+            spdlog::debug("start rotation initiated");
+        }
+    }
+
+    livingTime = GetLivingTime();
+    UpdateArrivingRoute();
+
+    const float minArrivalTime = *g_deltaTime * 2.f;
+    float remainingRouteLength = arrivingRoute.arcLength - closestSample.distanceFromStart;
+    remainingRouteLength = std::max(remainingRouteLength, linearDistance);
+    remainingTimeToArrive = std::max(timeToArrive - livingTime, minArrivalTime);
+    const float requiredAverageSpeed = remainingRouteLength / remainingTimeToArrive;
+
+    if (requiredAverageSpeed < Config::MinArrivalSpeed)
+        remainingTimeToArrive = std::max(remainingRouteLength / Config::MinArrivalSpeed, minArrivalTime);
+    else if (requiredAverageSpeed > Config::MaxArrivalSpeed)
+        remainingTimeToArrive = std::max(remainingRouteLength / Config::MaxArrivalSpeed, minArrivalTime);
+
+    const float desiredAcceleration = 2.f * (remainingRouteLength - speed * remainingTimeToArrive) / (remainingTimeToArrive * remainingTimeToArrive);
+    speed += desiredAcceleration * *g_deltaTimeRealTime;
+    speed = std::max(speed, Config::MinArrivalSpeed);
+
+    remainingTimeToArrive = remainingRouteLength / speed;
+    constexpr float nearArriveTimeThreshold = 0.369f;
+    isNear = remainingTimeToArrive < (nearArriveTimeThreshold < timeToArrive ? nearArriveTimeThreshold : timeToArrive * 0.8f);
+    constexpr float almostArrivedTimeThreshold = 0.169f;
+    isAlmostArrived = remainingTimeToArrive < (almostArrivedTimeThreshold < timeToArrive ? almostArrivedTimeThreshold : timeToArrive * 0.5f);
+    if (isAlmostArrived || isCatchable) {
+        uint16_t fadeDuration = (uint16_t)(almostArrivedTimeThreshold * 1000.f) + 200u;
+        parent->soundData.FadeArrivingStartSounds(fadeDuration);
+        parent->soundData.FadeArrivingLoopSounds(fadeDuration);
+        parent->soundData.FadeCallingHandSounds(fadeDuration);
+    } else if (isNear) {
+        parent->soundData.PlayArrivingNearSounds(model.get());
+    }
+//    spdlog::debug(
+//        "AFTER ACCEL speed={:.1f}, accel={:.1f}, L={:.1f}, T={:.3f}",
+//        speed,
+//        desiredAcceleration,
+//        remainingRouteLength,
+//        remainingTimeToArrive);
+//    spdlog::debug(
+//        "closest={} target={} closestT={:.3f} targetT={:.3f} "
+//        "closestL={:.1f} targetL={:.1f} routeL={:.1f}",
+//        arrivingRouteClosestIndex,
+//        targetIndex,
+//        closestSample.t,
+//        arrivingRoute.samples[targetIndex].t,
+//        closestSample.distanceFromStart,
+//        arrivingRoute.samples[targetIndex].distanceFromStart,
+//        arrivingRoute.arcLength
+//    );
+
+//    tReal = 1.f - remainingTimeToArrive / almostArrivedTimeThreshold;//timeToArrive;
+    tReal = timeToArrive / (timeToArrive + 2.f * (remainingTimeToArrive - 0.05f));
+    tReal = std::pow(tReal, 2.f);
+    tReal = std::clamp(tReal, 0.f, 1.f);
+//    tReal = tReal * tReal * (3.f - 2.f * tReal);
+
+    const float smoothTime = std::clamp(1.f - tReal, 0.01f, 0.069f);
+    const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
+    smoothedDesiredVelocity += (bezierDir * speed - smoothedDesiredVelocity) * alpha;
+    desiredDir = smoothedDesiredVelocity;
+    desiredDir.Unitize();
+    const bool doBlend = 
+        parent->data.projState == ProjectileState::kNone ||
+        parent->data.projState == ProjectileState::kLaunched;
+    vel = MathUtil::Angle::BlendVectors(doBlend ? parent->data.lastVelocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
+    if (vel.z < 0.f) {
+        constexpr float minHeight = -40.f;
+        constexpr float dampingRange = 69.f;
+        const float height = position.z - handPosition.z;
+        const float dampFactor = std::clamp((height - minHeight) / dampingRange, 0.f, 1.f);
+        vel.z *= dampFactor;
+    }
+
+    UpdateRotation();
+    UpdateAI(vel);
+    UpdateArrivingDirection();
+}
+#pragma endregion
+#pragma region Sounds
 void LeviathanAxe::SoundData::StopAllSounds()
 {
-    if (CallStartSH) CallStartSH->Stop();
-    if (ArrivingStartSH) ArrivingStartSH->Stop();
-    if (ArrivingLoop0SH) ArrivingLoop0SH->Stop();
-    if (ArrivingLoop1SH) ArrivingLoop1SH->Stop();
-    if (ArrivingLoop2SH) ArrivingLoop2SH->Stop();
-    if (ArrivingNearSH) ArrivingNearSH->Stop();
-    if (CatchSH) CatchSH->Stop();
+    if (CallStartSH.IsPlaying()) CallStartSH.Stop();
+    if (ArrivingStartSH.IsPlaying()) ArrivingStartSH.Stop();
+    if (ArrivingLoop0SH.IsPlaying()) ArrivingLoop0SH.Stop();
+    if (ArrivingLoop1SH.IsPlaying()) ArrivingLoop1SH.Stop();
+    if (ArrivingLoop2SH.IsPlaying()) ArrivingLoop2SH.Stop();
+    if (ArrivingNearSH.IsPlaying()) ArrivingNearSH.Stop();
+    if (ThrowingStartSH.IsPlaying()) ThrowingStartSH.Stop();
+    if (ThrowingLoop0SH.IsPlaying()) ThrowingLoop0SH.Stop();
+    if (ThrowingLoop1SH.IsPlaying()) ThrowingLoop1SH.Stop();
+    if (CatchSH.IsPlaying()) CatchSH.Stop();
+}
+void LeviathanAxe::SoundData::PauseAllSounds()
+{
+//    if (CallStartSH.IsPlaying() && GetState(SoundName::kCallStart) == State::kTriggered) {CallStartSH.Pause(); soundState[SoundName::kCallStart] = State::kPaused;}
+//    if (ArrivingStartSH.IsPlaying() && GetState(SoundName::kArrivingStart) == State::kTriggered) {ArrivingStartSH.Pause(); soundState[SoundName::kArrivingStart] = State::kPaused;}
+    if (ArrivingLoop0SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop1SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop2SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingNearSH.IsPlaying() && GetState(SoundName::kArrivingNear) == State::kTriggered) {ArrivingNearSH.Pause(); soundState[SoundName::kArrivingNear] = State::kPaused;}
+//    if (ThrowingStartSH.IsPlaying() && GetState(SoundName::kThrowingStart) == State::kTriggered) {ThrowingStartSH.Pause(); soundState[SoundName::kThrowingStart] = State::kPaused;}
+    if (ThrowingLoop0SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+    else if (ThrowingLoop1SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+//    if (CatchSH.IsPlaying() && GetState(SoundName::kCatch) == State::kTriggered) {CatchSH.Pause(); soundState[SoundName::kCatch] = State::kPaused;}
+
+//    if (CallStartSH.IsPlaying() && GetState(SoundName::kCallStart) == State::kTriggered) {CallStartSH.Pause(); soundState[SoundName::kCallStart] = State::kPaused;}
+//    if (ArrivingStartSH.IsPlaying() && GetState(SoundName::kArrivingStart) == State::kTriggered) {ArrivingStartSH.Pause(); soundState[SoundName::kArrivingStart] = State::kPaused;}
+//    if (ArrivingLoop0SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {ArrivingLoop0SH.Pause(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingLoop1SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {ArrivingLoop1SH.Pause(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingLoop2SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {ArrivingLoop2SH.Pause(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingNearSH.IsPlaying() && GetState(SoundName::kArrivingNear) == State::kTriggered) {ArrivingNearSH.Pause(); soundState[SoundName::kArrivingNear] = State::kPaused;}
+//    if (ThrowingStartSH.IsPlaying() && GetState(SoundName::kThrowingStart) == State::kTriggered) {ThrowingStartSH.Pause(); soundState[SoundName::kThrowingStart] = State::kPaused;}
+//    if (ThrowingLoop0SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {ThrowingLoop0SH.Pause(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+//    if (ThrowingLoop1SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {ThrowingLoop1SH.Pause(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+//    if (CatchSH.IsPlaying() && GetState(SoundName::kCatch) == State::kTriggered) {CatchSH.Pause(); soundState[SoundName::kCatch] = State::kPaused;}
+}
+void LeviathanAxe::SoundData::ContinueAllSounds()
+{
+    if (GetState(SoundName::kCallStart) == State::kPaused) {CallStartSH.Play(); soundState[SoundName::kCallStart] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingStart) == State::kPaused) {ArrivingStartSH.Play(); soundState[SoundName::kArrivingStart] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {ArrivingLoop0SH.Play(); soundState[SoundName::kArrivingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {ArrivingLoop1SH.Play(); soundState[SoundName::kArrivingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {ArrivingLoop2SH.Play(); soundState[SoundName::kArrivingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingNear) == State::kPaused) {ArrivingNearSH.Play(); soundState[SoundName::kArrivingNear] = State::kPlaying;}
+    if (GetState(SoundName::kThrowingStart) == State::kPaused) {ThrowingStartSH.Play(); soundState[SoundName::kThrowingStart] = State::kPlaying;}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused) {ThrowingLoop0SH.Play(); soundState[SoundName::kThrowingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused) {ThrowingLoop1SH.Play(); soundState[SoundName::kThrowingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kCatch) == State::kPaused) {CatchSH.Play(); soundState[SoundName::kCatch] = State::kPlaying;}
+}
+void LeviathanAxe::SoundData::PauseAllLoopingSounds()
+{
+    if (ArrivingLoop0SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop1SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop2SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    if (ThrowingLoop0SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+    else if (ThrowingLoop1SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+}
+void LeviathanAxe::SoundData::ContinueAllLoopingSounds()
+{
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {PlayArrivingLoopSounds(weaponData->model.get());}// soundState[SoundName::kArrivingLoop] = State::kPlaying; spdlog::debug("ArrivingLoop sounds continuing...");}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused) {PlayThrowingLoopSounds(weaponData->model.get());}// soundState[SoundName::kThrowingLoop] = State::kPlaying; spdlog::debug("ThrowingLoop sounds continuing...");}
 }
 void LeviathanAxe::SoundData::FadeAllSounds(const uint16_t a_durationMS)
 {
-    if (CallStartSH) CallStartSH->FadeOutAndRelease(a_durationMS);
-    if (ArrivingStartSH) ArrivingStartSH->FadeOutAndRelease(a_durationMS);
-    if (ArrivingLoop0SH) ArrivingLoop0SH->FadeOutAndRelease(a_durationMS);
-    if (ArrivingLoop1SH) ArrivingLoop1SH->FadeOutAndRelease(a_durationMS);
-    if (ArrivingLoop2SH) ArrivingLoop2SH->FadeOutAndRelease(a_durationMS);
-    if (ArrivingNearSH) ArrivingNearSH->FadeOutAndRelease(a_durationMS);
-    if (CatchSH) CatchSH->FadeOutAndRelease(a_durationMS);
+    if (CallStartSH.IsPlaying()) CallStartSH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingStartSH.IsPlaying()) ArrivingStartSH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop0SH.IsPlaying()) ArrivingLoop0SH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop1SH.IsPlaying()) ArrivingLoop1SH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop2SH.IsPlaying()) ArrivingLoop2SH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingNearSH.IsPlaying()) ArrivingNearSH.FadeOutAndRelease(a_durationMS);
+    if (CatchSH.IsPlaying()) CatchSH.FadeOutAndRelease(a_durationMS);
 }
 void LeviathanAxe::SoundData::PlayCallingHandSounds(RE::NiAVObject* a_source)
 {
     if (auto soundEffect = kratos->soundEffect.callLevi; soundEffect)
-        CallStartSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+        ObjectUtil::Sound::PlaySound(soundEffect, CallStartSH, a_source, 5.f);
 }
 void LeviathanAxe::SoundData::PlayArrivingStartSounds(RE::NiAVObject* a_source)
 {
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviStart; soundEffect)
-        ArrivingStartSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviStart; soundEffect && IsSoundValid(SoundName::kArrivingStart)) {
+        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingStartSH, a_source, 5.f);
+        soundState[SoundName::kArrivingStart] = State::kTriggered;
+    } else {
+        if (ArrivingStartSH.IsPlaying())
+            ArrivingStartSH.SetObjectToFollow(a_source);
+    }
 }
 void LeviathanAxe::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
 {
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect && (!ArrivingLoop0SH ||!ArrivingLoop0SH->IsPlaying()))
-        ArrivingLoop0SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f, nullptr, 0.2f);
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect && (!ArrivingLoop1SH ||!ArrivingLoop1SH->IsPlaying()))
-        ArrivingLoop1SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f, nullptr, 0.2f);
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect && (!ArrivingLoop2SH ||!ArrivingLoop2SH->IsPlaying()))
-        ArrivingLoop2SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f, nullptr, 0.2f);
+    if (IsSoundValid(SoundName::kArrivingLoop)) {
+        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 5.f);
+            soundState[SoundName::kArrivingLoop] = State::kTriggered;
+        }
+        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 2.f);
+            soundState[SoundName::kArrivingLoop] = State::kTriggered;
+        }
+        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
+            soundState[SoundName::kArrivingLoop] = State::kTriggered;
+        }
+    } else {
+        spdlog::debug("updating the following node of the arriving loop sounds.");
+        if (ArrivingLoop0SH.IsPlaying()) {
+            ArrivingLoop0SH.SetObjectToFollow(a_source);
+            ArrivingLoop0SH.Play();
+        } if (ArrivingLoop1SH.IsPlaying()) {
+            ArrivingLoop1SH.SetObjectToFollow(a_source);
+            ArrivingLoop1SH.Play();
+        } if (ArrivingLoop2SH.IsPlaying()) {
+            ArrivingLoop2SH.SetObjectToFollow(a_source);
+            ArrivingLoop2SH.Play();
+        }
+    }
 }
 void LeviathanAxe::SoundData::PlayArrivingNearSounds(RE::NiAVObject* a_source)
 {
-    if (auto soundEffect = kratos->soundEffect.arrivingLeviNear; soundEffect)
-        ArrivingNearSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviNear; soundEffect && IsSoundValid(SoundName::kArrivingNear) ) {
+        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingNearSH, a_source, 5.f);
+        soundState[SoundName::kArrivingNear] = State::kTriggered;
+    } else {
+        if (ArrivingNearSH.IsPlaying())
+            ArrivingNearSH.SetObjectToFollow(a_source);
+    }
 }
 void LeviathanAxe::SoundData::PlayCatchingSounds(RE::NiAVObject* a_source)
 {
     if (auto soundEffect = kratos->soundEffect.catchLevi; soundEffect)
-        CatchSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+        ObjectUtil::Sound::PlaySound(soundEffect, CatchSH, a_source, 5.f);
 }
 void LeviathanAxe::SoundData::PlayThrowingSounds(RE::NiAVObject* a_source)
 {
@@ -1868,27 +2244,94 @@ void LeviathanAxe::SoundData::PlayThrowingSounds(RE::NiAVObject* a_source)
 }
 void LeviathanAxe::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
 {
-//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect && (!ThrowingLoop0SH ||!ThrowingLoop0SH->IsPlaying()))
-//        ThrowingLoop0SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
-//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect && (!ThrowingLoop1SH ||!ThrowingLoop1SH->IsPlaying()))
-//        ThrowingLoop1SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
-//    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop2; soundEffect && (!ThrowingLoop2SH ||!ThrowingLoop2SH->IsPlaying()))
-//        ThrowingLoop2SH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+    if (IsSoundValid(SoundName::kThrowingLoop)) {
+        if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 5.f);
+            soundState[SoundName::kThrowingLoop] = State::kTriggered;
+        }
+        if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
+            soundState[SoundName::kThrowingLoop] = State::kTriggered;
+        }
+    } else {
+        spdlog::debug("updating the following node of the throwing loop sounds.");
+        if (ThrowingLoop0SH.IsPlaying()) {
+            ThrowingLoop0SH.SetObjectToFollow(a_source);
+            ThrowingLoop0SH.Play();
+        } if (ThrowingLoop1SH.IsPlaying()) {
+            ThrowingLoop1SH.SetObjectToFollow(a_source);
+            ThrowingLoop1SH.Play();
+        }
+    }
+}
+void LeviathanAxe::SoundData::FadeCallingHandSounds(const uint16_t a_durationMS)
+{
+    if (CallStartSH.IsPlaying()) CallStartSH.FadeOutAndRelease(a_durationMS);
+}
+void LeviathanAxe::SoundData::FadeArrivingStartSounds(const uint16_t a_durationMS)
+{
+    
+    soundState[SoundName::kArrivingStart] = State::kFading;
+    if (ArrivingStartSH.IsPlaying()) ArrivingStartSH.FadeOutAndRelease(a_durationMS);
+    else soundState[SoundName::kArrivingStart] = State::kStopped;
 }
 void LeviathanAxe::SoundData::FadeArrivingLoopSounds(const uint16_t a_durationMS)
 {
-    if (ArrivingLoop0SH) ArrivingLoop0SH->FadeOutAndRelease(a_durationMS);
-    if (ArrivingLoop1SH) ArrivingLoop1SH->FadeOutAndRelease(a_durationMS);
-    if (ArrivingLoop2SH) ArrivingLoop2SH->FadeOutAndRelease(a_durationMS);
+    soundState[SoundName::kArrivingLoop] = State::kFading;
+    if (ArrivingLoop0SH.IsPlaying()) ArrivingLoop0SH.FadeOutAndRelease(a_durationMS);
+    else {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+    if (ArrivingLoop1SH.IsPlaying()) ArrivingLoop1SH.FadeOutAndRelease(a_durationMS);
+    else {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+    if (ArrivingLoop2SH.IsPlaying()) ArrivingLoop2SH.FadeOutAndRelease(a_durationMS);
+    else {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+
+    StopArrivingLoopSounds(a_durationMS);
+}
+void LeviathanAxe::SoundData::FadeArrivingNearSounds(const uint16_t a_durationMS)
+{
+    soundState[SoundName::kArrivingNear] = State::kFading;
+    if (ArrivingNearSH.IsPlaying()) ArrivingNearSH.FadeOutAndRelease(a_durationMS);
+    else soundState[SoundName::kArrivingNear] = State::kStopped;
 }
 void LeviathanAxe::SoundData::FadeThrowingLoopSounds(const uint16_t a_durationMS)
 {
-    if (ThrowingLoop0SH) ThrowingLoop0SH->FadeOutAndRelease(a_durationMS);
-    if (ThrowingLoop1SH) ThrowingLoop1SH->FadeOutAndRelease(a_durationMS);
-    if (ThrowingLoop2SH) ThrowingLoop2SH->FadeOutAndRelease(a_durationMS);
+    soundState[SoundName::kThrowingLoop] = State::kFading;
+    if (ThrowingLoop0SH.IsPlaying()) ThrowingLoop0SH.FadeOutAndRelease(a_durationMS);
+    else {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+    if (ThrowingLoop1SH.IsPlaying()) ThrowingLoop1SH.FadeOutAndRelease(a_durationMS);
+    else {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+
+    StopThrowingLoopSounds(a_durationMS);
+}
+void LeviathanAxe::SoundData::StopArrivingLoopSounds(const uint16_t a_delayMS)
+{
+    if (a_delayMS == 0) {
+        if (ArrivingLoop0SH.IsPlaying()) {ArrivingLoop0SH.Stop(); spdlog::debug("arriving loop sound 1 stopped.");}
+        else {spdlog::debug("arriving loop sound 1 is already stopped."); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+        if (ArrivingLoop1SH.IsPlaying()) {ArrivingLoop1SH.Stop(); spdlog::debug("arriving loop sound 2 stopped.");}
+        else {spdlog::debug("arriving loop sound 2 is already stopped."); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+        if (ArrivingLoop2SH.IsPlaying()) {ArrivingLoop2SH.Stop(); spdlog::debug("arriving loop sound 3 stopped.");}
+        else {spdlog::debug("arriving loop sound 3 is already stopped."); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+        soundState[SoundName::kArrivingLoop] = State::kStopped;
+    } else {
+        arrivingLoopStopUpdate.RegisterForUpdate(((float)a_delayMS) / 1000.f);
+    }
+}
+void LeviathanAxe::SoundData::StopThrowingLoopSounds(const uint16_t a_delayMS)
+{
+    if (a_delayMS == 0) {
+        if (ThrowingLoop0SH.IsPlaying()) ThrowingLoop0SH.Stop();
+        else {spdlog::debug("throwing loop sound is already stopped."); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+        if (ThrowingLoop1SH.IsPlaying()) ThrowingLoop1SH.Stop();
+        else {spdlog::debug("throwing loop sound is already stopped."); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+        soundState[SoundName::kThrowingLoop] = State::kStopped;
+    } else {
+        throwingLoopStopUpdate.RegisterForUpdate(((float)a_delayMS) / 1000.f);
+    }
 }
 #pragma endregion
-#pragma region Blades_of_Chaos
+#pragma endregion
+#pragma region BLADES_OF_CHAOS
 bool BladeOfChaos::Initialize()
 {
     bool found = true;
@@ -1964,7 +2407,7 @@ void BladeOfChaos::HideChains(const bool a_hide)
     }
 }
 #pragma endregion
-#pragma region Draupnir_Spear
+#pragma region DRAUPNIR_SPEAR
 bool Draupnir::Initialize()
 {
     bool found = true;
@@ -2109,6 +2552,7 @@ void Draupnir::Throw()
 
         RE::Projectile::Launch(&pHandle, lData);
         data.proj.reset(pHandle.get().get());
+        data.throwingChargeDuration = 0.f;
 
         if (WeaponIdentify::isDraupnirSpear) {
             const auto root = AnArchos->Get3D1(false);
@@ -2351,7 +2795,7 @@ void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
     } else spdlog::warn("projectile or projectile model is null");
 }
 #pragma endregion
-#pragma region Mjolnir
+#pragma region MJOLNIR
 Mjolnir* Mjolnir::GetSingleton()                {static Mjolnir singleton; return &singleton;}
 bool Mjolnir::Initialize()
 {
@@ -2395,7 +2839,9 @@ void Mjolnir::Update(const float a_delta) {
     }
     if (projectileUpdate.IsTimeToUpdate()) {
         if (data.model && data.proj && data.proj->Get3D() && data.weaponModelCopy && data.model.get() == data.proj->Get3D()) {
-            auto animatedNode = data.model->AsNode();
+            const RE::BSFixedString rotatingBoneName = "Cylinder02";
+            auto animatedBone = data.model->GetObjectByName(rotatingBoneName);
+            auto animatedNode = animatedBone ? animatedBone->AsNode() : nullptr;
 
             auto cloneModel = data.weaponModelCopy.get()->Clone();
             auto cloneNode = cloneModel ? cloneModel->AsNode() : nullptr;
@@ -2405,10 +2851,12 @@ void Mjolnir::Update(const float a_delta) {
                 animatedNode->AttachChild(data.replacedProjectileModel.get(), false);
                 projectileUpdate.Done();
                 trailUpdate.RegisterForUpdate(a_delta * 2.f, false);
-                spdlog::debug("levi model changed!");
-            } else spdlog::warn("animated node or levinode null");
+                spdlog::debug("mjolnir model changed!");
+            } else spdlog::warn("animated node or mjolnirnode null");
         } else spdlog::warn("proj or proj->Get3D2() null");
     }
+    if (soundData.arrivingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopArrivingLoopSounds();}
+    if (soundData.throwingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopThrowingLoopSounds();}
     if (Config::DrawTrails) {
         AddProjectileTrail(a_delta);
         FadeProjectileTrail(a_delta);
@@ -2420,31 +2868,33 @@ bool Mjolnir::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 {
     bool result = false;
     if (!a_actor) return result;
-    auto thrownMjolnir =  LastMjolnirProjectile;
-//    if (!thrownMjolnir) thrownMjolnir = MjolnirProjectileT;
-    if (thrownMjolnir) {
-        a_point = thrownMjolnir->data.location;
-        result = true;
-    } else if (data.model) {
-        a_point = data.model->world.translate;
-        result = true;
-    } else {
-        spdlog::debug("we can't get thrown Mjolnir proj!");
-        a_point = data.position;
-        result = false;
+    if (data.model) {
+        data.transformPW = data.model->world;
+        data.transformPL = data.model->local;
     }
+    if (data.replacedProjectileModel) {
+        data.transformW = GetWorldTransform();
+        a_point = data.transformW.translate * 70.f;
+    //    a_point = data.replacedProjectileModel->worldBound.center;
+        result = true;
+        spdlog::debug("mjolnir coming from weapon model location.");
+    } else spdlog::debug("we can't get leviathan's weapon model!");
 
     if (GetThrowState() == tStateM::kThrowable) {
-        if (auto backWeaponSheathe = a_actor->GetNodeByName("WeaponMace"); backWeaponSheathe) {
-            a_point = backWeaponSheathe->world.translate;
+        if (auto maceSheathe = a_actor->GetNodeByName("WeaponMace"); maceSheathe) {
+            const auto& backSheatheTransform = maceSheathe->world;
+            a_point = backSheatheTransform.translate;
+            const auto& rightDir = backSheatheTransform.rotate * rightVec3;
+            const auto& downDir = backSheatheTransform.rotate * downVec3;
+            const auto& backDir = backSheatheTransform.rotate * backVec3;
+            data.lastVelocity = (0.5f * rightDir + 0.2f * backDir + 0.3f * downDir) * 2400.f;
+            spdlog::debug("mjolnir is coming from your back sheathe");
         }
     } else {
-        auto pcCell = a_actor->parentCell;
-        auto bound = pcCell->GetRuntimeData().cellData.exterior->worldX;
         auto pcPos = a_actor->GetPosition();
         float dist = pcPos.GetDistance(a_point);
         if (dist > 36000.f) {   // ~42000 is limit
-            spdlog::info("Mjolnir too far from you! ({} m)", (int)dist / 100);
+            spdlog::info("mjolnir is too far from you! ({} m)", (int)dist / 100);
             auto dir = a_point - pcPos;
             dir.Unitize();
             a_point = pcPos + dir * 36000.f;
@@ -2468,7 +2918,7 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
     }
     const auto MjolnirThrowSpell = (isVertical ? SpellMjolnirProjT : SpellMjolnirProjT);
     if (MjolnirThrowSpell && (WeaponIdentify::isMjolnir || justContinue)) 
-    {   //  calculate damage
+    {
         const auto MjolnirProjEff = MjolnirThrowSpell->effects[0];
         auto& MjolnirProjEffSetting = MjolnirProjEff->effectItem;
         auto& mag = MjolnirProjEffSetting.magnitude;
@@ -2483,7 +2933,6 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         mag *= throwChargeDamageMult;
 
         if (const auto MjolnirProjBaseEff = MjolnirProjEff->baseEffect; MjolnirProjBaseEff) {
-            MjolnirProjBaseEff->data.projectileBase->SetModel(data.weap->GetModel());
             auto& pbData = MjolnirProjBaseEff->data.projectileBase->data;
             pbData.speed = !justContinue ? Config::ThrowSpeed * 0.8f * std::clamp(throwChargeDamageMult / 2.f, 1.f, 1.25f) : pbData.speed * 0.7f;
             pbData.force = mag * 1.5f;
@@ -2491,6 +2940,8 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         } else spdlog::warn("not found mjolnir throwing effect!");
 
         if (!justContinue) {
+            soundData.PlayThrowingSounds(WeaponIdentify::RHandBone);
+
             data.gravity = 3.69f;
             data.gravity /= (std::powf(data.throwingChargeDuration + 1.f, 3.f));
             data.gravity = std::max(data.gravity, 0.5f);
@@ -2521,11 +2972,18 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
             const auto root = a_actor->Get3D1(false);
             auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
             auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
-            auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-            data.weaponModelCopy.reset(copyWeaponModelNode);
-            if (data.weaponModelCopy) {
-                data.weaponModelCopy->local = RE::NiTransform();
-                data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            if (copyWeaponModel) {
+                copyWeaponModel->RemoveExtraData("BSX");
+                copyWeaponModel->RemoveExtraData("BSXFlags");
+                if (copyWeaponModel->GetCollisionObject())
+                    copyWeaponModel->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
+                copyWeaponModel->collisionObject.reset();
+                auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
+                data.weaponModelCopy.reset(copyWeaponModelNode);
+                if (data.weaponModelCopy) {
+                    data.weaponModelCopy->local = RE::NiTransform();
+                    data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+                }
             }
         }
 
@@ -2544,7 +3002,7 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
             ResetCharge(data.enchMag, data.defaultEnchMag, true);
             WeaponIdentify::skipEquipAnim = true;
             ObjectUtil::Actor::UnEquipItem(a_actor, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
-            ResetEquipAnimationAfter(100, a_actor);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
             spdlog::debug("Mjolnir unequipped after throwing");
         } else {
             WeaponIdentify::isMjolnir = false;
@@ -2567,7 +3025,8 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         WeaponIdentify::EquippedObjR = nullptr;
         WeaponIdentify::lastThrownRelic = Kratos::Relic::kMjolnir;
             spdlog::info("Mjolnir throwed, raw damage is: {}", mag);
-        //  reset the last throw's traces
+
+        data.throwingChargeDuration = 0.f;
         data.lastHitActors.clear();
         data.lastHitForms.clear();
         if (a_actor->HasSpell(SpellCatchMjolnir)) a_actor->RemoveSpell(SpellCatchMjolnir);
@@ -2575,16 +3034,18 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
 }
 void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::optional<float> a_delay, RE::Actor* a_actor)
 {
+    RE::NiPoint3 startPoint = data.position;
+    GetPosition(startPoint, a_actor);
+    if (!isMjolnirCalled)
+        arrivingMjolnir = ArrivingWeapon(this, a_actor, WeaponIdentify::RHandBone, startPoint);
     auto kratos = Kratos::GetSingleton();
     const bool isDelayed = a_delay.has_value() && a_delay != 0.f;
     const bool isDelayedConfig = Config::MjolnirArrivingDelay.has_value() && Config::MjolnirArrivingDelay != 0.f;
     if (!a_justContinue && (isDelayed || (!isDelayed && !isDelayedConfig))) {
         isMjolnirCalled = true;
         isMjolnirArriving = false;
-        ObjectUtil::Sound::PlaySound(kratos->soundEffect.fingerSnap, WeaponIdentify::RHandBone, 5.f);
-        RE::NiPoint3 pos;
-        GetPosition(pos, a_actor);
-        arrivingMjolnir = ArrivingMjolnir(a_actor, WeaponIdentify::RHandBone, pos);
+        soundData.PlayCallingHandSounds(WeaponIdentify::RHandBone);
+    //    arrivingMjolnir = ArrivingMjolnir(a_actor, WeaponIdentify::RHandBone, pos);
 
         spdlog::debug("Mjolnir is calling...");
         if (isDelayed) callUpdate.RegisterForUpdate(*a_delay, true);
@@ -2597,7 +3058,14 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
 
         trailUpdate.Done();
         trailRemoveUpdate.Done();
+
+        if (data.model) {
+            data.transformPW = data.model->world;
+            data.transformPL = data.model->local;
+        }
         data.model.reset();
+
+        soundData.FadeThrowingLoopSounds(369);
 
         auto thrownMjolnir =  LastMjolnirProjectile;
         if (!thrownMjolnir)   thrownMjolnir = MjolnirProjectileT;
@@ -2625,12 +3093,7 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
             const auto MjolnirProjEff = SpellMjolnirProjA->effects[0];
             auto& MjolnirProjEffSetting = MjolnirProjEff->effectItem;
             MjolnirProjEffSetting.magnitude = mag * 0.25f;
-        //    if (const auto MjolnirProjBaseEff = MjolnirProjEff->baseEffect; MjolnirProjBaseEff) {
-        //        MjolnirProjBaseEff->data.projectileBase->SetModel(data.weap->GetModel());
-        //    } else spdlog::warn("not found Mjolnir throwing effect!");
 
-            RE::NiPoint3 startPoint = data.position;
-            GetPosition(startPoint, AnArchos);
             RE::NiPoint3  targetPoint = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
 
             RE::ProjectileHandle pHandle;
@@ -2651,11 +3114,13 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
             projectileUpdate.RegisterForUpdate(0.0f, false);
 
             if (a_justContinue) {
-                arrivingMjolnir.proj.reset(pHandle.get().get());
-                arrivingMjolnir.linearDistanceFromLastCallPos = startPoint.GetDistance(targetPoint);
+                arrivingMjolnir.Continue(pHandle.get().get(), startPoint);
+        //        arrivingMjolnir.proj.reset(pHandle.get().get());
+        //        arrivingMjolnir.linearDistanceFromLastCallPos = startPoint.GetDistance(targetPoint);
             //    arrivingMjolnir.timeToArrive = arrivingLevi.linearDistanceFromLastCallPos / arrivingLevi.speed;
             } else {
-                arrivingMjolnir = ArrivingMjolnir(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
+                arrivingMjolnir = ArrivingWeapon(arrivingMjolnir, pHandle.get().get(), startPoint);
+            //    arrivingMjolnir = ArrivingMjolnir(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
             }
 
             SetThrowState(ThrowState::kArriving);
@@ -2684,8 +3149,10 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         if (auto handEffect = kratos->VFXeffect.handShock; handEffect) 
             a_actor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
 
-        if (auto catchSound = kratos->soundEffect.catchMjolnir; catchSound) 
-            ObjectUtil::Sound::PlaySound(catchSound, WeaponIdentify::RHandBone, 2.f);
+        soundData.FadeArrivingNearSounds(469);
+    //    soundData.FadeArrivingLoopSounds(469);
+        soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
+        soundData.PlayCatchingSounds(WeaponIdentify::RHandBone);
 
         if (WeaponIdentify::Mjolnir) {
             WeaponIdentify::unequipWhenAnimEnds = false;
@@ -2693,7 +3160,8 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
             a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
             kratos->DoKratosAction(Kratos::Action::kWeaponCharge);
             ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::Mjolnir, WeaponIdentify::skipEquipAnim);//, 1U, true, false, false, true);
-            ResetEquipAnimationAfter(100, a_actor);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
+            RE::ShakeCamera(0.42f, data.position, 0.5f);
             if (WeaponIdentify::skipEquipAnim) WeaponIdentify::skipEquipAnim = false;
         } else spdlog::warn("you not have the Mjolnir");
 
@@ -2703,7 +3171,7 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         if (WeaponIdentify::AnimObjectRBone && WeaponIdentify::AnimObjectRBone->AsNode() && data.replacedProjectileModel && data.replacedProjectileModel->parent) {
             WeaponIdentify::AnimObjectRBone->AsNode()->AttachChild(data.replacedProjectileModel->parent);
             data.replacedProjectileModel->parent->local.translate = RE::NiPoint3();
-            data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(NI_HALF_PI, 0.f, NI_HALF_PI);
+            data.replacedProjectileModel->parent->local.rotate = data.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(PI2, 0.f, PI2);
         }
         trailUpdate.Done();
         data.model.reset();
@@ -2771,7 +3239,7 @@ void Mjolnir::FadeProjectileTrail(const float a_delta)
                 auto velocity = (data.replacedProjectileModel->world.translate - data.replacedProjectileModel->previousWorld.translate) / *g_deltaTime;
                 auto speed = velocity.Length();//rtData.linearVelocity.Length();
                 spdlog::debug("projectile trail fading... current speed: {}", speed);
-                if (speed != 0.f && speed < 269.f) {
+                if (speed != 0.f && speed < 669.f) {
                     DeleteProjectileTrail();
                     trailRemoveUpdate.Done();
                 }
@@ -2964,14 +3432,552 @@ void Mjolnir::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
         kratos->_soundHandle.Stop();
-        ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeMjolnir, WeaponIdentify::RHandBone, 5.f, &kratos->_soundHandle);
+        ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeMjolnir, kratos->_soundHandle, WeaponIdentify::RHandBone, 5.f);
         a_actor->ApplyArtObject(kratos->VFXeffect.handShock, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
     }
 }
+RE::NiTransform Mjolnir::GetWorldTransform()
+{
+    if (data.replacedProjectileModel) {
+        data.transformW = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(data.replacedProjectileModel.get());
+        return data.transformW;
+    } else return data.transformPW;
+    return {};
+}
+RE::NiTransform Mjolnir::GetLocalTransform()
+{
+    RE::NiTransform ret;
+    if (data.replacedProjectileModel) {
+        data.transformL = data.replacedProjectileModel->local;
+        ret = data.transformL;
+    } else ret = data.transformPL;
+    return ret;
+}
+#pragma region Arriving
+void Mjolnir::ArrivingWeapon::UpdateRotation()
+{
+    if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent && WeaponIdentify::WeaponBone) {
+        auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
+        auto& localRotation = replacedPMParent->local.rotate;
+        RE::NiMatrix3 targetLocalRotation;
+        if (replacedPMParent->parent) {
+            targetLocalRotation = replacedPMParent->parent->world.rotate.Transpose() * WeaponIdentify::WeaponBone->world.rotate;
+        } else {
+            targetLocalRotation = WeaponIdentify::WeaponBone->world.rotate;
+        }
+        const float angleZ = livingTime * rotationSpeed;
+        MathUtil::Angle::NormalAbsoluteAngle(angleZ);
+        arrivalSpin = (int)(std::floor(1 + (livingTime + remainingTimeToArrive) * rotationSpeed / TWO_PI)) * TWO_PI;
+        const float blendZ = std::lerp(angleZ, arrivalSpin, tReal);
+        const auto& startRotationC = startRotation;
+        auto desiredLocalRotation = MathUtil::Algebra::InterpolateRotation(startRotationC, targetLocalRotation, tReal);
+        desiredLocalRotation = desiredLocalRotation * RE::NiMatrix3(0.f, blendZ, 0.f);
+        constexpr float smoothTime = 0.0069f;
+        const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
+        MathUtil::Algebra::InterpolateRotation(localRotation, desiredLocalRotation, alpha);
+        spdlog::debug("target angle: {} calculated target angle: {} blended angle: {} tau: {}", angleZ, arrivalSpin, blendZ, tReal);
+    }
+//    mjolnirAngle = mjolnir->data.lastEulerAngles;
+//    mjolnirAngle.z = atan2(desiredDir.x, desiredDir.y);
+//    mjolnir->data.lastEulerAngles = mjolnirAngle;
+}
+void Mjolnir::ArrivingWeapon::UpdateAI(RE::NiPoint3& a_outVel)
+{
+    float height = position.z - caller->GetPosition().z;
+    if (!Config::DontDamageWhileArrive && tReal < 0.80f) {
+        if (auto aTarget = GetNextTarget(position); aTarget) {
+            auto targetPos = aTarget->GetPosition() + (aTarget->GetBoundMax() + aTarget->GetBoundMin()) * 0.75f;
+            auto targetDir = (targetPos - position);
+            targetDir.Unitize();
+            height = position.z - aTarget->GetPosition().z;
+            a_outVel = targetDir * speed;
+
+            if (parent->data.replacedProjectileModel) {
+                auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
+                auto& localRotation = replacedPMParent->local.rotate;
+                RE::NiMatrix3 targetLocalRotation;
+                MathUtil::Algebra::SetRotationMatrix(targetLocalRotation, -targetDir.x, targetDir.y, targetDir.z);
+                constexpr float smoothTime = 0.0069f;
+                const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
+                MathUtil::Algebra::InterpolateRotation(localRotation, targetLocalRotation, alpha);
+                auto& mjolnirAngle = parent->data.lastEulerAngles;
+                mjolnirAngle.x = asin(desiredDir.z);
+                mjolnirAngle.z = atan2(desiredDir.x, desiredDir.y);
+                if (mjolnirAngle.z < 0.0) {
+                    mjolnirAngle.z += PI;
+                }
+                if (desiredDir.x < 0.0) {
+                    mjolnirAngle.z += PI;
+                }
+            }
+        }
+    }
+}
+void Mjolnir::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
+{
+    if (caller && parent && callerBreastBone) {
+        if (parent->GetThrowState() == ThrowState::kThrowable || isCatchable) {
+
+        } else if (a_initial || linearDistance > 100.f) {
+            RE::NiPoint3  spineForwardDir = callerBreastBone->world.rotate * RE::NiPoint3(frontVec3);
+            spineForwardDir.z = 0.f;  //  ignore vertical direction
+            spineForwardDir.Unitize();
+
+            RE::NiPoint3 linearDir2D(linearArrivingDir.x, linearArrivingDir.y, 0.f);
+            linearDir2D.Unitize();
+
+            float dot = spineForwardDir.Dot(linearDir2D);
+            float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
+
+            arrivingRelativeAngleZ = atan2(det, dot);  //  angle between spine forward direction and arriving weapon direction
+            arrivingRelativeAngleZ = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, 2PI]
+
+            float snapStrength = arrivingRelativeAngleSnapStrength;
+            if (a_initial) snapStrength = 1.f;
+            else if ((arrivingRelativeAngleZ < PI4 || arrivingRelativeAngleZ > ONEANDHALF_PI) && snapStrength < 0.69f) snapStrength += 0.69f;
+            snapStrength = std::min(snapStrength, 1.f);
+            if (snapStrength > 0.f) {
+                arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);    //  for helping to the blender generator
+            }
+
+            if (!a_initial) {
+                float previousAngle; caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle); previousAngle *= TWO_PI;
+                const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
+                constexpr float smoothTime = 0.369f;
+                const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
+                float smoothedArrivingRelativeAngle = previousAngle;
+                smoothedArrivingRelativeAngle += delta * alpha;
+                arrivingRelativeAngleZ = smoothedArrivingRelativeAngle;
+                
+            }
+            arrivingRelativeAngleZ /= TWO_PI;
+        }
+        caller->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
+    }
+}
+void Mjolnir::ArrivingWeapon::UpdateArrivingRoute()
+{
+    RE::NiMatrix3 handRot   = callerHandBone->world.rotate;
+    const float alphaHandRot = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
+    RE::NiMatrix3 smoothedHandRot = 
+        MathUtil::Algebra::QuaternionToMatrix(MathUtil::Algebra::Slerp(
+            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->previousWorld.rotate),
+            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->world.rotate), alphaHandRot));
+    RE::NiPoint3 palmDir    = smoothedHandRot * RE::NiPoint3(backVec3);
+    RE::NiPoint3 handForward= smoothedHandRot * RE::NiPoint3(upVec3);
+    palmDir.Unitize();
+    handForward.Unitize();
+
+    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.25f);
+
+    RE::NiPoint3 handVelocity = (callerHandBone->world.translate - callerHandBone->previousWorld.translate) / *g_deltaTimeRealTime;
+    const float predictionTime = std::clamp(*g_deltaTimeRealTime, 0.0f, 0.1f);
+    RE::NiPoint3 predictedHandPos = handPosition + handVelocity * predictionTime;
+    bezierControlPoints[3] = predictedHandPos;
+    bezierControlPoints[2] = predictedHandPos + (float)IsInCallingAnimation() * (palmDir * (linearDistanceFromLastCallPos * 0.33f + 20.f) + handForward * (linearDistanceFromLastCallPos * handSideOffsetMult + 10.f));
+
+    RE::NiPoint3& p0 = bezierControlPoints[0];
+    RE::NiPoint3& p1 = bezierControlPoints[1];
+    RE::NiPoint3& p3 = bezierControlPoints[3];
+    RE::NiPoint3& p2 = bezierControlPoints[2];
+
+    arrivingRoute = MathUtil::Algebra::CalculateAndMeasureBezier(
+        p0, p1, p2, p3,
+        routeResolution);
+    float bestDist2 = FLT_MAX;
+
+    for (int i = 0; i < arrivingRoute.samples.size() - 1; i++) {
+        const float d2 = (arrivingRoute.samples[i].point - position).SqrLength();
+        if (d2 < bestDist2)
+        {
+            bestDist2 = d2;
+            arrivingRouteClosestIndex = i;
+        }
+    }
+
+    closestSample = arrivingRoute.samples[arrivingRouteClosestIndex];
+    const float t = closestSample.t;
+
+    const float lookAheadDistance = std::clamp(std::abs(speed) * 0.15f, 50.f, 200.f);
+    const float targetDistance = closestSample.distanceFromStart + lookAheadDistance;
+
+    int targetIndex = arrivingRouteClosestIndex;
+    while (targetIndex + 1 <
+        static_cast<int>(arrivingRoute.samples.size()) &&
+        arrivingRoute.samples[targetIndex].distanceFromStart < targetDistance)
+    {
+        targetIndex++;
+    }
+
+    bezierDir = arrivingRoute.samples[targetIndex].point - position;
+    bezierDir.Unitize();
+}
+void Mjolnir::ArrivingWeapon::Update(const float a_delta)
+{
+    if (!parent) return;
+
+    model = parent->data.model;
+    if (!model) return;
+
+    if (!callerHandBone) return;
+    handPosition = callerHandBone->world.translate;
+
+    if (!proj) return;
+    auto& rtData = proj->GetProjectileRuntimeData();
+    auto& vel = rtData.linearVelocity;
+
+    currentDir = vel;
+    currentDir.Unitize();
+
+    position = proj->data.location;
+
+    linearDistance = handPosition.GetDistance(position);
+    linearArrivingDir = handPosition - position;
+    linearArrivingDir.Unitize();
+
+    isCatchable = (linearDistance <= Config::CatchingTreshold) || (linearDistance <= (*g_deltaTime * vel.Length()));
+
+    if (parent->MjolnirProjectileA != proj.get()) {  //  first frame of the arriving projectile
+        parent->MjolnirProjectileA = proj.get();
+
+        if (!isCatchable) {
+            parent->soundData.PlayArrivingStartSounds(model.get());
+            parent->soundData.PlayArrivingLoopSounds(model.get());
+        }
+    }
+    if (isCatchable) {
+        if (parent->GetThrowState() == ThrowState::kArriving) parent->SetThrowState(ThrowState::kArrived);
+        parent->Catch();
+        spdlog::debug("mjolnir proj catched");
+    }
+    if (false && startRotation == RE::NiMatrix3()) {
+        if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent) {
+            model.get()->world = parent->data.transformPW;
+            model.get()->local = parent->data.transformPL;
+            auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
+            auto parentWorldInverse = replacedPMParent->world.Invert();
+            auto previousWorld = parent->data.transformW;
+            auto& localRotation = replacedPMParent->local.rotate;
+            auto& localPosition = replacedPMParent->local.translate;
+            if (replacedPMParent->parent) {
+                localRotation = parentWorldInverse.rotate * previousWorld.rotate;
+            //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
+            } else {
+                localRotation = previousWorld.rotate;
+            //    localPosition = previousWorld.translate;
+            }
+            startRotation = localRotation;
+            spdlog::debug("start rotation initiated");
+        }
+    }
+
+    livingTime = GetLivingTime();
+    UpdateArrivingRoute();
+
+    const float minArrivalTime = *g_deltaTime * 2.f;
+    float remainingRouteLength = arrivingRoute.arcLength - closestSample.distanceFromStart;
+    remainingRouteLength = std::max(remainingRouteLength, linearDistance);
+    remainingTimeToArrive = std::max(timeToArrive - livingTime, minArrivalTime);
+    const float requiredAverageSpeed = remainingRouteLength / remainingTimeToArrive;
+
+    if (requiredAverageSpeed < Config::MinArrivalSpeed)
+        remainingTimeToArrive = std::max(remainingRouteLength / Config::MinArrivalSpeed, minArrivalTime);
+    else if (requiredAverageSpeed > Config::MaxArrivalSpeed)
+        remainingTimeToArrive = std::max(remainingRouteLength / Config::MaxArrivalSpeed, minArrivalTime);
+
+    const float desiredAcceleration = 2.f * (remainingRouteLength - speed * remainingTimeToArrive) / (remainingTimeToArrive * remainingTimeToArrive);
+    speed += desiredAcceleration * *g_deltaTimeRealTime;
+    speed = std::max(speed, Config::MinArrivalSpeed);
+
+    remainingTimeToArrive = remainingRouteLength / speed;
+    constexpr float nearArriveTimeThreshold = 0.369f;
+    isNear = remainingTimeToArrive < (nearArriveTimeThreshold < timeToArrive ? nearArriveTimeThreshold : timeToArrive * 0.8f);
+    constexpr float almostArrivedTimeThreshold = 0.169f;
+    isAlmostArrived = remainingTimeToArrive < (almostArrivedTimeThreshold < timeToArrive ? almostArrivedTimeThreshold : timeToArrive * 0.5f);
+    if (isAlmostArrived || isCatchable) {
+        uint16_t fadeDuration = (uint16_t)(almostArrivedTimeThreshold * 1000.f) + 200u;
+        parent->soundData.FadeArrivingStartSounds(fadeDuration);
+        parent->soundData.FadeArrivingLoopSounds(fadeDuration);
+        parent->soundData.FadeCallingHandSounds(fadeDuration);
+    } else if (isNear) {
+        parent->soundData.PlayArrivingNearSounds(model.get());
+    }
+//    spdlog::debug(
+//        "AFTER ACCEL speed={:.1f}, accel={:.1f}, L={:.1f}, T={:.3f}",
+//        speed,
+//        desiredAcceleration,
+//        remainingRouteLength,
+//        remainingTimeToArrive);
+//    spdlog::debug(
+//        "closest={} target={} closestT={:.3f} targetT={:.3f} "
+//        "closestL={:.1f} targetL={:.1f} routeL={:.1f}",
+//        arrivingRouteClosestIndex,
+//        targetIndex,
+//        closestSample.t,
+//        arrivingRoute.samples[targetIndex].t,
+//        closestSample.distanceFromStart,
+//        arrivingRoute.samples[targetIndex].distanceFromStart,
+//        arrivingRoute.arcLength
+//    );
+
+//    tReal = 1.f - remainingTimeToArrive / almostArrivedTimeThreshold;//timeToArrive;
+    tReal = timeToArrive / (timeToArrive + 2.f * (remainingTimeToArrive - 0.05f));
+    tReal = std::pow(tReal, 2.f);
+    tReal = std::clamp(tReal, 0.f, 1.f);
+//    tReal = tReal * tReal * (3.f - 2.f * tReal);
+
+    const float smoothTime = std::clamp(1.f - tReal, 0.01f, 0.169f);
+    const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
+    smoothedDesiredVelocity += (bezierDir * speed - smoothedDesiredVelocity) * alpha;
+    desiredDir = smoothedDesiredVelocity;
+    desiredDir.Unitize();
+    const bool doBlend = 
+        parent->data.projState == ProjectileState::kNone ||
+        parent->data.projState == ProjectileState::kLaunched;
+    vel = MathUtil::Angle::BlendVectors(doBlend ? parent->data.lastVelocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
+    if (vel.z < 0.f) {
+        constexpr float minHeight = -40.f;
+        constexpr float dampingRange = 69.f;
+        const float height = position.z - handPosition.z;
+        const float dampFactor = std::clamp((height - minHeight) / dampingRange, 0.f, 1.f);
+        vel.z *= dampFactor;
+    }
+
+    UpdateRotation();
+    UpdateAI(vel);
+    UpdateArrivingDirection();
+}
+#pragma endregion
+#pragma region Sounds
+void Mjolnir::SoundData::StopAllSounds()
+{
+    if (CallStartSH.IsPlaying()) CallStartSH.Stop();
+    if (ArrivingStartSH.IsPlaying()) ArrivingStartSH.Stop();
+    if (ArrivingLoop0SH.IsPlaying()) ArrivingLoop0SH.Stop();
+    if (ArrivingLoop1SH.IsPlaying()) ArrivingLoop1SH.Stop();
+    if (ArrivingLoop2SH.IsPlaying()) ArrivingLoop2SH.Stop();
+    if (ArrivingNearSH.IsPlaying()) ArrivingNearSH.Stop();
+    if (ThrowingStartSH.IsPlaying()) ThrowingStartSH.Stop();
+    if (ThrowingLoop0SH.IsPlaying()) ThrowingLoop0SH.Stop();
+    if (ThrowingLoop1SH.IsPlaying()) ThrowingLoop1SH.Stop();
+    if (CatchSH.IsPlaying()) CatchSH.Stop();
+}
+void Mjolnir::SoundData::PauseAllSounds()
+{
+//    if (CallStartSH.IsPlaying() && GetState(SoundName::kCallStart) == State::kTriggered) {CallStartSH.Pause(); soundState[SoundName::kCallStart] = State::kPaused;}
+//    if (ArrivingStartSH.IsPlaying() && GetState(SoundName::kArrivingStart) == State::kTriggered) {ArrivingStartSH.Pause(); soundState[SoundName::kArrivingStart] = State::kPaused;}
+    if (ArrivingLoop0SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop1SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop2SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingNearSH.IsPlaying() && GetState(SoundName::kArrivingNear) == State::kTriggered) {ArrivingNearSH.Pause(); soundState[SoundName::kArrivingNear] = State::kPaused;}
+//    if (ThrowingStartSH.IsPlaying() && GetState(SoundName::kThrowingStart) == State::kTriggered) {ThrowingStartSH.Pause(); soundState[SoundName::kThrowingStart] = State::kPaused;}
+    if (ThrowingLoop0SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+    else if (ThrowingLoop1SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+//    if (CatchSH.IsPlaying() && GetState(SoundName::kCatch) == State::kTriggered) {CatchSH.Pause(); soundState[SoundName::kCatch] = State::kPaused;}
+
+//    if (CallStartSH.IsPlaying() && GetState(SoundName::kCallStart) == State::kTriggered) {CallStartSH.Pause(); soundState[SoundName::kCallStart] = State::kPaused;}
+//    if (ArrivingStartSH.IsPlaying() && GetState(SoundName::kArrivingStart) == State::kTriggered) {ArrivingStartSH.Pause(); soundState[SoundName::kArrivingStart] = State::kPaused;}
+//    if (ArrivingLoop0SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {ArrivingLoop0SH.Pause(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingLoop1SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {ArrivingLoop1SH.Pause(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingLoop2SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {ArrivingLoop2SH.Pause(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+//    if (ArrivingNearSH.IsPlaying() && GetState(SoundName::kArrivingNear) == State::kTriggered) {ArrivingNearSH.Pause(); soundState[SoundName::kArrivingNear] = State::kPaused;}
+//    if (ThrowingStartSH.IsPlaying() && GetState(SoundName::kThrowingStart) == State::kTriggered) {ThrowingStartSH.Pause(); soundState[SoundName::kThrowingStart] = State::kPaused;}
+//    if (ThrowingLoop0SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {ThrowingLoop0SH.Pause(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+//    if (ThrowingLoop1SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {ThrowingLoop1SH.Pause(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+//    if (CatchSH.IsPlaying() && GetState(SoundName::kCatch) == State::kTriggered) {CatchSH.Pause(); soundState[SoundName::kCatch] = State::kPaused;}
+}
+void Mjolnir::SoundData::ContinueAllSounds()
+{
+    if (GetState(SoundName::kCallStart) == State::kPaused) {CallStartSH.Play(); soundState[SoundName::kCallStart] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingStart) == State::kPaused) {ArrivingStartSH.Play(); soundState[SoundName::kArrivingStart] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {ArrivingLoop0SH.Play(); soundState[SoundName::kArrivingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {ArrivingLoop1SH.Play(); soundState[SoundName::kArrivingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {ArrivingLoop2SH.Play(); soundState[SoundName::kArrivingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kArrivingNear) == State::kPaused) {ArrivingNearSH.Play(); soundState[SoundName::kArrivingNear] = State::kPlaying;}
+    if (GetState(SoundName::kThrowingStart) == State::kPaused) {ThrowingStartSH.Play(); soundState[SoundName::kThrowingStart] = State::kPlaying;}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused) {ThrowingLoop0SH.Play(); soundState[SoundName::kThrowingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused) {ThrowingLoop1SH.Play(); soundState[SoundName::kThrowingLoop] = State::kPlaying;}
+    if (GetState(SoundName::kCatch) == State::kPaused) {CatchSH.Play(); soundState[SoundName::kCatch] = State::kPlaying;}
+}
+void Mjolnir::SoundData::PauseAllLoopingSounds()
+{
+    if (ArrivingLoop0SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop1SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    else if (ArrivingLoop2SH.IsPlaying() && GetState(SoundName::kArrivingLoop) == State::kTriggered) {StopArrivingLoopSounds(); soundState[SoundName::kArrivingLoop] = State::kPaused;}
+    if (ThrowingLoop0SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+    else if (ThrowingLoop1SH.IsPlaying() && GetState(SoundName::kThrowingLoop) == State::kTriggered) {StopThrowingLoopSounds(); soundState[SoundName::kThrowingLoop] = State::kPaused;}
+}
+void Mjolnir::SoundData::ContinueAllLoopingSounds()
+{
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused) {PlayArrivingLoopSounds(weaponData->model.get());}// soundState[SoundName::kArrivingLoop] = State::kPlaying; spdlog::debug("ArrivingLoop sounds continuing...");}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused) {PlayThrowingLoopSounds(weaponData->model.get());}// soundState[SoundName::kThrowingLoop] = State::kPlaying; spdlog::debug("ThrowingLoop sounds continuing...");}
+}
+void Mjolnir::SoundData::FadeAllSounds(const uint16_t a_durationMS)
+{
+    if (CallStartSH.IsPlaying()) CallStartSH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingStartSH.IsPlaying()) ArrivingStartSH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop0SH.IsPlaying()) ArrivingLoop0SH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop1SH.IsPlaying()) ArrivingLoop1SH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingLoop2SH.IsPlaying()) ArrivingLoop2SH.FadeOutAndRelease(a_durationMS);
+    if (ArrivingNearSH.IsPlaying()) ArrivingNearSH.FadeOutAndRelease(a_durationMS);
+    if (CatchSH.IsPlaying()) CatchSH.FadeOutAndRelease(a_durationMS);
+}
+void Mjolnir::SoundData::PlayCallingHandSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.fingerSnap; soundEffect)
+        ObjectUtil::Sound::PlaySound(soundEffect, CallStartSH, a_source, 5.f);
+}
+void Mjolnir::SoundData::PlayArrivingStartSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviStart; soundEffect && IsSoundValid(SoundName::kArrivingStart)) {
+        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingStartSH, a_source, 5.f);
+        soundState[SoundName::kArrivingStart] = State::kTriggered;
+    } else {
+        if (ArrivingStartSH.IsPlaying())
+            ArrivingStartSH.SetObjectToFollow(a_source);
+    }
+}
+void Mjolnir::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
+{
+    if (IsSoundValid(SoundName::kArrivingLoop)) {
+        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 5.f);
+            soundState[SoundName::kArrivingLoop] = State::kTriggered;
+        }
+        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 2.f);
+            soundState[SoundName::kArrivingLoop] = State::kTriggered;
+        }
+        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
+            soundState[SoundName::kArrivingLoop] = State::kTriggered;
+        }
+    } else {
+        spdlog::debug("updating the following node of the arriving loop sounds.");
+        if (ArrivingLoop0SH.IsPlaying()) {
+            ArrivingLoop0SH.SetObjectToFollow(a_source);
+            ArrivingLoop0SH.Play();
+        } if (ArrivingLoop1SH.IsPlaying()) {
+            ArrivingLoop1SH.SetObjectToFollow(a_source);
+            ArrivingLoop1SH.Play();
+        } if (ArrivingLoop2SH.IsPlaying()) {
+            ArrivingLoop2SH.SetObjectToFollow(a_source);
+            ArrivingLoop2SH.Play();
+        }
+    }
+}
+void Mjolnir::SoundData::PlayArrivingNearSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.arrivingLeviNear; soundEffect && IsSoundValid(SoundName::kArrivingNear) ) {
+        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingNearSH, a_source, 5.f);
+        soundState[SoundName::kArrivingNear] = State::kTriggered;
+    } else {
+        if (ArrivingNearSH.IsPlaying())
+            ArrivingNearSH.SetObjectToFollow(a_source);
+    }
+}
+void Mjolnir::SoundData::PlayCatchingSounds(RE::NiAVObject* a_source)
+{
+    if (auto soundEffect = kratos->soundEffect.catchLevi; soundEffect)
+        ObjectUtil::Sound::PlaySound(soundEffect, CatchSH, a_source, 5.f);
+}
+void Mjolnir::SoundData::PlayThrowingSounds(RE::NiAVObject* a_source)
+{
+//    if (auto soundEffect = kratos->soundEffect.throwingLeviNear; soundEffect)
+//        ThrowingStartSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
+}
+void Mjolnir::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
+{
+    if (IsSoundValid(SoundName::kThrowingLoop)) {
+        if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 5.f);
+            soundState[SoundName::kThrowingLoop] = State::kTriggered;
+        }
+        if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
+            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
+            soundState[SoundName::kThrowingLoop] = State::kTriggered;
+        }
+    } else {
+        spdlog::debug("updating the following node of the throwing loop sounds.");
+        if (ThrowingLoop0SH.IsPlaying()) {
+            ThrowingLoop0SH.SetObjectToFollow(a_source);
+            ThrowingLoop0SH.Play();
+        } if (ThrowingLoop1SH.IsPlaying()) {
+            ThrowingLoop1SH.SetObjectToFollow(a_source);
+            ThrowingLoop1SH.Play();
+        }
+    }
+}
+void Mjolnir::SoundData::FadeCallingHandSounds(const uint16_t a_durationMS)
+{
+    if (CallStartSH.IsPlaying()) CallStartSH.FadeOutAndRelease(a_durationMS);
+}
+void Mjolnir::SoundData::FadeArrivingStartSounds(const uint16_t a_durationMS)
+{
+    
+    soundState[SoundName::kArrivingStart] = State::kFading;
+    if (ArrivingStartSH.IsPlaying()) ArrivingStartSH.FadeOutAndRelease(a_durationMS);
+    else soundState[SoundName::kArrivingStart] = State::kStopped;
+}
+void Mjolnir::SoundData::FadeArrivingLoopSounds(const uint16_t a_durationMS)
+{
+    soundState[SoundName::kArrivingLoop] = State::kFading;
+    if (ArrivingLoop0SH.IsPlaying()) ArrivingLoop0SH.FadeOutAndRelease(a_durationMS);
+    else {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+    if (ArrivingLoop1SH.IsPlaying()) ArrivingLoop1SH.FadeOutAndRelease(a_durationMS);
+    else {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+    if (ArrivingLoop2SH.IsPlaying()) ArrivingLoop2SH.FadeOutAndRelease(a_durationMS);
+    else {StopArrivingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+
+    StopArrivingLoopSounds(a_durationMS);
+}
+void Mjolnir::SoundData::FadeArrivingNearSounds(const uint16_t a_durationMS)
+{
+    soundState[SoundName::kArrivingNear] = State::kFading;
+    if (ArrivingNearSH.IsPlaying()) ArrivingNearSH.FadeOutAndRelease(a_durationMS);
+    else soundState[SoundName::kArrivingNear] = State::kStopped;
+}
+void Mjolnir::SoundData::FadeThrowingLoopSounds(const uint16_t a_durationMS)
+{
+    soundState[SoundName::kThrowingLoop] = State::kFading;
+    if (ThrowingLoop0SH.IsPlaying()) ThrowingLoop0SH.FadeOutAndRelease(a_durationMS);
+    else {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+    if (ThrowingLoop1SH.IsPlaying()) ThrowingLoop1SH.FadeOutAndRelease(a_durationMS);
+    else {StopThrowingLoopSounds(*g_deltaTimeRealTime * 2000.f); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+
+    StopThrowingLoopSounds(a_durationMS);
+}
+void Mjolnir::SoundData::StopArrivingLoopSounds(const uint16_t a_delayMS)
+{
+    if (a_delayMS == 0) {
+        if (ArrivingLoop0SH.IsPlaying()) {ArrivingLoop0SH.Stop(); spdlog::debug("arriving loop sound 1 stopped.");}
+        else {spdlog::debug("arriving loop sound 1 is already stopped."); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+        if (ArrivingLoop1SH.IsPlaying()) {ArrivingLoop1SH.Stop(); spdlog::debug("arriving loop sound 2 stopped.");}
+        else {spdlog::debug("arriving loop sound 2 is already stopped."); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+        if (ArrivingLoop2SH.IsPlaying()) {ArrivingLoop2SH.Stop(); spdlog::debug("arriving loop sound 3 stopped.");}
+        else {spdlog::debug("arriving loop sound 3 is already stopped."); soundState[SoundName::kArrivingLoop] = State::kStopped;}
+        soundState[SoundName::kArrivingLoop] = State::kStopped;
+    } else {
+        arrivingLoopStopUpdate.RegisterForUpdate(((float)a_delayMS) / 1000.f);
+    }
+}
+void Mjolnir::SoundData::StopThrowingLoopSounds(const uint16_t a_delayMS)
+{
+    if (a_delayMS == 0) {
+        if (ThrowingLoop0SH.IsPlaying()) ThrowingLoop0SH.Stop();
+        else {spdlog::debug("throwing loop sound is already stopped."); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+        if (ThrowingLoop1SH.IsPlaying()) ThrowingLoop1SH.Stop();
+        else {spdlog::debug("throwing loop sound is already stopped."); soundState[SoundName::kThrowingLoop] = State::kStopped;}
+        soundState[SoundName::kThrowingLoop] = State::kStopped;
+    } else {
+        throwingLoopStopUpdate.RegisterForUpdate(((float)a_delayMS) / 1000.f);
+    }
+}
+#pragma endregion
 #pragma endregion
 #ifdef TRIDENT
-#pragma region Trident
+#pragma region TRIDENT
 bool Trident::Initialize()
 {
     bool found = true;
@@ -3050,7 +4056,8 @@ void Trident::Throw(const bool justContinue, RE::Actor* a_actor)
         WeaponIdentify::EquippedObjR = nullptr;
         WeaponIdentify::lastThrownRelic = Kratos::Relic::kTrident;
             spdlog::info("Trident throwed, raw damage is: {}", mag);
-        //  reset the last throw's traces
+
+        data.throwingChargeDuration = 0.f;
         data.lastHitActors.clear();
         data.lastHitForms.clear();
     } else  spdlog::info("Trident is not equipped for throwing");
@@ -3110,7 +4117,7 @@ void Trident::Call(const float a_damage, const float a_force, RE::Actor* a_actor
 {
     if (WeaponIdentify::Trident && !WeaponIdentify::isTrident) {
         ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::Trident, true, 1U, true, false, false, false, nullptr, a_justEquip);
-        ResetEquipAnimationAfter(100, a_actor);
+        ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
         if (WeaponIdentify::skipEquipAnim) WeaponIdentify::skipEquipAnim = false;
     }
 
@@ -3174,659 +4181,3 @@ inline void Trident::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::Projecti
 }
 #pragma endregion
 #endif
-#pragma region AnimationEvents
-bool AnimationEventTracker::Register()
-{
-    const auto pc = PlayerCharacter::GetSingleton();
-
-    bool bSinked = false;
-    bool bSuccess = pc->AddAnimationGraphEventSink(AnimationEventTracker::GetSingleton());
-    if (bSuccess) {
-        spdlog::info("Registered {}", typeid(BSAnimationGraphEvent).name());
-    } else {
-        BSAnimationGraphManagerPtr graphManager;
-        pc->GetAnimationGraphManager(graphManager);
-        if (graphManager) {         
-            for (auto& animationGraph : graphManager->graphs) {
-                if (bSinked) {
-                    break;
-                }
-                auto eventSource = animationGraph->GetEventSource<BSAnimationGraphEvent>();
-                for (auto& sink : eventSource->sinks) {
-                    if (sink == AnimationEventTracker::GetSingleton()) {
-                        bSinked = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!bSinked) {
-            spdlog::info("Failed to register {}", typeid(BSAnimationGraphEvent).name());
-        }
-    }
-    return bSuccess || bSinked;
-}
-EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_event, BSTEventSource<BSAnimationGraphEvent>* a_eventSource)
-{
-    if (a_event) {
-        std::string eventTag = a_event->tag.data();
-        switch (hash(eventTag.data(), eventTag.size())) {
-        // Start phase
-        case "SkipNextEquipAnimation"_h:
-            WeaponIdentify::skipEquipAnim = true;
-            break;
-//        case "BeginWeaponDraw"_h:
-//            if (WeaponIdentify::isLeviathanAxe && Kratos::GetSingleton()->IsCanCallAxe()) {
-//                if ((uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() > 1U && (uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() < 5U) LeviathanAxe::GetSingleton()->Call();
-//            }
-//            else if (WeaponIdentify::isMjolnir && Kratos::GetSingleton()->IsCanCallMjolnir()) {
-//                if ((uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() > 1U && (uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() < 5U) Mjolnir::GetSingleton()->Call();
-//            }
-//            break;
-        case "CallWeapon"_h:
-            if (auto kratos = Kratos::GetSingleton(); kratos) {
-                switch (kratos->GetNextWeaponToCall())
-                {
-                case Kratos::Relic::kLeviathanAxe:
-                    LeviathanAxe::GetSingleton()->Call();
-                    break;
-                case Kratos::Relic::kMjolnir:
-                    Mjolnir::GetSingleton()->Call(false, false, Config::MjolnirArrivingDelay);
-                    break;
-#ifdef TRIDENT
-                case Kratos::Relic::kTrident:
-                    Trident::GetSingleton()->Call(10.f, 100.f, RE::PlayerCharacter::GetSingleton(), true);
-                    break;
-#endif
-                default:
-                    spdlog::warn("Can't found any weapon for ready to calling! Trying to call Levi");
-                    LeviathanAxe::GetSingleton()->Call();
-                    break;
-                }
-            }
-/*
-            if (WeaponIdentify::lastThrownRelic == Kratos::Relic::kLeviathanAxe) {
-                if ((uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::Mjolnir && (uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() > 1U) Mjolnir::GetSingleton()->Call();
-#ifdef TRIDENT
-                else if ((uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::Trident && !Trident::GetSingleton()->isTridentThrowable) Trident::GetSingleton()->Call(10.f, 100.f, RE::PlayerCharacter::GetSingleton(), true);
-#endif
-                else LeviathanAxe::GetSingleton()->Call();
-            }
-            else if (WeaponIdentify::lastThrownRelic == Kratos::Relic::kMjolnir) {
-                if ((uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::LeviathanAxe && (uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() > 1U) LeviathanAxe::GetSingleton()->Call();
-#ifdef TRIDENT
-                else if ((uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() == 1U && WeaponIdentify::Trident && !Trident::GetSingleton()->isTridentThrowable) Trident::GetSingleton()->Call(10.f, 100.f, RE::PlayerCharacter::GetSingleton(), true);
-#endif
-                else Mjolnir::GetSingleton()->Call();
-            }
-#ifdef TRIDENT
-            else if (WeaponIdentify::lastThrownRelic == Kratos::Relic::kTrident) {
-                if (Trident::GetSingleton()->isTridentThrowable && WeaponIdentify::LeviathanAxe && (uint_fast8_t)LeviathanAxe::GetSingleton()->GetThrowState() > 1U) LeviathanAxe::GetSingleton()->Call();
-                else if (Trident::GetSingleton()->isTridentThrowable && WeaponIdentify::Mjolnir && (uint_fast8_t)Mjolnir::GetSingleton()->GetThrowState() > 1U) Mjolnir::GetSingleton()->Call();
-                else Trident::GetSingleton()->Call(10.f, 100.f, RE::PlayerCharacter::GetSingleton(), true);
-            }
-#endif
-            else {spdlog::warn("Can't found any weapon for ready to calling! Trying to call Levi"); LeviathanAxe::GetSingleton()->Call();}
-*/            break;
-        case "CatchLevi"_h:
-            break;
-    //    case "LeviCallAttack"_h:     //event: attackPowerStartInPlace, attackStart, PowerAttack [IDLE:000E8456], NormalAttack [IDLE:00013215]
-    //        if (auto Levi = LeviathanAxe::GetSingleton(); !WeaponIdentify::isLeviathanAxe && WeaponIdentify::LeviathanAxe) {
-    //            Levi->Call(true);
-    //            auto AnArchos = PlayerCharacter::GetSingleton();
-    //            ObjectUtil::Actor::EquipItem(AnArchos, WeaponIdentify::LeviathanAxe, true, 1u, true, false, false, false);
-    //            ResetEquipAnimationAfter(100, AnArchos);
-    //        } else spdlog::info("Levi is not callable");
-        case "ThrowAttackStart"_h:
-            if (WeaponIdentify::isLeviathanAxe) {
-                if (auto Levi = LeviathanAxe::GetSingleton()) {
-                    Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag);
-                }
-            }
-            else if (WeaponIdentify::isMjolnir) {
-                if (auto mjolnir = Mjolnir::GetSingleton()) {
-                    mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag);
-                }
-            }
-        //    if (WeaponIdentify::isLeviathanAxe)
-        //        Kratos::GetSingleton()->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false);
-        //    if (WeaponIdentify::isMjolnir)
-        //        Kratos::GetSingleton()->SetIsCanCharge(RE::PlayerCharacter::GetSingleton(), false, Kratos::Relic::kMjolnir);
-            break;
-        case "ThrowWeapon"_h:
-            if (WeaponIdentify::isLeviathanAxe) {
-                if (auto Levi = LeviathanAxe::GetSingleton(); Levi->GetThrowState() == tState::kThrowable) {
-                    Levi->Throw(false);
-                } else spdlog::warn("Levi is not throwable");
-            }
-            if (WeaponIdentify::isMjolnir) {
-                if (auto mjolnir = Mjolnir::GetSingleton(); mjolnir->GetThrowState() == tStateM::kThrowable) {
-                    mjolnir->Throw(false);
-                } else spdlog::warn("Mjolnir is not throwable");
-            }
-            if (WeaponIdentify::isDraupnirSpear) Draupnir::Throw();
-            break;
-        case "ThrowWeaponV"_h:
-            if (auto Levi = LeviathanAxe::GetSingleton(); Levi && Levi->GetThrowState() == tState::kThrowable) {
-                Levi->Throw(true);
-            }
-            else spdlog::warn("Levi is not throwable");
-            break;
-        case "ThrowWeaponH"_h:
-            if (WeaponIdentify::isLeviathanAxe) {
-                if (auto Levi = LeviathanAxe::GetSingleton(); Levi->GetThrowState() == tState::kThrowable) {
-                    Levi->Throw(false, false, true);
-                } else spdlog::warn("Levi is not throwable");
-            }
-            if (WeaponIdentify::isMjolnir) {
-                if (auto mjolnir = Mjolnir::GetSingleton(); mjolnir->GetThrowState() == tStateM::kThrowable) {
-                    mjolnir->Throw(false, false, true);
-                } else spdlog::warn("Mjolnir is not throwable");
-            }
-            if (WeaponIdentify::isDraupnirSpear) Draupnir::Throw();
-#ifdef TRIDENT
-            else if(WeaponIdentify::isTrident) Trident::GetSingleton()->Throw();
-#endif
-            break;
-        case "LeviChargeStart"_h:
-            if (auto kratos = Kratos::GetSingleton(); auto AnArchos = RE::PlayerCharacter::GetSingleton()) {
-                if (kratos && AnArchos) {
-                    if (auto handEffect = kratos->VFXeffect.handFrost; handEffect)
-                        AnArchos->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone, false);
-                    if (auto soundEffect = kratos->soundEffect.chargeLevi; soundEffect)
-                        ObjectUtil::Sound::PlaySound(soundEffect, WeaponIdentify::RHandBone, 5.f);
-                }
-            }
-            break;
-        case "LeviChargeEnd"_h:
-            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsCanCharge(PlayerCharacter::GetSingleton()))
-                if (auto levi = LeviathanAxe::GetSingleton())
-                    levi->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, -1);
-            break;
-        case "MjolnirChargeStart"_h:
-            if (auto kratos = Kratos::GetSingleton(); auto AnArchos = RE::PlayerCharacter::GetSingleton()) {
-                if (kratos && AnArchos) {
-                    if (auto handEffect = kratos->VFXeffect.handShock; handEffect)
-                        AnArchos->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone, false);
-                    if (auto soundEffect = kratos->soundEffect.chargeLevi; soundEffect)
-                        ObjectUtil::Sound::PlaySound(soundEffect, WeaponIdentify::RHandBone, 5.f);
-                }
-            }
-            break;
-        case "MjolnirCharge1"_h:
-            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsCanCharge(PlayerCharacter::GetSingleton(), Kratos::Relic::kMjolnir))
-                if (auto mjolnir = Mjolnir::GetSingleton())
-                    mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 1u, -1);
-            break;
-        case "MjolnirCharge2"_h:
-            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsCanCharge(PlayerCharacter::GetSingleton(), Kratos::Relic::kMjolnir))
-                if (auto mjolnir = Mjolnir::GetSingleton())
-                    mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 2u, -1);
-            break;
-        case "MjolnirCharge3"_h:
-            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsCanCharge(PlayerCharacter::GetSingleton(), Kratos::Relic::kMjolnir))
-                if (auto mjolnir = Mjolnir::GetSingleton())
-                    mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 3u, -1);
-            break;
-    //    case "MjolnirChargeEnd"_h:
-    //        if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsCanCharge(PlayerCharacter::GetSingleton(), Kratos::Relic::kMjolnir))
-    //            if (auto mjolnir = Mjolnir::GetSingleton())
-    //                mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 3u, -1);
-    //        break;
-        case "ThrowSpear"_h:
-            if (WeaponIdentify::isDraupnirSpear) Draupnir::Throw();
-#ifdef TRIDENT
-            else if(WeaponIdentify::isTrident) Trident::GetSingleton()->Throw();
-#endif
-            break;
-        case "DraupnirsCallStage1"_h:
-            if (WeaponIdentify::isDraupnirSpear) Draupnir::SetExplosionMagnitude(1.2f);
-            break;
-        case "DraupnirsCallStage2"_h:
-            if (WeaponIdentify::isDraupnirSpear) Draupnir::SetExplosionMagnitude(1.5f);
-            break;
-        case "DraupnirsCall"_h:
-            if (WeaponIdentify::isDraupnirSpear) Draupnir::Call(10.f, 100.f);
-#ifdef TRIDENT
-            else if (WeaponIdentify::isTrident || !Trident::GetSingleton()->isTridentThrowable) Trident::GetSingleton()->Call(10, 100);
-#endif
-            break;
-        //  rage
-        case "RageFuryTriggerStart"_h:
-            Kratos::GetSingleton()->StartRage(Kratos::Rage::kFury);
-            break;
-        case "RageFuryTriggerEnd"_h:
-    //        if (auto kratos = Kratos::GetSingleton(); kratos->IsInRage())
-    //            kratos->SetIsCanRage(false);
-            break;
-        case "RageValorStart"_h:
-            Kratos::GetSingleton()->StartRage(Kratos::Rage::kValor);
-            break;
-        case "RageValorEnd"_h:
-            Kratos::GetSingleton()->EndRage(Kratos::Rage::kValor, true);
-            break;
-        case "RageFinish"_h:
-            Kratos::GetSingleton()->EndRage(Kratos::GetSingleton()->GetLastTriggeredRageType(), true, false);
-    //        Kratos::GetSingleton()->SetIsCanRage();
-            break;
-        case "weaponDraw"_h:
-        //    WeaponIdentify::WeaponCheck();
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-                BoC->HideChains();
-            }
-            break;
-        case "weaponSwing"_h:
-            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsInRage())
-                kratos->RestoreRage(RE::PlayerCharacter::GetSingleton(), kratos->CalcRageDamageOrBuffAmount(360.f));
-            break;
-    //    case "CastOKStart"_h:
-        case "MCO_AttackInitiate"_h:
-        case "MCO_PowerAttackInitiate"_h:
-        case "MCO_SprintAttackInitiate"_h:
-        case "MCO_SprintPowerAttackInitiate"_h:
-        case "Bfco_AttackStartFX"_h:
-            if (WeaponIdentify::isLeviathanAxe) {
-                if (auto Levi = LeviathanAxe::GetSingleton()) {
-                    Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag);
-                }
-            }
-            else if (WeaponIdentify::isMjolnir) {
-                if (auto mjolnir = Mjolnir::GetSingleton()) {
-                    mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag);
-                }
-            }
-            break;
-        case "AttackWinStart"_h:
-        case "MCO_WinOpen"_h:
-        case "MCO_PowerWinOpen"_h:
-        case "BFCO_NextWinStart"_h:
-        case "BFCO_NextPowerWinStart"_h:
-        case "Collision_AttackEnd"_h:
-            if (WeaponIdentify::isLeviathanAxe) {
-                if (auto Levi = LeviathanAxe::GetSingleton()) {
-                    Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, true);
-                }
-            }
-            else if (WeaponIdentify::isMjolnir) {
-                if (auto mjolnir = Mjolnir::GetSingleton()) {
-                    mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag, true);
-                }
-            }
-            break;
-        case "InsertDraupnir"_h:
-            Draupnir::MeleeThrow();
-            break;
-        case "RainOfSpear"_h:
-            if (WeaponIdentify::isDraupnirSpear) Draupnir::ArtilleryOfTheAncients(0.1f, 3.f);
-#ifdef TRIDENT
-            else if(WeaponIdentify::isTrident) Trident::GetSingleton()->TrishulsMight(1.f, 6.f);
-#endif
-            break;
-        case "chainOpenR"_h:
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-                BoC->HideChains(false);
-            }
-            break;
-        case "chainOpenL"_h:
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-                BoC->HideChains(false);
-            }
-            break;
-        case "FlameWhiplashStart"_h:
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-            //    if (!BoC->IsScorching()) RE::PlayerCharacter::GetSingleton()->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kSpeedMult, 0.8f);
-                BoC->SetIsScorching();
-                BoC->SetScorchingSpeed(0.5f);
-            }
-            break;
-        case "FlameWhiplashLoop"_h:
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-                if (BoC->IsQueueEnd()) {
-                    RE::PlayerCharacter::GetSingleton()->NotifyAnimationGraph("chainCloseR");
-                    RE::PlayerCharacter::GetSingleton()->NotifyAnimationGraph("IdleStop");
-                }
-            }
-            break;
-        case "FlameWhiplashEnd"_h:
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-            //    if (!BoC->IsScorching()) RE::PlayerCharacter::GetSingleton()->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kSpeedMult, -0.8f);
-                BoC->SetIsScorching(false);
-            }
-            break;
-    //    case "BFCO_DIY_recovery"_h:
-    //    case "MCO_Recovery"_h:
-        case "MCO_AttackStateExit"_h:
-        case "tailCombatState"_h:
-        case "tailCombatIdle"_h:
-        case "attackStop"_h:
-        case "IdleStop"_h:
-        case "CastOKStop"_h:
-            if (WeaponIdentify::unequipWhenAnimEnds) {
-                if (auto AnArchos = PlayerCharacter::GetSingleton(); AnArchos) {
-                    ObjectUtil::Actor::UnEquipItem(AnArchos, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
-                    ResetEquipAnimationAfter(100, AnArchos);
-                } WeaponIdentify::unequipWhenAnimEnds = false;
-            }
-#ifdef EXPERIMENTAL_SHIELD
-            //  animated shield
-            ObjectUtil::Actor::SendAnimationEvent(PlayerCharacter::GetSingleton(), "shieldClose");
-#endif
-            break;
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-                BoC->HideChains(true);
-            }
-        case "throwAttackReady"_h:
-        case "throwPowerAttackReady"_h:
-            if (Config::IsAdvancedThrowingInstalled) {
-                if (auto AnArchos = PlayerCharacter::GetSingleton(); AnArchos && WeaponIdentify::isRelic) {
-                    bool isThrowing; AnArchos->GetGraphVariableBool("bIsThrowing", isThrowing);
-                    if (isThrowing) {
-                        bool isChargingThrow; AnArchos->GetGraphVariableBool("bIsPressingAttackButton", isChargingThrow);
-                        if (!isChargingThrow) AnArchos->GetGraphVariableBool("bIsPressingPowerAttackButton", isChargingThrow);
-                        if (auto kratos = Kratos::GetSingleton(); kratos) {
-                            if (auto Levi = LeviathanAxe::GetSingleton(); WeaponIdentify::isLeviathanAxe && Levi->GetThrowState() == tState::kThrowable) {
-                                Levi->data.throwingChargeDuration = 0.f;
-                                if (isChargingThrow) Levi->StartChargingThrow(AnArchos);
-                            } else if (auto mjolnir = Mjolnir::GetSingleton(); WeaponIdentify::isMjolnir && mjolnir->GetThrowState() == tStateM::kThrowable) {
-                                mjolnir->data.throwingChargeDuration = 0.f;
-                                if (isChargingThrow) mjolnir->StartChargingThrow(AnArchos);
-                            } else if (WeaponIdentify::isDraupnirSpear) {
-                                Draupnir::data.throwingChargeDuration = 0.f;
-                                if (isChargingThrow) Draupnir::StartChargingThrow(AnArchos);
-#ifdef TRIDENT
-                            } else if (WeaponIdentify::isTrident) {
-                                if (isChargingThrow) Trident::StartChargingThrow(AnArchos);
-#endif
-                            }
-                        }
-                    }
-                }
-            }
-            break;
-        case "throwAttackEndStart"_h:
-        case "throwPowerAttackEndStart"_h:
-            if (Config::IsAdvancedThrowingInstalled) {
-                if (auto kratos = Kratos::GetSingleton(); kratos) kratos->SetIsChargingThrow(false);
-            }
-            break;
-        }
-    }
-        return EventChecker::kContinue;
-}
-bool AnimObjectAnimationEventTracker::Register()
-{
-    const auto pc = PlayerCharacter::GetSingleton();
-
-    bool bSinked = false;
-    bool bSuccess = pc->AddAnimationGraphEventSink(AnimObjectAnimationEventTracker::GetSingleton());
-    if (bSuccess) {
-        spdlog::info("Registered {}", typeid(AnimObjectAnimationEventTracker).name());
-    } else {
-        BSAnimationGraphManagerPtr graphManager;
-        pc->GetBiped1(false)->objects->weaponManager->GetAnimationGraphManager(graphManager);
-        if (graphManager) {
-            for (auto& animationGraph : graphManager->graphs) {
-                if (bSinked) {
-                    break;
-                }
-                auto eventSource = animationGraph->GetEventSource<BSAnimationGraphEvent>();
-                for (auto& sink : eventSource->sinks) {
-                    if (sink == AnimObjectAnimationEventTracker::GetSingleton()) {
-                        bSinked = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!bSinked) {
-            spdlog::info("Failed to register {}", typeid(AnimObjectAnimationEventTracker).name());
-        }
-
-    }
-    return bSuccess || bSinked;
-}
-EventChecker AnimObjectAnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_event, BSTEventSource<BSAnimationGraphEvent>* a_eventSource)
-{
-    if (a_event) {
-        std::string eventTag = a_event->tag.data();
-        switch (hash(eventTag.data(), eventTag.size())) {
-        case "chainClosedR"_h:
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-                BoC->HideChains();
-            }
-            break;
-        case "chainClosedL"_h:
-            if (auto BoC = BladeOfChaos::GetSingleton()) {
-                BoC->HideChains();
-            }
-            break;
-        }
-    }
-        return EventChecker::kContinue;
-}
-#pragma endregion
-bool MagicEffectApplyTracker::Register()
-{
-    auto sourceHolder = RE::ScriptEventSourceHolder::GetSingleton(); 
-    if (sourceHolder) {
-        sourceHolder->AddEventSink(MagicEffectApplyTracker::GetSingleton());
-            spdlog::info("Magic effect apply event sink registered!");
-            return true;
-    } else  spdlog::warn("Magic effect apply event sink not registered!");
-    return false;
-}
-EventChecker MagicEffectApplyTracker::ProcessEvent(const RE::TESMagicEffectApplyEvent* a_event, RE::BSTEventSource<RE::TESMagicEffectApplyEvent>* a_eventSource)
-{
-    if (a_event) {
-        auto formID = a_event->magicEffect;
-        auto casterRef = a_event->caster.get();
-        auto targetRef = a_event->target.get();
-        if (casterRef && targetRef && casterRef == targetRef) {
-            auto caster = casterRef->As<RE::Actor>();
-            auto casterMT = caster ? caster->AsMagicTarget() : nullptr;
-            auto kratos = Kratos::GetSingleton();
-            auto levi = LeviathanAxe::GetSingleton();
-            auto mjolnir = Mjolnir::GetSingleton();
-            if (!casterMT || !kratos || !levi || !mjolnir) {spdlog::warn("caster magic target or kratos or levi or mjolnir does not exists!"); return EventChecker::kContinue;}
-
-            if (formID == kratos->spellID.aim) {
-                spdlog::debug("aiming...");
-            } else if (formID == kratos->spellID.call) {
-                if (!WeaponIdentify::isRelic) {
-                    if (levi->data.weap || mjolnir->data.weap || WeaponIdentify::Trident) {
-                        if ((uint_fast8_t)levi->GetThrowState() <= 3U && (uint_fast8_t)levi->GetThrowState() != 0U) {
-                            caster->SetGraphVariableInt("iNextWeaponToCall", (uint32_t)kratos->GetNextWeaponToCall());
-                            caster->SetGraphVariableBool("bLeviInCatchRange", false);
-                            kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
-                        } else if ((uint_fast8_t)mjolnir->GetThrowState() <= 3U && (uint_fast8_t)mjolnir->GetThrowState() != 0U) {
-                            caster->SetGraphVariableInt("iNextWeaponToCall", (uint32_t)kratos->GetNextWeaponToCall());
-                            caster->SetGraphVariableBool("bLeviInCatchRange", false);
-                            kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
-#ifdef TRIDENT
-                        } else if (!Trident::GetSingleton()->isTridentThrowable) {
-                            caster->SetGraphVariableInt("iNextWeaponToCall", (uint32_t)kratos->GetNextWeaponToCall());
-                            caster->SetGraphVariableBool("bLeviInCatchRange", false);
-                            kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
-#endif
-                        } else spdlog::info("levi and mjolnir can't arrive!");
-                    } else spdlog::info("levi and mjolnir does not exist!");
-                } else if (WeaponIdentify::isLeviathanAxe) {
-                    if (!levi->isAxeThrowed && kratos->IsCanCharge(caster, Kratos::Relic::kLeviathanAxe)) {
-                        kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
-                    }
-                } else if (WeaponIdentify::isBladeOfChaos) {
-                    BladeOfChaos::GetSingleton()->Update(*g_engineTime);
-                    BladeOfChaos::GetSingleton()->BuffScorchingSpeed();
-                    kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
-                } else if (WeaponIdentify::isDraupnirSpear || WeaponIdentify::isTrident) {
-                    kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
-                } else if (WeaponIdentify::isMjolnir) {
-                    if (!mjolnir->isMjolnirThrowed && kratos->IsCanCharge(caster, Kratos::Relic::kMjolnir)) {
-                        kratos->DoKratosAction(Kratos::Action::kWeaponCharge, caster);
-                    }
-                }
-            } else if (formID == kratos->spellID.runic) {
-                if (caster->HasSpell(kratos->SpellFinisherButton)) {
-                    kratos->DoKratosAction(Kratos::Action::kRage, caster);
-                }
-            } else if (formID == kratos->spellID.finisher) {
-                if (caster->HasSpell(kratos->SpellRunicButton)) {
-                    kratos->DoKratosAction(Kratos::Action::kRage, caster);
-                }
-            } else if (formID == kratos->spellID.leviChargeCoolDown) {
-                spdlog::debug("levi charge in cooldown...");
-            }
-        }
-    }   return EventChecker::kContinue;
-}
-
-bool InputEventTracker::Register()
-{
-    auto sourceHolder = RE::BSInputDeviceManager::GetSingleton(); 
-    if (sourceHolder) {
-        sourceHolder->AddEventSink(InputEventTracker::GetSingleton());
-            spdlog::info("input event sink registered!");
-            return true;
-    } else  spdlog::warn("input event sink not registered!");
-    return false;
-};
-std::uint32_t InputEventTracker::GetGamepadIndex(RE::BSWin32GamepadDevice::Key a_key)
-{
-    using Key = RE::BSWin32GamepadDevice::Key;
-
-    std::uint32_t index;
-    switch (a_key) 
-    {
-    case Key::kUp:
-        index = 0;
-        break;
-    case Key::kDown:
-        index = 1;
-        break;
-    case Key::kLeft:
-        index = 2;
-        break;
-    case Key::kRight:
-        index = 3;
-        break;
-    case Key::kStart:
-        index = 4;
-        break;
-    case Key::kBack:
-        index = 5;
-        break;
-    case Key::kLeftThumb:
-        index = 6;
-        break;
-    case Key::kRightThumb:
-        index = 7;
-        break;
-    case Key::kLeftShoulder:
-        index = 8;
-        break;
-    case Key::kRightShoulder:
-        index = 9;
-        break;
-    case Key::kA:
-        index = 10;
-        break;
-    case Key::kB:
-        index = 11;
-        break;
-    case Key::kX:
-        index = 12;
-        break;
-    case Key::kY:
-        index = 13;
-        break;
-    case Key::kLeftTrigger:
-        index = 14;
-        break;
-    case Key::kRightTrigger:
-        index = 15;
-        break;
-    default:
-        index = kInvalid;
-        break;
-    } return index != kInvalid ? index + kGamepadOffset : kInvalid;
-}
-std::uint32_t InputEventTracker::GetOffsettedKeyCode(std::uint32_t a_keyCode, RE::INPUT_DEVICE a_inputDevice) const
-{
-    switch (a_inputDevice) {
-    case RE::INPUT_DEVICE::kKeyboard:
-        break;
-    case RE::INPUT_DEVICE::kMouse:
-        a_keyCode += kMouseOffset;
-        break;
-    case RE::INPUT_DEVICE::kGamepad:
-        a_keyCode = GetGamepadIndex((RE::BSWin32GamepadDevice::Key)a_keyCode);
-        break;
-    default:
-        break;
-    } return a_keyCode;
-}
-EventChecker InputEventTracker::ProcessEvent(RE::InputEvent* const *a_event, RE::BSTEventSource<RE::InputEvent*> *a_eventSource)
-{
-    if (!a_event || RE::UI::GetSingleton()->GameIsPaused()) return EventChecker::kContinue;
-
-    for (auto event = *a_event; event; event = event->next) {
-        if (!event->HasIDCode() || event->GetEventType() != RE::INPUT_EVENT_TYPE::kButton) continue;
-
-        auto keyCode = event->AsIDEvent()->GetIDCode();
-
-        auto player = RE::PlayerCharacter::GetSingleton();
-        if (!player) return EventChecker::kContinue;
-
-        auto kratos = Kratos::GetSingleton();
-        if (!kratos) return EventChecker::kContinue;
-
-        if (auto button = static_cast<RE::ButtonEvent*>(event); button) {
-            auto device = event->device.get();
-            keyCode = GetOffsettedKeyCode(keyCode, device);
-            if (keyCode == Config::AxeCallKey) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", true);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", false);}
-            }
-            else if (keyCode == Config::AimKey) {
-                if (button->IsDown()) {kratos->Aim(true); player->AddSpell(kratos->SpellAimButton);/* player->SetGraphVariableBool("bIsAiming", true);*/}
-                else if (button->IsUp()) {kratos->Aim(false); player->RemoveSpell(kratos->SpellAimButton);/* player->SetGraphVariableBool("bIsAiming", false);*/}
-            }
-            else if (keyCode == Config::RunicKey) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellRunicButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellRunicButton);}
-            }
-            else if (keyCode == Config::FinisherKey) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellFinisherButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellFinisherButton);}
-            }
-            else if (keyCode == Config::MediumDistanceKey) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellMidDistButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellMidDistButton);}
-            }
-            else if (keyCode == Config::LongDistanceKey) {
-                if (button->IsDown()) {player->AddSpell(kratos->SpellLongDistButton);}
-                else if (button->IsUp()) {player->RemoveSpell(kratos->SpellLongDistButton);}
-            }
-        }
-    } return EventChecker::kContinue;
-}
-
-bool HitEventTracker::Register()
-{
-    auto sourceHolder = RE::ScriptEventSourceHolder::GetSingleton(); 
-    if (sourceHolder) {
-        sourceHolder->AddEventSink(HitEventTracker::GetSingleton());
-            spdlog::info("hit event sink registered!");
-            return true;
-    } else  spdlog::warn("hit event sink not registered!");
-    return false;
-};
-EventChecker HitEventTracker::ProcessEvent(const RE::TESHitEvent*   a_event, RE::BSTEventSource<RE::TESHitEvent>* a_eventSource)
-{
-    if (a_event && a_eventSource && a_event->target && a_event->target->IsPlayerRef()) {
-
-    }
-        return EventChecker::kContinue;
-}

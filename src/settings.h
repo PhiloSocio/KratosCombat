@@ -15,8 +15,9 @@ public:
     //Axe-Mace throw
     static inline float ThrowSpeed                  = 3700.f;       //  cm/s
     static inline float ThrowRotationSpeed          = 2160.f;       //  deg/s
-    static inline float NoGravityDurationLeviathan  = 0.36f;
-    static inline float NoGravityDurationMjolnir    = 0.36f;
+    static inline float ThrowRotationSpeedM         = 2160.f;       //  deg/s
+    static inline float NoGravityDurationLeviathan  = 0.18f;
+    static inline float NoGravityDurationMjolnir    = 0.18f;
     static inline std::string ThrowEvent            = "ThrowWeapon";
     static inline std::string ThrowEventV           = "ThrowWeaponV";
     static inline std::string ThrowEndEvent         = "ThrowAttackEnd";
@@ -43,11 +44,12 @@ public:
     //Axe/Mace call
     static inline float ArrivalTime                 = 0.52f;        //  s
     static inline float ArrivalRotationSpeed        = 1440.f;       //  deg/s
+    static inline float ArrivalRotationSpeedM       = 720.f;        //  deg/s
     static inline float ArrivalRotationX            = 90.f;         //  deg/s
     static inline float ArrivalRotationY            = 0.f;          //  deg/s
     static inline float ArrivalRotationZ            = 180.f;        //  deg/s
     static inline float ArrivalRoadCurveMagnitude   = 18.f;         //  deg
-    static inline float CatchingTreshold            = 69.f;         //  cm
+    static inline float CatchingTreshold            = 6.f;          //  cm
     static inline float ArrivalAngleSnap            = 0.1f;         //  snap to nearest angle in radians
     static inline std::optional<float> MjolnirArrivingDelay = std::nullopt;
     static inline std::string CallEvent             = "CallWeapon";
@@ -60,7 +62,7 @@ public:
     static inline RE::SpellItem* RetroMovesetSpell = nullptr;
 
     //Limit values
-    static inline float MaxArrivalSpeed             = 69000.f;      //  cm/s
+    static inline float MaxArrivalSpeed             = 6900.f;       //  cm/s
     static inline float MinArrivalSpeed             = 1669.f;       //  cm/s
 
     static inline float MaxAxeStuckAngle            = 350.f;        //  cm/s

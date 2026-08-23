@@ -361,13 +361,25 @@
                 }
             },
             {
+                "id": "fThrowRotationSpeedM:Main",
+                "text": "$KratosCombat_ThrowRotationSpeedM_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ThrowRotationSpeedM_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 4096,
+                    "step": 4,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
                 "id": "fThrowSpeed:Main",
                 "text": "$KratosCombat_ThrowSpeed_OptionText",
                 "type": "slider",
                 "help": "$KratosCombat_ThrowSpeed_InfoText",
                 "valueOptions": {
-                    "min": 100,
-                    "max": 10000,
+                    "min": 1000,
+                    "max": 12000,
                     "step": 20,
                     "sourceType": "ModSettingFloat"
                 }
@@ -391,8 +403,8 @@
                 "type": "slider",
                 "help": "$KratosCombat_ArrivalTime_InfoText",
                 "valueOptions": {
-                    "min": 0,
-                    "max": 2,
+                    "min": 0.36,
+                    "max": 2.0,
                     "step": 0.01,
                     "formatString": "{2}",
                     "sourceType": "ModSettingFloat"
@@ -405,7 +417,7 @@
                 "help": "$KratosCombat_CatchingTreshold_InfoText",
                 "valueOptions": {
                     "min": 3,
-                    "max": 120.0,
+                    "max": 30.0,
                     "step": 3,
                     "sourceType": "ModSettingFloat"
                 }
@@ -449,6 +461,18 @@
                 }
             },
             {
+                "id": "fArrivalRotationSpeedM:Main",
+                "text": "$KratosCombat_ArrivalRotationSpeedM_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_ArrivalRotationSpeedM_InfoText",
+                "valueOptions": {
+                    "min": 0,
+                    "max": 2048.0,
+                    "step": 4,
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
                 "id": "fArrivalRoadCurveMagnitude:Main",
                 "text": "$KratosCombat_ArrivalRoadCurveMagnitude_OptionText",
                 "type": "slider",
@@ -466,8 +490,8 @@
                 "type": "slider",
                 "help": "$KratosCombat_MaxArrivalSpeed_InfoText",
                 "valueOptions": {
-                    "min": 100,
-                    "max": 100000,
+                    "min": 1000,
+                    "max": 12000,
                     "step": 20,
                     "sourceType": "ModSettingFloat"
                 }

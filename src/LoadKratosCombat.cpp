@@ -1,5 +1,6 @@
 #include "logger.h"
 #include "Papyrus.h"
+#include "events.h"
 #include "MainKratosCombat.h"
 
 inline bool UpdateConfig() 

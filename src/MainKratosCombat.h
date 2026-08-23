@@ -3,9 +3,6 @@
 #include "settings.h"
 #include "hook.h"
 
-static bool _skipEquipAnim, _skipLoad3D;
-static int _load3Ddelay;
-
 class Kratos
 {
 public:
@@ -92,6 +89,8 @@ public:
         RE::BGSSoundDescriptorForm* arrivingLeviLoop2 = nullptr;
         RE::BGSSoundDescriptorForm* arrivingLeviNear = nullptr;
         RE::BGSSoundDescriptorForm* catchLevi = nullptr;    //  WPNImpactBladeVsIceSD [SNDR:0002398A]
+        RE::BGSSoundDescriptorForm* throwingLeviLoop0 = nullptr;
+        RE::BGSSoundDescriptorForm* throwingLeviLoop1 = nullptr;
         RE::BGSSoundDescriptorForm* chargeLevi = nullptr;   //  MAGIcicleChargeSD [SNDR:0003EDD5], MAGIcicleReadyLPSD [SNDR:0003F1F0]
         RE::BGSSoundDescriptorForm* chargeLeviLoop = nullptr;// MAGFrostBiteFireLPMSD [SNDR:0003E5CB]
         RE::BGSSoundDescriptorForm* chargeLeviEndT = nullptr;
@@ -297,7 +296,7 @@ private:
 class LeviathanAxe
 {
 public:
-    static LeviathanAxe* GetSingleton();// {static LeviathanAxe singleton; return &singleton;}
+    static LeviathanAxe* GetSingleton();
     bool Initialize();
 
     enum class ThrowState : std::uint_fast8_t {
@@ -309,10 +308,10 @@ public:
         kArrived = 5
     };
     enum class ProjectileState : std::uint_fast8_t {
-        kNone = 0,
-        kLaunched = 1,
-        kStucked = 2,
-        kHavok = 3
+        kNone,
+        kLaunched,
+        kStucked,
+        kHavok
     };
 
     struct Data {
@@ -323,6 +322,10 @@ public:
         RE::NiPoint3 position       = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastVelocity   = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
+        RE::NiTransform transformPW = RE::NiTransform();
+        RE::NiTransform transformPL = RE::NiTransform();
+        RE::NiTransform transformW  = RE::NiTransform();
+        RE::NiTransform transformL  = RE::NiTransform();
         RE::NiPointer<RE::NiAVObject>   model;
         RE::NiPointer<RE::NiNode>       weaponModelCopy;
         RE::NiPointer<RE::NiNode>       replacedProjectileModel;
@@ -357,32 +360,49 @@ public:
         float throwingChargeDuration = 0.f;
     };
 
-    struct ArrivingLeviathan {
-        const LeviathanAxe* parent;
-        RE::NiPointer<RE::Projectile> proj;
+    struct ArrivingWeapon {
+        static constexpr std::array<float, 4> arrivingDirections {
+            0.f, PI2, PI, ONEANDHALF_PI     //  b, r, f, l
+        };
+
+        LeviathanAxe* parent;
         RE::NiPointer<RE::Actor> caller;
         RE::NiPointer<RE::NiAVObject> callerHandBone;
         RE::NiPointer<RE::NiAVObject> callerBreastBone;
+        RE::NiPointer<RE::Projectile> proj;
+        RE::NiPointer<RE::NiAVObject> model;
+        RE::NiMatrix3 startRotation = RE::NiMatrix3();
+        RE::NiPoint3 handPosition;
         RE::NiPoint3 startPosition;
+        RE::NiPoint3 position;
         RE::NiPoint3 currentDir;
+        RE::NiPoint3 bezierDir;
         RE::NiPoint3 desiredDir;
-        RE::NiPoint3 smoothedDesiredDir;
+        RE::NiPoint3 smoothedDesiredVelocity;
         RE::NiPoint3 linearArrivingDir;
         MathUtil::Algebra::BezierCurve arrivingRoute;
+        MathUtil::Algebra::BezierSample closestSample;
         RE::NiPoint3 bezierControlPoints[4];
         int arrivingRouteClosestIndex;
+        uint16_t routeResolution = 64;
         std::vector<RE::Actor *> targets;
+        bool  isNear = false;
+        bool  isAlmostArrived = false;
         bool  isCatchable = false;
         bool  isInCallingAnimation = false;
         float throwedTime = 0.f;
         float livingTime = 0.f;
         float timeToArrive = Config::ArrivalTime;
+        float remainingTimeToArrive = Config::ArrivalTime;
+        float tReal = 0.f;
+        float rotationSpeed = Config::ArrivalRotationSpeed; //  rad/s
+        float arrivalSpin = 0; //  rad
         float linearDistance = 0.f;
         float linearDistanceFromStart = 0.f;
         float linearDistanceFromLastCallPos = 0.f;
         float arrivingRelativeAngleZ = 0.5f;
         float arrivingRelativeAngleSnapStrength = Config::ArrivalAngleSnap;
-        float speed = 2400.f;
+        float speed = 0.f;
 
         float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
         std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
@@ -426,47 +446,16 @@ public:
                 caller->GetGraphVariableBool("bIsInCallingAnimation", isInCallingAnimation);
             } return isInCallingAnimation;
         }
-        void UpdateArrivingDirection(const bool a_initial = false) {
-            if (caller && parent && callerBreastBone) {
-                if (parent->GetThrowState() == ThrowState::kThrowable || isCatchable) {
 
-                } else if (a_initial || linearDistance > 100.f) {
-                    RE::NiPoint3  spineForwardDir = callerBreastBone->world.rotate * RE::NiPoint3(frontVec3);
-                    spineForwardDir.z = 0.f;  //  ignore vertical direction
-                    spineForwardDir.Unitize();
+        void UpdateRotation();
+        void UpdateAI(RE::NiPoint3& a_outVel);
+        void UpdateArrivingDirection(const bool a_initial = false);
+        void UpdateArrivingRoute();
+        void Update(const float a_delta);
 
-                    RE::NiPoint3 linearDir2D(linearArrivingDir.x, linearArrivingDir.y, 0.f);
-                    linearDir2D.Unitize();
-
-                    float dot = spineForwardDir.Dot(linearDir2D);
-                    float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
-
-                    arrivingRelativeAngleZ = atan2(det, dot);  //  angle between spine forward direction and axe direction
-                    arrivingRelativeAngleZ = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, PI]
-                    arrivingRelativeAngleZ = MathUtil::Angle::RadianToDegree(arrivingRelativeAngleZ) / 360.f;  //  normalize angle to [0, 1]
-
-                    if (arrivingRelativeAngleSnapStrength > 0.f) {
-                        std::vector<float> targets = {0.f, 0.25f, 0.5f, 0.75f, 1.f};
-                    //    if ((arrivingRelativeAngle < 0.124f || arrivingRelativeAngle > 0.876f) && snapStrength < 0.8f) snapStrength += 0.1f;
-                        arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, targets, arrivingRelativeAngleSnapStrength);    //  for helping to the blender generator
-                    }
-
-                    if (!a_initial) {
-                        float previousAngle; caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle);
-                        constexpr float smoothTime = 0.369f;
-                        const float alpha = 1.f - std::exp(-*g_deltaTime / smoothTime);
-                        float smoothedArrivingRelativeAngle = previousAngle;
-                        smoothedArrivingRelativeAngle += (arrivingRelativeAngleZ - previousAngle) * alpha;
-                        arrivingRelativeAngleZ = smoothedArrivingRelativeAngle;
-                    }
-                }
-                caller->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
-            }
-        }
-
-        virtual ~ArrivingLeviathan() = default;
-        ArrivingLeviathan() = default;
-        ArrivingLeviathan(const LeviathanAxe* a_parent, RE::Projectile* a_proj, 
+        virtual ~ArrivingWeapon() = default;
+        ArrivingWeapon() = default;
+        ArrivingWeapon(LeviathanAxe* a_parent, RE::Projectile* a_proj, 
             RE::Actor* a_caller, 
             RE::NiAVObject* a_callerHandBone, 
             RE::NiPoint3& a_startPosition) : parent(a_parent), proj(a_proj),
@@ -479,14 +468,33 @@ public:
             linearArrivingDir.Unitize();
             linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
             linearDistanceFromLastCallPos = linearDistanceFromStart;
-            speed = linearDistanceFromStart / timeToArrive;
-            speed = std::clamp(speed, Config::MinArrivalSpeed, Config::MaxArrivalSpeed);
             targets = GetTargets();
             arrivingRoute = MathUtil::Algebra::BezierCurve();
             arrivingRouteClosestIndex = 0;
-            smoothedDesiredDir = (uint_fast8_t)a_parent->data.projState < 2U ? a_parent->data.lastVelocity : linearArrivingDir * speed;
-            spdlog::debug("projstate: {}, ", a_parent->data.projState == LeviathanAxe::ProjectileState::kNone ? "none" : a_parent->data.projState == LeviathanAxe::ProjectileState::kLaunched ? "launched" : a_parent->data.projState == LeviathanAxe::ProjectileState::kHavok ? "havok" : "stucked");
+            const bool doBlend = 
+                a_parent->data.projState == ProjectileState::kNone ||
+                a_parent->data.projState == ProjectileState::kLaunched;
+            smoothedDesiredVelocity = doBlend ? a_parent->data.lastVelocity : linearArrivingDir * speed;
+        //    spdlog::debug("projstate: {}, ", a_parent->data.projState == LeviathanAxe::ProjectileState::kNone ? "none" : a_parent->data.projState == LeviathanAxe::ProjectileState::kLaunched ? "launched" : a_parent->data.projState == LeviathanAxe::ProjectileState::kHavok ? "havok" : "stucked");
             UpdateArrivingDirection(true);
+            bezierControlPoints[0] = startPosition;
+            bezierControlPoints[1] = startPosition + linearArrivingDir * linearDistanceFromLastCallPos * 0.33f;
+        }
+        ArrivingWeapon(const ArrivingWeapon& a_aWeapon, RE::Projectile* a_proj, RE::NiPoint3& a_startPosition) : parent(a_aWeapon.parent), proj(a_proj),
+            caller(a_aWeapon.caller), callerHandBone(a_aWeapon.callerHandBone), startPosition(a_startPosition)
+        {
+            throwedTime = a_aWeapon.throwedTime;
+            callerBreastBone = a_aWeapon.callerBreastBone;
+            auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerHandPosition - startPosition);
+            linearArrivingDir.Unitize();
+            linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
+            linearDistanceFromLastCallPos = linearDistanceFromStart;
+            targets = GetTargets();
+            arrivingRoute = a_aWeapon.arrivingRoute;
+            arrivingRouteClosestIndex = a_aWeapon.arrivingRouteClosestIndex;
+            smoothedDesiredVelocity = parent->data.lastVelocity;
+        //    spdlog::debug("projstate: {}, ", parent->data.projState == LeviathanAxe::ProjectileState::kNone ? "none" : a_parent->data.projState == LeviathanAxe::ProjectileState::kLaunched ? "launched" : a_parent->data.projState == LeviathanAxe::ProjectileState::kHavok ? "havok" : "stucked");
             bezierControlPoints[0] = startPosition;
             bezierControlPoints[1] = startPosition + linearArrivingDir * linearDistanceFromLastCallPos * 0.33f;
         }
@@ -579,21 +587,47 @@ public:
     };
 
     struct SoundData {
+        enum class State : std::uint_fast8_t {
+            kNone = 0,
+            kTriggered = 1,
+            kPlaying = 2,
+            kFading = 3,
+            kPaused = 4,
+            kStopped = 5
+        };
+        enum class SoundName : std::uint16_t {
+            kNone = 0,
+            kCallStart = 1,
+            kArrivingStart = 2,
+            kArrivingLoop = 3,
+            kArrivingNear = 4,
+            kCatch = 5,
+            kThrowingStart = 6,
+            kThrowingLoop = 7
+        };
+        std::unordered_map<SoundName, State> soundState;
+        AsyncUtil::GameTime arrivingLoopStopUpdate;
+        AsyncUtil::GameTime throwingLoopStopUpdate;
+
+        Data* weaponData = nullptr;
         Kratos* kratos = nullptr;
-        RE::BSSoundHandle* CallStartSH = nullptr;
-        RE::BSSoundHandle* ArrivingStartSH = nullptr;
-        RE::BSSoundHandle* ArrivingLoop0SH = nullptr;
-        RE::BSSoundHandle* ArrivingLoop1SH = nullptr;
-        RE::BSSoundHandle* ArrivingLoop2SH = nullptr;
-        RE::BSSoundHandle* ArrivingNearSH = nullptr;
-        RE::BSSoundHandle* CatchSH = nullptr;
-        RE::BSSoundHandle* ThrowingStartSH = nullptr;
-        RE::BSSoundHandle* ThrowingLoop0SH = nullptr;
-        RE::BSSoundHandle* ThrowingLoop1SH = nullptr;
-        RE::BSSoundHandle* ThrowingLoop2SH = nullptr;
+        RE::BSSoundHandle CallStartSH;
+        RE::BSSoundHandle ArrivingStartSH;
+        RE::BSSoundHandle ArrivingLoop0SH;
+        RE::BSSoundHandle ArrivingLoop1SH;
+        RE::BSSoundHandle ArrivingLoop2SH;
+        RE::BSSoundHandle ArrivingNearSH;
+        RE::BSSoundHandle CatchSH;
+        RE::BSSoundHandle ThrowingStartSH;
+        RE::BSSoundHandle ThrowingLoop0SH;
+        RE::BSSoundHandle ThrowingLoop1SH;
 
         void StopAllSounds();
+        void PauseAllSounds();
+        void ContinueAllSounds();
         void FadeAllSounds(const uint16_t a_durationMS = 500u);
+        void PauseAllLoopingSounds();
+        void ContinueAllLoopingSounds();
 
         void PlayCallingHandSounds(RE::NiAVObject* a_source);
         void PlayArrivingStartSounds(RE::NiAVObject* a_source);
@@ -604,16 +638,74 @@ public:
         void PlayThrowingSounds(RE::NiAVObject* a_source);
         void PlayThrowingLoopSounds(RE::NiAVObject* a_source);
 
+        void FadeCallingHandSounds(const uint16_t a_durationMS = 1000u);
+        void FadeArrivingStartSounds(const uint16_t a_durationMS = 1000u);
         void FadeArrivingLoopSounds(const uint16_t a_durationMS = 1000u);
+        void FadeArrivingNearSounds(const uint16_t a_durationMS = 1000u);
         void FadeThrowingLoopSounds(const uint16_t a_durationMS = 1000u);
+        
+        void StopArrivingLoopSounds(const uint16_t a_delayMS = 0u);
+        void StopThrowingLoopSounds(const uint16_t a_delayMS = 0u);
 
-        SoundData(Kratos* a_kratos) : kratos(a_kratos) {};
+        [[nodiscard]] RE::BSSoundHandle GetSoundHandle(const SoundName a_soundName) const {
+            RE::BSSoundHandle ret;
+            switch (a_soundName) {
+            case SoundName::kCallStart:
+                return CallStartSH;
+            case SoundName::kArrivingStart:
+                return ArrivingStartSH;
+            case SoundName::kArrivingLoop:
+                return ArrivingLoop0SH;
+            case SoundName::kArrivingNear:
+                return ArrivingNearSH;
+            case SoundName::kCatch:
+                return CatchSH;
+            case SoundName::kThrowingStart:
+                return ThrowingStartSH;
+            case SoundName::kThrowingLoop:
+                return ThrowingLoop0SH;
+            } return ret;
+        }
+        void UpdateSoundState(const SoundName a_soundName) {
+            const auto soundHandle = GetSoundHandle(a_soundName);
+            if (soundHandle.IsPlaying()) soundState[a_soundName] = State::kPlaying;
+            spdlog::debug("sound state {}", soundHandle.state.underlying());
+        }
+        [[nodiscard]] bool IsTriggered(const SoundName a_soundName) const {
+            bool ret = false;
+            if (auto it = soundState.find(a_soundName); it != soundState.end()) {
+                const auto soundHandle = GetSoundHandle(a_soundName);
+                const bool isTriggered = (*it).second == State::kTriggered;
+                ret = isTriggered;
+            } return ret;
+        }
+        [[nodiscard]] State GetState(const SoundName a_soundName) {
+            return soundState[a_soundName];
+        }
+        [[nodiscard]] bool IsSoundValid(const SoundName a_soundName)  {
+            switch (GetState(a_soundName)) {
+            case State::kNone:
+                return !IsTriggered(a_soundName);
+            case State::kTriggered:
+                return false;
+            case State::kPlaying:
+                return false;
+            case State::kFading:
+                return true;
+            case State::kPaused:
+                return true;
+            case State::kStopped:
+                return true;
+            } return false;
+        }
+
+        SoundData(Kratos* a_kratos, Data* a_data) : kratos(a_kratos), weaponData(a_data) {};
     };
 
     Data data;
-    ArrivingLeviathan arrivingLevi;
+    ArrivingWeapon arrivingLevi;
     HomingLeviathan homingLevi;
-    SoundData soundData = SoundData(Kratos::GetSingleton());
+    SoundData soundData = SoundData(Kratos::GetSingleton(), &data);
 
     void Update(const float a_delta);
     void SetThrowState(const ThrowState a_throwState);
@@ -622,7 +714,6 @@ public:
     void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Call(const bool a_justDestroy = false, const bool a_justContinue = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     void Catch(bool a_justDestroy = false, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
-    //  experimental:
     void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_coolDown = 15u);
     void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false);
     void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical);
@@ -635,11 +726,12 @@ public:
     void AddProjectileTrail(const float a_delta);
     void FadeProjectileTrail(const float a_delta);
     void DeleteProjectileTrail();
+    RE::NiTransform GetWorldTransform();
+    RE::NiTransform GetLocalTransform();
 
     bool isAxeCalled;
     bool isAxeThrowed;
     bool isAxeStucked;
-//  RE::Projectile::LaunchData* LeviThrowData   = nullptr;
 
     AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;
@@ -803,7 +895,7 @@ friend class ProjectileHook;
 class Mjolnir
 {
 public:
-    static Mjolnir* GetSingleton();// {static Mjolnir singleton; return &singleton;}
+    static Mjolnir* GetSingleton();
     bool Initialize();
 
     enum class ThrowState : std::uint_fast8_t {
@@ -830,6 +922,10 @@ public:
         RE::NiPoint3 lastEulerAngles= {0.f, 0.f, 0.f};
         RE::NiPoint3 lastVelocity   = {0.f, 0.f, 0.f};
         RE::NiPoint3 lastOrientation= {0.f, 0.f, 0.f};
+        RE::NiTransform transformPW = RE::NiTransform();
+        RE::NiTransform transformPL = RE::NiTransform();
+        RE::NiTransform transformW  = RE::NiTransform();
+        RE::NiTransform transformL  = RE::NiTransform();
         RE::NiPointer<RE::NiAVObject>   model;
         RE::NiPointer<RE::NiNode>       weaponModelCopy;
         RE::NiPointer<RE::NiNode>       replacedProjectileModel;
@@ -944,7 +1040,7 @@ public:
                 std::vector<float> targets = {0.f, 0.25f, 0.5f, 0.75f, 1.f};
                 float snapStrength = Config::ArrivalAngleSnap;
                 if ((arrivingRelativeAngle < 0.124f || arrivingRelativeAngle > 0.876f) && snapStrength < 0.8f) snapStrength += 0.3f;
-                arrivingRelativeAngle = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngle, targets, snapStrength);
+            //    arrivingRelativeAngle = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngle, targets, snapStrength);
                 arrivingRelativeAngleZ = arrivingRelativeAngle;
                 a_caller->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
             }
@@ -978,6 +1074,155 @@ public:
             speed = arrivingRoute.arcLength / timeToArrive;
             speed = std::clamp(speed, Config::MinArrivalSpeed, Config::MaxArrivalSpeed);//(Config::MaxArrivalSpeed < speedLimit) ? Config::MaxArrivalSpeed : speedLimit);
             targets = GetTargets();
+        }
+    };
+
+    struct ArrivingWeapon {
+        static constexpr std::array<float, 4> arrivingDirections {
+            0.f, PI2, PI, ONEANDHALF_PI     //  b, r, f, l
+        };
+
+        Mjolnir* parent;
+        RE::NiPointer<RE::Actor> caller;
+        RE::NiPointer<RE::NiAVObject> callerHandBone;
+        RE::NiPointer<RE::NiAVObject> callerBreastBone;
+        RE::NiPointer<RE::Projectile> proj;
+        RE::NiPointer<RE::NiAVObject> model;
+        RE::NiMatrix3 startRotation = RE::NiMatrix3();
+        RE::NiPoint3 handPosition;
+        RE::NiPoint3 startPosition;
+        RE::NiPoint3 position;
+        RE::NiPoint3 currentDir;
+        RE::NiPoint3 bezierDir;
+        RE::NiPoint3 desiredDir;
+        RE::NiPoint3 startVelocity;
+        RE::NiPoint3 smoothedDesiredVelocity;
+        RE::NiPoint3 linearArrivingDir;
+        MathUtil::Algebra::BezierCurve arrivingRoute;
+        MathUtil::Algebra::BezierSample closestSample;
+        RE::NiPoint3 bezierControlPoints[4];
+        int arrivingRouteClosestIndex;
+        uint16_t routeResolution = 64;
+        std::vector<RE::Actor *> targets;
+        bool  isNear = false;
+        bool  isAlmostArrived = false;
+        bool  isCatchable = false;
+        bool  isInCallingAnimation = false;
+        float callTime   = 0.f;
+        float launchTime = 0.f;
+        float livingTime = 0.f;
+        float timeToArrive = Config::ArrivalTime;
+        float remainingTimeToArrive = Config::ArrivalTime;
+        float tReal = 0.f;
+        float rotationSpeed = Config::ArrivalRotationSpeedM; //  rad/s
+        float arrivalSpin = 0; //  rad
+        float linearDistance = 0.f;
+        float linearDistanceFromStart = 0.f;
+        float linearDistanceFromLastCallPos = 0.f;
+        float arrivingRelativeAngleZ = 0.5f;
+        float arrivingRelativeAngleSnapStrength = Config::ArrivalAngleSnap;
+        float speed = 0.f;
+
+        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - (launchTime > callTime ? launchTime : callTime);}
+        std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
+            targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller.get(), linearDistance, true);
+            CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
+            return targets;
+        }
+        void CheckTargets(RE::NiPoint3& a_origin) {
+            if (!targets.empty()) {
+                std::erase_if(targets, [=](const RE::Actor* actor) {
+                    bool result = false;
+                    if (!actor || actor->IsDead() || !parent || std::find(parent->data.lastHitActors.begin(), parent->data.lastHitActors.end(), actor) != parent->data.lastHitActors.end()) {
+                        result = true;
+                    } else {
+                        auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;
+                        auto targetDir = targetPos - a_origin;
+                        targetDir.Unitize();
+                        float distance = actor->GetPosition().GetDistance(a_origin);
+                        result = distance > linearDistance
+                            || currentDir.Dot(targetDir) < std::cos(PI8)
+                            || currentDir.Dot(linearArrivingDir) < std::cos(PI8);
+                    }
+                    return result;
+                });
+                std::sort(targets.begin(), targets.end(), 
+                    [&](const auto& a, const auto& b) {
+                        return a->GetPosition().GetDistance(a_origin) < 
+                            b->GetPosition().GetDistance(a_origin);
+                    }
+                );
+            };
+        }
+        RE::Actor* GetNextTarget(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
+            if (a_origin) {
+                GetTargets(a_origin);
+            }
+            return !targets.empty() ? targets.front() : nullptr;
+        }
+        bool IsInCallingAnimation() {
+            if (caller) {
+                caller->GetGraphVariableBool("bIsInCallingAnimation", isInCallingAnimation);
+            } return isInCallingAnimation;
+        }
+
+        void UpdateRotation();
+        void UpdateAI(RE::NiPoint3& a_outVel);
+        void UpdateArrivingDirection(const bool a_initial = false);
+        void UpdateArrivingRoute();
+        void Update(const float a_delta);
+        void Continue(RE::Projectile* a_proj, RE::NiPoint3& a_startPosition)
+        {
+            proj.reset(a_proj);
+            startPosition = a_startPosition;
+            auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerHandPosition - startPosition);
+            linearArrivingDir.Unitize();
+            linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
+            linearDistanceFromLastCallPos = linearDistanceFromStart;
+            targets = GetTargets();
+            smoothedDesiredVelocity = parent->data.lastVelocity;
+        //    spdlog::debug("projstate: {}, ", parent->data.projState == LeviathanAxe::ProjectileState::kNone ? "none" : a_parent->data.projState == LeviathanAxe::ProjectileState::kLaunched ? "launched" : a_parent->data.projState == LeviathanAxe::ProjectileState::kHavok ? "havok" : "stucked");
+            bezierControlPoints[0] = startPosition;
+            bezierControlPoints[1] = startPosition + linearArrivingDir * linearDistanceFromLastCallPos * 0.33f;
+        }
+
+        virtual ~ArrivingWeapon() = default;
+        ArrivingWeapon() = default;
+        ArrivingWeapon(Mjolnir* a_parent, RE::Actor* a_caller, 
+            RE::NiAVObject* a_callerHandBone, 
+            RE::NiPoint3& a_startPosition) : parent(a_parent), caller(a_caller), callerHandBone(a_callerHandBone), startPosition(a_startPosition)
+        {
+            callTime = AsyncUtil::GameTime::GetEngineTime();
+            callerBreastBone.reset(caller ? caller->GetNodeByName("NPC Spine2 [Spn2]") : nullptr);
+            auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerHandPosition - startPosition);
+            linearArrivingDir.Unitize();
+            linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
+            linearDistanceFromLastCallPos = linearDistanceFromStart;
+            UpdateArrivingDirection(true);
+        }
+        ArrivingWeapon(const ArrivingWeapon& a_aWeapon, RE::Projectile* a_proj, 
+            RE::NiPoint3& a_startPosition) : parent(a_aWeapon.parent), proj(a_proj),
+            caller(a_aWeapon.caller), callerHandBone(a_aWeapon.callerHandBone), startPosition(a_startPosition)
+        {
+            launchTime = AsyncUtil::GameTime::GetEngineTime();
+            callerBreastBone.reset(caller ? caller->GetNodeByName("NPC Spine2 [Spn2]") : nullptr);
+            auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
+            linearArrivingDir = (callerHandPosition - startPosition);
+            linearArrivingDir.Unitize();
+            linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
+            linearDistanceFromLastCallPos = linearDistanceFromStart;
+            targets = GetTargets();
+            arrivingRoute = MathUtil::Algebra::BezierCurve();
+            arrivingRouteClosestIndex = 0;
+            const bool doBlend = 
+                parent->data.projState == ProjectileState::kNone ||
+                parent->data.projState == ProjectileState::kLaunched;
+            smoothedDesiredVelocity = doBlend ? parent->data.lastVelocity : linearArrivingDir * speed;
+        //    spdlog::debug("projstate: {}, ", parent->data.projState == LeviathanAxe::ProjectileState::kNone ? "none" : a_parent->data.projState == LeviathanAxe::ProjectileState::kLaunched ? "launched" : a_parent->data.projState == LeviathanAxe::ProjectileState::kHavok ? "havok" : "stucked");
+            bezierControlPoints[0] = startPosition;
+            bezierControlPoints[1] = startPosition + linearArrivingDir * linearDistanceFromLastCallPos * 0.33f;
         }
     };
 
@@ -1067,9 +1312,126 @@ public:
         }
     };
 
+    struct SoundData {
+        enum class State : std::uint_fast8_t {
+            kNone = 0,
+            kTriggered = 1,
+            kPlaying = 2,
+            kFading = 3,
+            kPaused = 4,
+            kStopped = 5
+        };
+        enum class SoundName : std::uint16_t {
+            kNone = 0,
+            kCallStart = 1,
+            kArrivingStart = 2,
+            kArrivingLoop = 3,
+            kArrivingNear = 4,
+            kCatch = 5,
+            kThrowingStart = 6,
+            kThrowingLoop = 7
+        };
+        std::unordered_map<SoundName, State> soundState;
+        AsyncUtil::GameTime arrivingLoopStopUpdate;
+        AsyncUtil::GameTime throwingLoopStopUpdate;
+
+        Data* weaponData = nullptr;
+        Kratos* kratos = nullptr;
+        RE::BSSoundHandle CallStartSH;
+        RE::BSSoundHandle ArrivingStartSH;
+        RE::BSSoundHandle ArrivingLoop0SH;
+        RE::BSSoundHandle ArrivingLoop1SH;
+        RE::BSSoundHandle ArrivingLoop2SH;
+        RE::BSSoundHandle ArrivingNearSH;
+        RE::BSSoundHandle CatchSH;
+        RE::BSSoundHandle ThrowingStartSH;
+        RE::BSSoundHandle ThrowingLoop0SH;
+        RE::BSSoundHandle ThrowingLoop1SH;
+
+        void StopAllSounds();
+        void PauseAllSounds();
+        void ContinueAllSounds();
+        void FadeAllSounds(const uint16_t a_durationMS = 500u);
+        void PauseAllLoopingSounds();
+        void ContinueAllLoopingSounds();
+
+        void PlayCallingHandSounds(RE::NiAVObject* a_source);
+        void PlayArrivingStartSounds(RE::NiAVObject* a_source);
+        void PlayArrivingLoopSounds(RE::NiAVObject* a_source);
+        void PlayArrivingNearSounds(RE::NiAVObject* a_source);
+
+        void PlayCatchingSounds(RE::NiAVObject* a_source);
+        void PlayThrowingSounds(RE::NiAVObject* a_source);
+        void PlayThrowingLoopSounds(RE::NiAVObject* a_source);
+
+        void FadeCallingHandSounds(const uint16_t a_durationMS = 1000u);
+        void FadeArrivingStartSounds(const uint16_t a_durationMS = 1000u);
+        void FadeArrivingLoopSounds(const uint16_t a_durationMS = 1000u);
+        void FadeArrivingNearSounds(const uint16_t a_durationMS = 1000u);
+        void FadeThrowingLoopSounds(const uint16_t a_durationMS = 1000u);
+        
+        void StopArrivingLoopSounds(const uint16_t a_delayMS = 0u);
+        void StopThrowingLoopSounds(const uint16_t a_delayMS = 0u);
+
+        [[nodiscard]] RE::BSSoundHandle GetSoundHandle(const SoundName a_soundName) const {
+            RE::BSSoundHandle ret;
+            switch (a_soundName) {
+            case SoundName::kCallStart:
+                return CallStartSH;
+            case SoundName::kArrivingStart:
+                return ArrivingStartSH;
+            case SoundName::kArrivingLoop:
+                return ArrivingLoop0SH;
+            case SoundName::kArrivingNear:
+                return ArrivingNearSH;
+            case SoundName::kCatch:
+                return CatchSH;
+            case SoundName::kThrowingStart:
+                return ThrowingStartSH;
+            case SoundName::kThrowingLoop:
+                return ThrowingLoop0SH;
+            } return ret;
+        }
+        void UpdateSoundState(const SoundName a_soundName) {
+            const auto soundHandle = GetSoundHandle(a_soundName);
+            if (soundHandle.IsPlaying()) soundState[a_soundName] = State::kPlaying;
+            spdlog::debug("sound state {}", soundHandle.state.underlying());
+        }
+        [[nodiscard]] bool IsTriggered(const SoundName a_soundName) const {
+            bool ret = false;
+            if (auto it = soundState.find(a_soundName); it != soundState.end()) {
+                const auto soundHandle = GetSoundHandle(a_soundName);
+                const bool isTriggered = (*it).second == State::kTriggered;
+                ret = isTriggered;
+            } return ret;
+        }
+        [[nodiscard]] State GetState(const SoundName a_soundName) {
+            return soundState[a_soundName];
+        }
+        [[nodiscard]] bool IsSoundValid(const SoundName a_soundName)  {
+            switch (GetState(a_soundName)) {
+            case State::kNone:
+                return !IsTriggered(a_soundName);
+            case State::kTriggered:
+                return false;
+            case State::kPlaying:
+                return false;
+            case State::kFading:
+                return true;
+            case State::kPaused:
+                return true;
+            case State::kStopped:
+                return true;
+            } return false;
+        }
+
+        SoundData(Kratos* a_kratos, Data* a_data) : kratos(a_kratos), weaponData(a_data) {};
+    };
+
     Data data;
-    ArrivingMjolnir arrivingMjolnir;
+    ArrivingWeapon arrivingMjolnir;
     HomingMjolnir homingMjolnir;
+    SoundData soundData = SoundData(Kratos::GetSingleton(), &data);
 
     void Update(const float a_delta);
     void SetThrowState(const ThrowState a_throwState);
@@ -1087,6 +1449,8 @@ public:
     void AddProjectileTrail(const float a_delta);
     void FadeProjectileTrail(const float a_delta);
     void DeleteProjectileTrail();
+    RE::NiTransform GetWorldTransform();
+    RE::NiTransform GetLocalTransform();
 
     bool isMjolnirCalled;
     bool isMjolnirArriving;
@@ -1186,76 +1550,7 @@ friend class MagicEffectApplyTracker;
     bool tridentRainStarted = false;
 };
 #endif
-using EventChecker = RE::BSEventNotifyControl;
-class AnimationEventTracker : public RE::BSTEventSink<RE::BSAnimationGraphEvent>
-{
-public:
-    static AnimationEventTracker* GetSingleton() {static AnimationEventTracker singleton; return &singleton;}
 
-    static bool Register();
-
-    virtual EventChecker ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource) override;
-};
-class AnimObjectAnimationEventTracker : public RE::BSTEventSink<RE::BSAnimationGraphEvent>
-{
-public:
-    static AnimObjectAnimationEventTracker* GetSingleton() {static AnimObjectAnimationEventTracker singleton; return &singleton;}
-
-    static bool Register();
-
-    virtual EventChecker ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource) override;
-};
-class MagicEffectApplyTracker : public RE::BSTEventSink<RE::TESMagicEffectApplyEvent>
-{
-public:
-    static MagicEffectApplyTracker* GetSingleton() {static MagicEffectApplyTracker singleton; return &singleton;}
-
-    static bool Register();
-
-    virtual EventChecker ProcessEvent(const RE::TESMagicEffectApplyEvent* a_event, RE::BSTEventSource<RE::TESMagicEffectApplyEvent>* a_eventSource) override;
-};
-class InputEventTracker : public RE::BSTEventSink<RE::InputEvent*>
-{
-public:
-    static InputEventTracker* GetSingleton() {static InputEventTracker singleton; return &singleton;}
-
-    static bool Register();
-
-    virtual EventChecker ProcessEvent(RE::InputEvent* const* a_event, RE::BSTEventSource<RE::InputEvent*>* a_eventSource) override;
-private:
-    enum : std::uint32_t
-    {
-        kInvalid = static_cast<std::uint32_t>(-1),
-        kKeyboardOffset = 0,
-        kMouseOffset = 256,
-        kGamepadOffset = 266,
-    };
-    static std::uint32_t GetGamepadIndex(RE::BSWin32GamepadDevice::Key a_key);
-    std::uint32_t GetOffsettedKeyCode(std::uint32_t a_keyCode, RE::INPUT_DEVICE a_inputDevice) const;
-
-    InputEventTracker() = default;
-    InputEventTracker(const InputEventTracker&) = delete;
-    InputEventTracker(InputEventTracker&&) = delete;
-    virtual ~InputEventTracker() = default;
-    InputEventTracker& operator=(const InputEventTracker&) = delete;
-    InputEventTracker& operator=(InputEventTracker&&) = delete;
-};
-class HitEventTracker : public RE::BSTEventSink<RE::TESHitEvent>
-{
-public:
-    static MagicEffectApplyTracker* GetSingleton() {static MagicEffectApplyTracker singleton; return &singleton;}
-
-    static bool Register();
-
-    virtual EventChecker ProcessEvent(const RE::TESHitEvent* a_event, RE::BSTEventSource<RE::TESHitEvent>* a_eventSource) override;
-};
-inline bool RegisterEvents() 
-{
-    return !(
-        !AnimationEventTracker::Register() ||
-    //    !AnimObjectAnimationEventTracker::Register() ||
-        !MagicEffectApplyTracker::Register() ||
-        !InputEventTracker::Register()// ||
-    //    HitEventTracker::Register()
-    );
-}
+using tState = LeviathanAxe::ThrowState;
+using tStateM = Mjolnir::ThrowState;
+using wStateB = BladeOfChaos::WeaponState;

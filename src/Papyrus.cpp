@@ -1,6 +1,7 @@
 #include "Papyrus.h"
 #include "Settings.h"
 #include "MainKratosCombat.h"
+#include "events.h"
 
 namespace Papyrus
 {

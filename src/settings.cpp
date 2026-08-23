@@ -58,7 +58,7 @@ void Config::WriteIntSetting(CSimpleIniA& a_ini, const char* a_sectionName, cons
 //        spdlog::debug("int setting {} is writed as {}", a_settingName, bFound);
 //    } else spdlog::warn("int setting {} can't be found for writing!", a_settingName);
 }
-/**/
+
 void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
 {
     CSimpleIniA ini;
@@ -94,9 +94,11 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
 
     ReadFloatSetting(ini, "Main", "fThrowSpeed", ThrowSpeed);
     ReadFloatSetting(ini, "Main", "fThrowRotationSpeed", ThrowRotationSpeed);
+    ReadFloatSetting(ini, "Main", "fThrowRotationSpeedM", ThrowRotationSpeedM);
 
     ReadFloatSetting(ini, "Main", "fArrivalTime", ArrivalTime);
     ReadFloatSetting(ini, "Main", "fArrivalRotationSpeed", ArrivalRotationSpeed);
+    ReadFloatSetting(ini, "Main", "fArrivalRotationSpeedM", ArrivalRotationSpeedM);
     ReadFloatSetting(ini, "Main", "fArrivalRotationX", ArrivalRotationX);
     ReadFloatSetting(ini, "Main", "fArrivalRotationY", ArrivalRotationY);
     ReadFloatSetting(ini, "Main", "fArrivalRotationZ", ArrivalRotationZ);
@@ -191,10 +193,10 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     ReadBoolSetting(ini, "Misc", "bDebugModeOpen", DebugModeOpen);
 
     if      (ThrowSpeed < 1000.f)   ThrowSpeed = 1000.f;
-    else if (ThrowSpeed > 100000.f) ThrowSpeed = 100000.f;
+    else if (ThrowSpeed > 12000.f)  ThrowSpeed = 12000.f;
 
-    if      (ArrivalTime <= 0.f)    ArrivalTime = 0.05f;
-    else if (ArrivalTime > 60.f)    ArrivalTime = 60.f;
+    if      (ArrivalTime < 0.24f)   ArrivalTime = 0.24f;
+    else if (ArrivalTime > 2.f)     ArrivalTime = 2.f;
 
     if      (DraupnirSpearCount > 9)    DraupnirSpearCount = 9;
     else if (DraupnirSpearCount < 1)    DraupnirSpearCount = 1;
@@ -222,11 +224,13 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
 inline void PrepareValues()
 {
     Config::ThrowRotationSpeed *= 0.017453292f;
+    Config::ThrowRotationSpeedM *= 0.017453292f;
 
     Config::ArrivalRoadCurveMagnitude *= 0.017453292f;
     Config::ArrivalRoadCurveMagnitude = sinf(Config::ArrivalRoadCurveMagnitude);
 
     Config::ArrivalRotationSpeed *= 0.017453292f;
+    Config::ArrivalRotationSpeedM *= 0.017453292f;
     Config::ArrivalRotationX *= 0.017453292f;
     Config::ArrivalRotationY *= 0.017453292f;
     Config::ArrivalRotationZ *= 0.017453292f;
@@ -236,8 +240,8 @@ inline void PrepareValues()
 }
 void Config::CheckConfig(const bool a_writeChanges)
 {
-    constexpr auto DefaultConfigPath = L"Data/MCM/Config/KratosCombat/Settings.ini";
-    constexpr auto UserConfigPath = L"Data/MCM/Settings/KratosCombat.ini";
+    static constexpr auto DefaultConfigPath = L"Data/MCM/Config/KratosCombat/Settings.ini";
+    static constexpr auto UserConfigPath = L"Data/MCM/Settings/KratosCombat.ini";
     ReadConfig(DefaultConfigPath);
     ReadConfig(UserConfigPath, a_writeChanges);
 
@@ -311,7 +315,7 @@ bool Config::CheckForms()
 
     return found;
 }
-/**/
+
 std::optional<bool> APIs::Request()
 {
     std::optional<bool> result;

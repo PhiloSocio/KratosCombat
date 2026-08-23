@@ -13,14 +13,13 @@
 
 using namespace std::literals;
 
+	using EventChecker = RE::BSEventNotifyControl;
 	using rFlag = RE::TESForm::RecordFlags;
 	using pFlag = RE::Projectile::Flags;
 
 #define DEBUG_MODE
 //#undef DEBUG_MODE
 
-// for experimental draupnir spear detonating features:
-//#define EXPERIMENTAL
 #define EXPERIMENTAL_CHARGE_LEVI
 //#define EXPERIMENTAL_EXTRAARROW
 #define EXPERIMENTAL_SHIELD
@@ -29,8 +28,5 @@ using namespace std::literals;
 #define EXPERIMENTAL_UNEQUIP_AFTER_THROW
 //#define NEW_WEAPON_REGISTER_METHOD
 //#define TRIDENT
-#define NEW_ARRIVING_METHOD
-#define SMART_ARRIVING_METHOD
 //#define OVERPOWERED
-//#define EXPERIMENTAL_LEVIATHAN_MODEL
 //#define EXPERIMENTAL_PROJECTILE_HIT_EXPLOSION
