@@ -24,6 +24,27 @@ inline constexpr RE::NiPoint3 backVec3(backVec);
 inline constexpr RE::NiPoint3 rightVec3(rightVec);
 inline constexpr RE::NiPoint3 leftVec3(leftVec);
 
+inline constexpr RE::NiColorA RED(1.f, 0.f, 0.f, 1.f);
+inline constexpr RE::NiColorA GREEN(0.f, 1.f, 0.f, 1.f);
+inline constexpr RE::NiColorA BLUE(0.f, 0.f, 1.f, 1.f);
+inline constexpr RE::NiColorA ORANGE(1.f, 0.5f, 0.f, 1.f);
+inline constexpr RE::NiColorA YELLOW(1.f, 1.f, 0.f, 1.f);
+inline constexpr RE::NiColorA CYAN(0.f, 1.f, 1.f, 1.f);
+inline constexpr RE::NiColorA MAGENTA(1.f, 0.f, 1.f, 1.f);
+inline constexpr RE::NiColorA PURPLE(0.5f, 0.f, 0.5f, 1.f);
+inline constexpr RE::NiColorA SILVER(0.75f, 0.75f, 0.75f, 1.f);
+inline constexpr RE::NiColorA GOLD(1.f, 0.843f, 0.f, 1.f);
+inline constexpr RE::NiColorA BROWN(0.6f, 0.4f, 0.2f, 1.f);
+inline constexpr RE::NiColorA DARK_GREEN(0.f, 0.5f, 0.f, 1.f);
+inline constexpr RE::NiColorA DARK_BLUE(0.f, 0.f, 0.5f, 1.f);
+inline constexpr RE::NiColorA DARK_RED(0.5f, 0.f, 0.f, 1.f);
+inline constexpr RE::NiColorA SKYBLUE(0.35f, 0.75f, 1.0f, 1.0f);
+inline constexpr RE::NiColorA ICEBLUE(0.55f, 0.85f, 1.0f, 1.0f);
+inline constexpr RE::NiColorA GRAY(0.5f, 0.5f, 0.5f, 1.f);
+inline constexpr RE::NiColorA SEMITRANSPARENT(1.f, 1.f, 1.f, 0.5f);
+inline constexpr RE::NiColorA BLACK(0.f, 0.f, 0.f, 1.f);
+inline constexpr RE::NiColorA WHITE(1.f, 1.f, 1.f, 1.f);
+
 inline constexpr float havokWorldScale = 0.0142857142857143f;
 
 static float* g_deltaTime = (float*)RELOCATION_ID(523660, 410199).address();            //  sensitive to slow time spell

@@ -311,24 +311,7 @@
                     "sourceType": "ModSettingBool"
                 }
             },
-            {
-                "id": "bDrawTrails:Main",
-                "text": "$KratosCombat_DrawTrails_OptionText",
-                "type": "toggle",
-                "help": "$KratosCombat_DrawTrails_InfoText",
-                "valueOptions": {
-                    "sourceType": "ModSettingBool"
-                }
-            },
-            {
-                "id": "bUsePrecisionTrailsg:Main",
-                "text": "$KratosCombat_UsePrecisionTrails_OptionText",
-                "type": "toggle",
-                "help": "$KratosCombat_UsePrecisionTrails_InfoText",
-                "valueOptions": {
-                    "sourceType": "ModSettingBool"
-                }
-            },
+
             {
                 "id": "bDontHitWhileArriving:Main",
                 "text": "$KratosCombat_DontHitWhileArriving_OptionText",
@@ -567,6 +550,110 @@
                     "min": 1,
                     "max": 11,
                     "step": 1,
+                    "sourceType": "ModSettingInt"
+                }
+            }
+        ]
+    },
+    {
+        "pageDisplayName": "$KratosComat_TrailsPage",
+        "cursorFillMode": "topToBottom",
+        "content": [
+            {
+                "id": "bDrawTrails:Trails",
+                "text": "$KratosCombat_DrawTrails_OptionText",
+                "type": "toggle",
+                "help": "$KratosCombat_DrawTrails_InfoText",
+                "valueOptions": {
+                    "sourceType": "ModSettingBool"
+                }
+            },
+            {
+                "id": "bUsePrecisionTrailsg:Trails",
+                "text": "$KratosCombat_UsePrecisionTrails_OptionText",
+                "type": "toggle",
+                "help": "$KratosCombat_UsePrecisionTrails_InfoText",
+                "valueOptions": {
+                    "sourceType": "ModSettingBool"
+                }
+            },
+            {
+                "id": "fTrailColorMult:Trails",
+                "text": "$KratosCombat_TrailColorMult_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_TrailColorMult_InfoText",
+                "valueOptions": {
+                    "min": 0.2,
+                    "max": 20,
+                    "step": 0.01,
+                    "formatString": "{2}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "fTrailLifetimeMult:Trails",
+                "text": "$KratosCombat_TrailLifetimeMult_OptionText",
+                "type": "slider",
+                "help": "$KratosCombat_TrailLifetimeMult_InfoText",
+                "valueOptions": {
+                    "min": 0.2,
+                    "max": 20,
+                    "step": 0.01,
+                    "formatString": "{2}",
+                    "sourceType": "ModSettingFloat"
+                }
+            },
+            {
+                "id": "bTrailColorIndexLeviathan:Trails",
+                "text": "$KratosCombat_LeviathanTrailColor_OptionText",
+                "type": "enum",
+                "help": "$KratosCombat_LeviathanTrailColor_InfoText",
+                "valueOptions": {
+                    "options": [
+                        "$KratosCombat_LeviathanTrailColor_White",
+                        "$KratosCombat_LeviathanTrailColor_IceBlue",
+                        "$KratosCombat_LeviathanTrailColor_SkyBlue",
+                        "$KratosCombat_LeviathanTrailColor_Blue",
+                        "$KratosCombat_LeviathanTrailColor_Yellow",
+                        "$KratosCombat_LeviathanTrailColor_Gold",
+                        "$KratosCombat_LeviathanTrailColor_Silver"
+                    ],
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "bTrailColorIndexMjolnir:Trails",
+                "text": "$KratosCombat_MjolnirTrailColor_OptionText",
+                "type": "enum",
+                "help": "$KratosCombat_MjolnirTrailColor_InfoText",
+                "valueOptions": {
+                    "options": [
+                        "$KratosCombat_MjolnirTrailColor_White",
+                        "$KratosCombat_MjolnirTrailColor_IceBlue",
+                        "$KratosCombat_MjolnirTrailColor_SkyBlue",
+                        "$KratosCombat_MjolnirTrailColor_Blue",
+                        "$KratosCombat_MjolnirTrailColor_Yellow",
+                        "$KratosCombat_MjolnirTrailColor_Gold",
+                        "$KratosCombat_MjolnirTrailColor_Silver"
+                    ],
+                    "sourceType": "ModSettingInt"
+                }
+            },
+            {
+                "id": "bTrailColorIndexDraupnir:Trails",
+                "text": "$KratosCombat_DraupnirTrailColor_OptionText",
+                "type": "enum",
+                "help": "$KratosCombat_DraupnirTrailColor_InfoText",
+                "valueOptions": {
+                    "options": [
+                        "$KratosCombat_DraupnirTrailColor_White",
+                        "$KratosCombat_DraupnirTrailColor_IceBlue",
+                        "$KratosCombat_DraupnirTrailColor_SkyBlue",
+                        "$KratosCombat_DraupnirTrailColor_Blue",
+                        "$KratosCombat_DraupnirTrailColor_Yellow",
+                        "$KratosCombat_DraupnirTrailColor_Gold",
+                        "$KratosCombat_DraupnirTrailColor_Silver"
+                    ],
                     "sourceType": "ModSettingInt"
                 }
             }

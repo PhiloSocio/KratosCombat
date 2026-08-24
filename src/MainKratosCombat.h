@@ -313,6 +313,43 @@ public:
         kStucked,
         kHavok
     };
+    enum class TrailColor : std::uint32_t {
+        kWhite = 0u,
+        kIceBlue = 1u,
+        kSkyBlue = 2u,
+        kBlue = 3u,
+        kYellow = 4u,
+        kGold = 5u,
+        kSilver = 6u
+    };
+    struct TrailData {
+        std::vector<RE::NiPointer<RE::BSTempEffectParticle>> projTrails;
+        RE::NiTransform trailTransform;
+        std::deque<RE::NiTransform> trailTransformHistory;
+        RE::NiPointer<RE::BSTempEffectParticle> projTrail;
+        RE::NiPointer<RE::NiNode> trailRootNode;
+        uint32_t trailSegmentCount;
+        RE::NiTransform lastTrailTransform;
+        bool hasLastTrailTransform = false;
+        float trailTimeAccumulator = 0.f;
+        float trailDistanceAccumulator = 0.f;
+        std::deque<float> segmentTimestamps;
+        uint32_t currentBoneIdx = 0;
+        float currentTime = 0.f;
+        float currentTimeOffset = 0.f;
+        TrailOverride trailOverride;
+        TrailTransformOverride transformOverride = TrailTransformOverride();
+
+        RE::NiColorA GetColorByIndex(const uint32_t a_index);
+        TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.f) {
+            trailOverride = TrailOverride(
+                Config::TrailLifetimeMult * a_intensity, 
+                GetColorByIndex(Config::TrailColorIndexLeviathan), 
+                Config::TrailColorScaleMult * a_intensity, 
+                a_meshDirectory
+            );
+        }
+    };
 
     struct Data {
         RE::NiPointer<RE::Projectile> proj;
@@ -329,22 +366,6 @@ public:
         RE::NiPointer<RE::NiAVObject>   model;
         RE::NiPointer<RE::NiNode>       weaponModelCopy;
         RE::NiPointer<RE::NiNode>       replacedProjectileModel;
-        std::vector<RE::NiPointer<RE::BSTempEffectParticle>> projTrails;
-        RE::NiTransform trailTransform;
-        std::deque<RE::NiTransform> trailTransformHistory;
-        RE::NiPointer<RE::BSTempEffectParticle> projTrail;
-        RE::NiPointer<RE::NiNode> trailRootNode;
-        uint32_t trailSegmentCount;
-        RE::NiTransform lastTrailTransform;
-        bool hasLastTrailTransform = false;
-        float trailTimeAccumulator = 0.f;
-        float trailDistanceAccumulator = 0.f;
-        std::deque<float> segmentTimestamps;
-        uint32_t currentBoneIdx = 0;
-        float currentTime = 0.f;
-        float currentTimeOffset = 0.f;
-        TrailOverride trailOverride = TrailOverride();
-        TrailTransformOverride transformOverride = TrailTransformOverride();
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
         RE::NiPointer<RE::NiNode> stuckedBone;
@@ -703,6 +724,7 @@ public:
     };
 
     Data data;
+    TrailData trailData;
     ArrivingWeapon arrivingLevi;
     HomingLeviathan homingLevi;
     SoundData soundData = SoundData(Kratos::GetSingleton(), &data);
@@ -821,6 +843,30 @@ public:
     static Draupnir* GetSingleton() {static Draupnir singleton; return &singleton;}
     bool Initialize();
 
+    enum class TrailColor : std::uint32_t {
+        kWhite = 0u,
+        kIceBlue = 1u,
+        kSkyBlue = 2u,
+        kBlue = 3u,
+        kYellow = 4u,
+        kGold = 5u,
+        kSilver = 6u
+    };
+    struct TrailData {
+        TrailOverride trailOverride;
+        TrailTransformOverride transformOverride = TrailTransformOverride();
+
+        RE::NiColorA GetColorByIndex(const uint32_t a_index);
+        TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.f) {
+            trailOverride = TrailOverride(
+                Config::TrailLifetimeMult * a_intensity, 
+                GetColorByIndex(Config::TrailColorIndexLeviathan), 
+                Config::TrailColorScaleMult * a_intensity, 
+                a_meshDirectory
+            );
+        }
+    };
+
     struct Data {
         RE::NiPointer<RE::Projectile>   proj;
         RE::NiPointer<RE::NiAVObject>   model;
@@ -829,8 +875,6 @@ public:
         RE::AlchemyItem*                poison  = nullptr;
         RE::NiPointer<RE::NiNode>       weaponModelCopy;
         RE::NiPointer<RE::NiNode>       replacedProjectileModel;
-        TrailOverride                   trailOverride       = TrailOverride();
-        TrailTransformOverride          transformOverride   = TrailTransformOverride();
         float damage                    = 0.f;
         float gravity                   = 2.69f;
         float rotationSpeed             = Config::ThrowRotationSpeed; //  rad/s
@@ -838,6 +882,7 @@ public:
     };
 
     static inline Data data;
+    static inline TrailData trailData;
 
     static inline RE::NiPointer<RE::Projectile>   DraupnirSpearProjectiles[9];                            //  they will be explode after Draupnir's Call move
     static inline RE::NiPointer<RE::Projectile>   DraupnirsCallProjectiles[9];                            //  hard to explain
@@ -913,6 +958,30 @@ public:
         kHavok = 3
     };
 
+    enum class TrailColor : std::uint32_t {
+        kWhite = 0u,
+        kIceBlue = 1u,
+        kSkyBlue = 2u,
+        kBlue = 3u,
+        kYellow = 4u,
+        kGold = 5u,
+        kSilver = 6u
+    };
+    struct TrailData {
+        TrailOverride trailOverride;
+        TrailTransformOverride transformOverride = TrailTransformOverride();
+
+        RE::NiColorA GetColorByIndex(const uint32_t a_index);
+        TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.f) {
+            trailOverride = TrailOverride(
+                Config::TrailLifetimeMult * a_intensity, 
+                GetColorByIndex(Config::TrailColorIndexLeviathan), 
+                Config::TrailColorScaleMult * a_intensity, 
+                a_meshDirectory
+            );
+        }
+    };
+
     struct Data {
         RE::NiPointer<RE::Projectile> proj;
         RE::TESObjectWEAP* weap     = nullptr;
@@ -929,9 +998,6 @@ public:
         RE::NiPointer<RE::NiAVObject>   model;
         RE::NiPointer<RE::NiNode>       weaponModelCopy;
         RE::NiPointer<RE::NiNode>       replacedProjectileModel;
-        TrailOverride                   trailOverride       = TrailOverride();
-        TrailTransformOverride          transformOverride   = TrailTransformOverride();
-        RE::NiTransform trailTransform;
         std::vector<RE::Actor*>         lastHitActors;  //  keeps last 3 hit actor from the last throw
         std::vector<RE::TESObjectREFR*> lastHitForms;   //  keeps last 3 hit object from the last throw
         ProjectileState projState   = ProjectileState::kNone;
@@ -1429,6 +1495,7 @@ public:
     };
 
     Data data;
+    TrailData trailData;
     ArrivingWeapon arrivingMjolnir;
     HomingMjolnir homingMjolnir;
     SoundData soundData = SoundData(Kratos::GetSingleton(), &data);

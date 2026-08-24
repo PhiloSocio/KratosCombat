@@ -1061,7 +1061,7 @@ void LeviathanAxe::Update(const float a_delta) {
             //    oldWorld.scale = data.replacedProjectileModel.get()->world.scale;
             //    data.replacedProjectileModel.get()->local = ObjectUtil::Node::GetLocalTransform(data.replacedProjectileModel.get(), oldWorld);
                 projectileUpdate.Done();
-                data.projTrail.reset();
+                trailData.projTrail.reset();
                 trailUpdate.RegisterForUpdate(a_delta * 2.f, false);
                 spdlog::debug("levi model changed!");
             } else spdlog::warn("animated node or levinode null");
@@ -1257,8 +1257,8 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         } else {
             WeaponIdentify::isLeviathanAxe = false;
             WeaponIdentify::isRelic = false;
-            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
-            a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
+        //    Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
+        //    a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
             WeaponIdentify::skipEquipAnim = true;
             WeaponIdentify::unequipWhenAnimEnds = true;
         }
@@ -1283,10 +1283,11 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
 }
 void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE::Actor* a_actor)
 {
+    homingLevi.proj.reset();
     if (a_actor && data.weap) {
         spdlog::debug("Levi is calling...");
         projectileUpdate.Done();
-        data.projTrail.reset();
+        trailData.projTrail.reset();
 
         trailUpdate.Done();
         trailRemoveUpdate.Done();
@@ -1452,7 +1453,7 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
 
         isAxeCalled = false;
         std::jthread delayedCast([=]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(400));
+            std::this_thread::sleep_for(std::chrono::milliseconds(800));
             if (GetThrowState() == tState::kThrowable) kratos->SetIsCanCallAxe(a_actor, false);
         });
         delayedCast.detach();
@@ -1466,8 +1467,8 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
         auto bone = data.replacedProjectileModel;
         if (bone) {
             const bool isCharged = IsCharged(true);
-            float particleMult = isCharged ? 3.f : 2.f;
-            data.trailOverride.meshOverride = isCharged ? Config::TrailModelPathFrost : Config::TrailModelPathDef;
+            const float intensity = isCharged ? 3.f : 2.f;
+            const auto meshOverride = isCharged ? Config::TrailModelPathFrost : Config::TrailModelPathDef;
             float length = bone->worldBound.radius;
             ObjectUtil::Capsule capsule;
             ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
@@ -1475,13 +1476,12 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
             length = length > capsuleLength ? length : capsuleLength;
             float scale = fmax(length, capsule.radius) * 0.01f;
             float tipOffset = length;
+            trailData = TrailData(meshOverride, intensity);
 
             if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
                 trailUpdate.Done();
-                TrailOverride trailOverride = data.trailOverride;
-                trailOverride.lifetimeMult = particleMult;
-                data.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
-                data.transformOverride.scale = bone->worldBound.radius * 0.01f;
+                trailData.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
+                trailData.transformOverride.scale = bone->worldBound.radius * 0.01f;
                 auto node = RE::NiNode::Create(0);
                 node->name = "trailParentNode";
                 bone->AttachChild(node, false);
@@ -1489,82 +1489,82 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
                     node, 
                     RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                     RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                    trailOverride, 
-                    data.transformOverride);
+                    trailData.trailOverride, 
+                    trailData.transformOverride);
                 if (isCharged) {
-                    trailOverride.meshOverride = Config::TrailModelPathDef;
+                    trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
                     APIs::precision->AddTrailEffect(
                         node, 
                         RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                         RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                        trailOverride, 
-                        data.transformOverride);
+                        trailData.trailOverride, 
+                        trailData.transformOverride);
                 }
             //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastLeviProjectile);
             } else {
                 auto weaponForward = frontVec3;
-                data.trailTransform = bone->world;
-                data.trailTransform.translate +=
-                    data.trailTransform.rotate * weaponForward * tipOffset;
+                trailData.trailTransform = bone->world;
+                trailData.trailTransform.translate +=
+                    trailData.trailTransform.rotate * weaponForward * tipOffset;
 
             //    auto dir = data.trailTransform.translate - bone->world.translate;
                 auto dir = data.lastOrientation;
             //    dir.Unitize();
-                MathUtil::Algebra::SetRotationMatrix(data.trailTransform.rotate, -dir.x, dir.y, dir.z);
+                MathUtil::Algebra::SetRotationMatrix(trailData.trailTransform.rotate, -dir.x, dir.y, dir.z);
                 RE::NiMatrix3 weaponRotation(0.f, NI_HALF_PI, -NI_HALF_PI);
-                data.trailTransform.rotate = data.trailTransform.rotate * weaponRotation;
+                trailData.trailTransform.rotate = trailData.trailTransform.rotate * weaponRotation;
                 RE::NiMatrix3 flip90(-NI_HALF_PI, 0.f, 0.f);
-                data.trailTransform.rotate = data.trailTransform.rotate * flip90;
+                trailData.trailTransform.rotate = trailData.trailTransform.rotate * flip90;
 
-                if (!data.projTrail) {
-                    data.projTrail = RE::NiPointer<RE::BSTempEffectParticle>(
+                if (!trailData.projTrail) {
+                    trailData.projTrail = RE::NiPointer<RE::BSTempEffectParticle>(
                         RE::BSTempEffectParticle::Spawn(
                             RE::PlayerCharacter::GetSingleton()->GetParentCell(),
                             10.f,
-                            data.trailOverride.meshOverride.value().data(),
-                            data.trailTransform.rotate,
-                            data.trailTransform.translate,
+                            trailData.trailOverride.meshOverride.value().data(),
+                            trailData.trailTransform.rotate,
+                            trailData.trailTransform.translate,
                             scale,
                             7,
                             nullptr));
 
-                    data.trailRootNode.reset();
-                    data.trailTimeAccumulator = 0.f;
-                    data.segmentTimestamps.clear();
+                    trailData.trailRootNode.reset();
+                    trailData.trailTimeAccumulator = 0.f;
+                    trailData.segmentTimestamps.clear();
                     spdlog::warn("Created trail particle.");
-                } else if (!data.trailRootNode) {
-                    auto particleObject = data.projTrail ? data.projTrail->particleObject : nullptr;
+                } else if (!trailData.trailRootNode) {
+                    auto particleObject = trailData.projTrail ? trailData.projTrail->particleObject : nullptr;
                     auto fadeNode = particleObject ? particleObject->AsFadeNode() : nullptr;
                     auto trailRoot = fadeNode ? fadeNode->GetObjectByName("TrailRoot"sv) : nullptr;
-                    data.trailRootNode.reset(trailRoot ? trailRoot->AsNode() : nullptr);
-                    data.trailSegmentCount = data.trailRootNode ? data.trailRootNode->GetChildren().size() : 0u;
+                    trailData.trailRootNode.reset(trailRoot ? trailRoot->AsNode() : nullptr);
+                    trailData.trailSegmentCount = trailData.trailRootNode ? trailData.trailRootNode->GetChildren().size() : 0u;
 
-                    data.trailTransformHistory.clear();
-                //    for (uint32_t i = 0; i < data.trailSegmentCount; i++)
-                //        data.trailTransformHistory.push_front(data.trailTransform);
+                    trailData.trailTransformHistory.clear();
+                //    for (uint32_t i = 0; i < trailData.trailSegmentCount; i++)
+                //        trailData.trailTransformHistory.push_front(trailData.trailTransform);
 
-                    if (data.trailRootNode)
-                        if (data.trailRootNode->GetChildren().empty())
+                    if (trailData.trailRootNode)
+                        if (trailData.trailRootNode->GetChildren().empty())
                             spdlog::error("Trail root node has no children! Check the trail model path!");
                         else
                             spdlog::info("Found projectile trail root node!");
                     else 
                         spdlog::warn("Cannot find projectile trail root node...");
                 } else {
-                    if (auto fadeNode = data.projTrail->particleObject ? data.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
+                    if (auto fadeNode = trailData.projTrail->particleObject ? trailData.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
                         fadeNode->currentFade = 1.f;
 
-                        data.trailRootNode->world = data.trailTransform;
-                        ObjectUtil::Node::UpdateNodeTransformLocal(data.trailRootNode.get(), data.trailTransform);
-                        data.trailTransformHistory.emplace_back(data.trailTransform);
+                        trailData.trailRootNode->world = trailData.trailTransform;
+                        ObjectUtil::Node::UpdateNodeTransformLocal(trailData.trailRootNode.get(), trailData.trailTransform);
+                        trailData.trailTransformHistory.emplace_back(trailData.trailTransform);
                     }
                 }
             }
         }
-    } else if (data.projTrail) {
-        data.projTrail->age += data.projTrail->lifetime;
-        if (data.projTrail->particleObject && data.projTrail->particleObject->AsGeometry()) {
-            auto effect = data.projTrail->particleObject->AsGeometry()->properties[RE::BSGeometry::States::kEffect];
+    } else if (trailData.projTrail) {
+        trailData.projTrail->age += trailData.projTrail->lifetime;
+        if (trailData.projTrail->particleObject && trailData.projTrail->particleObject->AsGeometry()) {
+            auto effect = trailData.projTrail->particleObject->AsGeometry()->properties[RE::BSGeometry::States::kEffect];
             auto effectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect.get());
             if (effectShader) {
                 auto effectShaderMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShader->material);
@@ -1580,24 +1580,24 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
                             effectShaderMaterial->baseColor.alpha -= a_delta / 1.5f;
                         else {
                             effectShaderMaterial->baseColor.alpha = 0.f;
-                            data.projTrail.reset();
-                            data.trailRootNode.reset();
+                            trailData.projTrail.reset();
+                            trailData.trailRootNode.reset();
                         }
                     }
                 }
             }
-        } else if (auto fadeNode = data.projTrail->particleObject ? data.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
+        } else if (auto fadeNode = trailData.projTrail->particleObject ? trailData.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
             if (fadeNode->currentFade > 0.f) {
                 float fadeDuration = 0.5f;
                 fadeNode->currentFade -= a_delta / fadeDuration;
             } else {
                 fadeNode->currentFade = 0.f;
-                data.projTrail.reset();
-                data.trailRootNode.reset();
+                trailData.projTrail.reset();
+                trailData.trailRootNode.reset();
             }
         } else {
-            data.projTrail.reset();
-            data.trailRootNode.reset();
+            trailData.projTrail.reset();
+            trailData.trailRootNode.reset();
         }
     }
 }
@@ -1817,6 +1817,29 @@ RE::NiTransform LeviathanAxe::GetLocalTransform()
     } else ret = data.transformPL;
     return ret;
 }
+#pragma region Trails
+RE::NiColorA LeviathanAxe::TrailData::GetColorByIndex(const uint32_t a_index)
+{
+    switch ((TrailColor)a_index) {
+    case TrailColor::kWhite:
+        return WHITE;
+    case TrailColor::kIceBlue:
+        return ICEBLUE;
+    case TrailColor::kSkyBlue:
+        return SKYBLUE;
+    case TrailColor::kBlue:
+        return BLUE;
+    case TrailColor::kYellow:
+        return YELLOW;
+    case TrailColor::kGold:
+        return GOLD;
+    case TrailColor::kSilver:
+        return SILVER;
+    default:
+        return WHITE;
+    }
+}
+#pragma endregion
 #pragma region Arriving
 void LeviathanAxe::ArrivingWeapon::UpdateRotation()
 {
@@ -2204,10 +2227,10 @@ void LeviathanAxe::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
             ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 2.f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
-        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
-            soundState[SoundName::kArrivingLoop] = State::kTriggered;
-        }
+    //    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
+    //        soundState[SoundName::kArrivingLoop] = State::kTriggered;
+    //    }
     } else {
         spdlog::debug("updating the following node of the arriving loop sounds.");
         if (ArrivingLoop0SH.IsPlaying()) {
@@ -2216,10 +2239,10 @@ void LeviathanAxe::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
         } if (ArrivingLoop1SH.IsPlaying()) {
             ArrivingLoop1SH.SetObjectToFollow(a_source);
             ArrivingLoop1SH.Play();
-        } if (ArrivingLoop2SH.IsPlaying()) {
-            ArrivingLoop2SH.SetObjectToFollow(a_source);
-            ArrivingLoop2SH.Play();
-        }
+        }// if (ArrivingLoop2SH.IsPlaying()) {
+    //        ArrivingLoop2SH.SetObjectToFollow(a_source);
+    //        ArrivingLoop2SH.Play();
+    //    }
     }
 }
 void LeviathanAxe::SoundData::PlayArrivingNearSounds(RE::NiAVObject* a_source)
@@ -2249,19 +2272,19 @@ void LeviathanAxe::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
             ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 5.f);
             soundState[SoundName::kThrowingLoop] = State::kTriggered;
         }
-        if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
-            soundState[SoundName::kThrowingLoop] = State::kTriggered;
-        }
+    //    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
+    //        soundState[SoundName::kThrowingLoop] = State::kTriggered;
+    //    }
     } else {
         spdlog::debug("updating the following node of the throwing loop sounds.");
         if (ThrowingLoop0SH.IsPlaying()) {
             ThrowingLoop0SH.SetObjectToFollow(a_source);
             ThrowingLoop0SH.Play();
-        } if (ThrowingLoop1SH.IsPlaying()) {
-            ThrowingLoop1SH.SetObjectToFollow(a_source);
-            ThrowingLoop1SH.Play();
-        }
+        }// if (ThrowingLoop1SH.IsPlaying()) {
+    //        ThrowingLoop1SH.SetObjectToFollow(a_source);
+    //        ThrowingLoop1SH.Play();
+    //    }
     }
 }
 void LeviathanAxe::SoundData::FadeCallingHandSounds(const uint16_t a_durationMS)
@@ -2474,8 +2497,8 @@ void Draupnir::Update(const float a_delta)
         if (trailUpdate.IsTimeToUpdate()) {
             auto bone = data.replacedProjectileModel;
             if (bone) {
-                float particleMult = 2.f;
-                data.trailOverride.meshOverride = Config::TrailModelPathDef;
+                const float intensity = 2.f;
+                const auto meshOverride = Config::TrailModelPathDef;
                 float length = bone->worldBound.radius;
                 ObjectUtil::Capsule capsule;
                 ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
@@ -2483,21 +2506,20 @@ void Draupnir::Update(const float a_delta)
                 length = length > capsuleLength ? length : capsuleLength;
                 float scale = fmax(length, capsule.radius) * 0.01f;
                 float tipOffset = length;
+                trailData = TrailData(meshOverride, intensity);
 
                 if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
                     trailUpdate.Done();
-                    TrailOverride trailOverride = data.trailOverride;
-                    trailOverride.lifetimeMult = particleMult;
-                    data.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
-                    data.transformOverride.scale = bone->worldBound.radius * 0.01f;
+                    trailData.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
+                    trailData.transformOverride.scale = bone->worldBound.radius * 0.01f;
                     auto node = RE::NiNode::Create(0);
                     bone->AttachChild(node, false);
                     APIs::precision->AddTrailEffect(
                         node, 
                         RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                         RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                        trailOverride, 
-                        data.transformOverride);
+                        trailData.trailOverride, 
+                        trailData.transformOverride);
                 }
             }
         }
@@ -2794,6 +2816,29 @@ void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
         } else spdlog::warn("projectile node is null");
     } else spdlog::warn("projectile or projectile model is null");
 }
+#pragma region Trails
+RE::NiColorA Draupnir::TrailData::GetColorByIndex(const uint32_t a_index)
+{
+    switch ((TrailColor)a_index) {
+    case TrailColor::kWhite:
+        return WHITE;
+    case TrailColor::kIceBlue:
+        return ICEBLUE;
+    case TrailColor::kSkyBlue:
+        return SKYBLUE;
+    case TrailColor::kBlue:
+        return BLUE;
+    case TrailColor::kYellow:
+        return YELLOW;
+    case TrailColor::kGold:
+        return GOLD;
+    case TrailColor::kSilver:
+        return SILVER;
+    default:
+        return WHITE;
+    }
+}
+#pragma endregion
 #pragma endregion
 #pragma region MJOLNIR
 Mjolnir* Mjolnir::GetSingleton()                {static Mjolnir singleton; return &singleton;}
@@ -3007,8 +3052,8 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         } else {
             WeaponIdentify::isMjolnir = false;
             WeaponIdentify::isRelic = false;
-            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
-            a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
+        //    Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
+        //    a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
             WeaponIdentify::skipEquipAnim = true;
             WeaponIdentify::unequipWhenAnimEnds = true;
         }
@@ -3034,6 +3079,7 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
 }
 void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::optional<float> a_delay, RE::Actor* a_actor)
 {
+    homingMjolnir.proj.reset();
     RE::NiPoint3 startPoint = data.position;
     GetPosition(startPoint, a_actor);
     if (!isMjolnirCalled)
@@ -3179,7 +3225,7 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
 
         isMjolnirCalled = false;
         std::jthread delayedCast([=]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(400));
+            std::this_thread::sleep_for(std::chrono::milliseconds(800));
             if (GetThrowState() == tStateM::kThrowable) kratos->SetIsCanCallMjolnir(a_actor, false);
         });
         delayedCast.detach();
@@ -3193,21 +3239,20 @@ void Mjolnir::AddProjectileTrail(const float a_delta)
             trailRemoveUpdate.Done();
             DeleteProjectileTrail();
             const bool isCharged = IsCharged(true);
-            float particleMult = isCharged ? 3.f : 2.f;
-            data.trailOverride.meshOverride = isCharged ? Config::TrailModelPathShock : Config::TrailModelPathDef;
+            const float intensity = isCharged ? 3.f : 2.f;
+            const auto meshOverride = isCharged ? Config::TrailModelPathShock : Config::TrailModelPathDef;
             float length = bone->worldBound.radius;
             ObjectUtil::Capsule capsule;
             ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
             float capsuleLength = capsule.a.GetDistance(capsule.b);
             length = length > capsuleLength ? length : capsuleLength;
             float scale = fmax(length, capsule.radius) * 0.01f;
+            trailData = TrailData(meshOverride, intensity);
 
             if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
                 trailUpdate.Done();
-                TrailOverride trailOverride = data.trailOverride;
-                trailOverride.lifetimeMult = particleMult;
-                data.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
-                data.transformOverride.scale = scale;
+                trailData.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
+                trailData.transformOverride.scale = scale;
                 auto node = RE::NiNode::Create(0);
                 node->name = "trailParentNode";
                 bone->AttachChild(node, false);
@@ -3215,16 +3260,16 @@ void Mjolnir::AddProjectileTrail(const float a_delta)
                     node, 
                     RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                     RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                    trailOverride, 
-                    data.transformOverride);
+                    trailData.trailOverride, 
+                    trailData.transformOverride);
                 if (isCharged) {
-                    trailOverride.meshOverride = Config::TrailModelPathDef;
+                    trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
                     APIs::precision->AddTrailEffect(
                         node, 
                         RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                         RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                        trailOverride, 
-                        data.transformOverride);
+                        trailData.trailOverride, 
+                        trailData.transformOverride);
                 }
             }
         }
@@ -3454,6 +3499,29 @@ RE::NiTransform Mjolnir::GetLocalTransform()
     } else ret = data.transformPL;
     return ret;
 }
+#pragma region Trails
+RE::NiColorA Mjolnir::TrailData::GetColorByIndex(const uint32_t a_index)
+{
+    switch ((TrailColor)a_index) {
+    case TrailColor::kWhite:
+        return WHITE;
+    case TrailColor::kIceBlue:
+        return ICEBLUE;
+    case TrailColor::kSkyBlue:
+        return SKYBLUE;
+    case TrailColor::kBlue:
+        return BLUE;
+    case TrailColor::kYellow:
+        return YELLOW;
+    case TrailColor::kGold:
+        return GOLD;
+    case TrailColor::kSilver:
+        return SILVER;
+    default:
+        return WHITE;
+    }
+}
+#pragma endregion
 #pragma region Arriving
 void Mjolnir::ArrivingWeapon::UpdateRotation()
 {
@@ -3476,7 +3544,7 @@ void Mjolnir::ArrivingWeapon::UpdateRotation()
         constexpr float smoothTime = 0.0069f;
         const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
         MathUtil::Algebra::InterpolateRotation(localRotation, desiredLocalRotation, alpha);
-        spdlog::debug("target angle: {} calculated target angle: {} blended angle: {} tau: {}", angleZ, arrivalSpin, blendZ, tReal);
+    //    spdlog::debug("target angle: {} calculated target angle: {} blended angle: {} tau: {}", angleZ, arrivalSpin, blendZ, tReal);
     }
 //    mjolnirAngle = mjolnir->data.lastEulerAngles;
 //    mjolnirAngle.z = atan2(desiredDir.x, desiredDir.y);
@@ -3849,10 +3917,10 @@ void Mjolnir::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
             ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 2.f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
-        if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
-            soundState[SoundName::kArrivingLoop] = State::kTriggered;
-        }
+    //    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
+    //        soundState[SoundName::kArrivingLoop] = State::kTriggered;
+    //    }
     } else {
         spdlog::debug("updating the following node of the arriving loop sounds.");
         if (ArrivingLoop0SH.IsPlaying()) {
@@ -3861,10 +3929,10 @@ void Mjolnir::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
         } if (ArrivingLoop1SH.IsPlaying()) {
             ArrivingLoop1SH.SetObjectToFollow(a_source);
             ArrivingLoop1SH.Play();
-        } if (ArrivingLoop2SH.IsPlaying()) {
-            ArrivingLoop2SH.SetObjectToFollow(a_source);
-            ArrivingLoop2SH.Play();
-        }
+        }// if (ArrivingLoop2SH.IsPlaying()) {
+    //        ArrivingLoop2SH.SetObjectToFollow(a_source);
+    //        ArrivingLoop2SH.Play();
+    //    }
     }
 }
 void Mjolnir::SoundData::PlayArrivingNearSounds(RE::NiAVObject* a_source)
@@ -3894,19 +3962,19 @@ void Mjolnir::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
             ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 5.f);
             soundState[SoundName::kThrowingLoop] = State::kTriggered;
         }
-        if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
-            soundState[SoundName::kThrowingLoop] = State::kTriggered;
-        }
+    //    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
+    //        soundState[SoundName::kThrowingLoop] = State::kTriggered;
+    //    }
     } else {
         spdlog::debug("updating the following node of the throwing loop sounds.");
         if (ThrowingLoop0SH.IsPlaying()) {
             ThrowingLoop0SH.SetObjectToFollow(a_source);
             ThrowingLoop0SH.Play();
-        } if (ThrowingLoop1SH.IsPlaying()) {
-            ThrowingLoop1SH.SetObjectToFollow(a_source);
-            ThrowingLoop1SH.Play();
-        }
+        }// if (ThrowingLoop1SH.IsPlaying()) {
+    //        ThrowingLoop1SH.SetObjectToFollow(a_source);
+    //        ThrowingLoop1SH.Play();
+    //    }
     }
 }
 void Mjolnir::SoundData::FadeCallingHandSounds(const uint16_t a_durationMS)

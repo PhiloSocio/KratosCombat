@@ -120,6 +120,12 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     ReadFloatSetting(ini, "Main", "fMinAxeStuckAngle", MinAxeStuckAngle);
 
     ReadBoolSetting(ini, "Main", "bDrawTrails", DrawTrails);
+    ReadFloatSetting(ini, "Main", "bTrailColorScaleMult", TrailColorScaleMult);
+    ReadFloatSetting(ini, "Main", "bTrailLifetimeMult", TrailLifetimeMult);
+    ReadIntSetting(ini, "Main", "bTrailColorIndexLeviathan", TrailColorIndexLeviathan);
+    ReadIntSetting(ini, "Main", "bTrailColorIndexMjolnir", TrailColorIndexMjolnir);
+    ReadIntSetting(ini, "Main", "bTrailColorIndexDraupnir", TrailColorIndexDraupnir);
+
     ReadBoolSetting(ini, "Main", "bReturnHProjectileAfterLoops", ReturnHProjectileAfterLoops);
 
     ReadIntSetting(ini, "Main", "iDraupnirExplodableCount", DraupnirSpearCount);
@@ -127,14 +133,6 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
 
     ReadIntSetting(ini, "Main", "iChargeHitCount", ChargeHitCount);
     ReadFloatSetting(ini, "Main", "fChargeMagnitude", ChargeMagnitude);
-
-//    ReadStringSetting(ini, "Main", "sKratosCombatESP", KratosCombatESP);
-//    ReadStringSetting(ini, "Main", "sDraupnirModESP", DraupnirModESP);
-
-//    ReadStringSetting(ini, "Main", "sWeaponThrowingEvent", ThrowEvent);
-//    ReadStringSetting(ini, "Main", "sWeaponCallingEvent", CallEvent);
-//    ReadStringSetting(ini, "Main", "sAxeChargeEvent", ChargeLeviEvent);
-//    ReadStringSetting(ini, "Main", "sDraupnirsCallEvent", DraupnirsCallEvent);
 
     ReadIntSetting(ini, "Registration", "uRegisteredLeviathanID",      (uint32_t&)registeredLeviathanID);
     ReadIntSetting(ini, "Registration", "uRegisteredBladeOfChaosID",   (uint32_t&)registeredBladeOfChaosID);

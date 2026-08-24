@@ -266,11 +266,6 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                 mjolnir->data.lastEulerAngles = mjolnirAngle;
                 mjolnir->data.throwedTime = livingTime;
                 mjolnir->data.projState = Mjolnir::ProjectileState::kLaunched;
-            //    float speed = vel.Length();
-            //    speed *= (*g_deltaTimeRealTime / *g_deltaTime); //  for not be effected by slow motion/fast motion
-            //    vel = linearDir * speed;
-
-            //  skip gravity effect for a while
 
                 if (mjolnir->IsHoming(a_this)) {
                     auto& hMjolnir = mjolnir->homingMjolnir;
@@ -383,6 +378,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     auto velocityWhenCalled = mjolnir->data.projState == Mjolnir::ProjectileState::kLaunched ? mjolnir->data.lastVelocity : (aMjolnir.linearArrivingDir * aMjolnir.speed);
                     vel = MathUtil::Angle::BlendVectors(velocityWhenCalled, linearArrivingDir * mjolnir->arrivingMjolnir.speed, mjolnir->arrivingMjolnir.GetLivingTime() / blendTime);
                     aMjolnir.startVelocity = vel;
+                    mjolnir->data.lastVelocity = vel;
                     RE::NiPoint3 curvyDir = vel;
                     curvyDir.Unitize();
                     mjolnirAngle = mjolnir->data.lastEulerAngles;  //  keep last angle

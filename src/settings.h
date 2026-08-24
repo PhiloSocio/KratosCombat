@@ -29,6 +29,11 @@ public:
     //Trails
     static inline bool DrawTrails                   = true;         //  draw trails for thrown weapons
     static inline uint8_t TrailParticleCount        = 6u;           //  how many particles will be used for the trail
+    static inline float TrailColorScaleMult         = 1.f;
+    static inline float TrailLifetimeMult           = 1.f;
+    static inline uint32_t TrailColorIndexLeviathan = 1u;
+    static inline uint32_t TrailColorIndexMjolnir   = 2u;
+    static inline uint32_t TrailColorIndexDraupnir  = 5u;
     static inline std::string TrailModelPathDef     = "effects/WeaponTrails/AttackTrail.nif";
     static inline std::string TrailModelPathMagic   = "effects/WeaponTrails/AttackTrailMagic.nif";
     static inline std::string TrailModelPathFrost   = "effects/WeaponTrails/AttackTrailMagic_Frost.nif";
@@ -75,7 +80,7 @@ public:
     //Draupnir spear
     static inline float DraupnirExplosionsInterval  = 0.24f;
     static inline uint32_t DraupnirSpearCount       = 6;            //  count of spear explodable projectiles (max 9)
-    static inline float NoGravityDurationDraupnir   = 0.36f;
+    static inline float NoGravityDurationDraupnir   = 0.18f;
     static inline std::string DraupnirsCallEvent    = "DraupnirsCall";
     static inline std::string SpearThrowEvent       = "ThrowSpear";
 
