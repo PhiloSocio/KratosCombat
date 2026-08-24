@@ -1125,7 +1125,30 @@ namespace ObjectUtil
 
     struct Actor
     {
-        static void PushActorAway(RE::Actor* a_target, const float a_force, const RE::NiPoint3& a_direction) {
+        static RE::CameraState GetCameraState()
+        {
+            if (const auto playerCamera = RE::PlayerCamera::GetSingleton(); playerCamera && playerCamera->currentState)
+                return playerCamera->currentState->id;
+            return RE::CameraState::kTotal;
+        }
+        static RE::NiAVObject* GetBoneByName(const RE::Actor* a_target, const RE::BSFixedString& a_name)
+        {
+            if (a_target)  {
+                if (const auto root = a_target->GetCurrent3D()) {
+                    return root->GetObjectByName(a_name);
+                }
+            } return nullptr;
+        }
+        static RE::NiAVObject* GetBoneByName(const RE::Actor* a_target, const RE::BSFixedString& a_name, const bool a_1stP)
+        {
+            if (a_target)  {
+                if (const auto root = a_target->Get3D(a_1stP)) {
+                    return root->GetObjectByName(a_name);
+                }
+            } return nullptr;
+        }
+        static void PushActorAway(RE::Actor* a_target, const float a_force, const RE::NiPoint3& a_direction)
+        {
             if (a_target && !a_target->IsDead() && a_target->Is3DLoaded()) {
                 auto process = a_target->GetActorRuntimeData().currentProcess;
                 if (process && process->InHighProcess()) {
@@ -1651,7 +1674,6 @@ namespace ObjectUtil
         }
     };
 }
-
 
 namespace AnimUtil
 {

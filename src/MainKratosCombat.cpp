@@ -413,21 +413,12 @@ void WeaponIdentify::WeaponCheck(const bool a_specialityCheck)
     isThor = false;
 
     auto AnArchos = PlayerCharacter::GetSingleton();
-    if      (!AnArchos || !AnArchos->AsActorValueOwner()) {spdlog::error("can't found the player!"); return;}
-    if      (RHandBone = AnArchos->GetNodeByName("NPC R Finger20 [RF20]"); RHandBone)  {}
-    else if (RHandBone = AnArchos->GetNodeByName("NPC R MagicNode [RMag]"); RHandBone) {}
-    else if (RHandBone = AnArchos->GetNodeByName("NPC R Hand [RHnd]"); RHandBone)      {}
-    else    spdlog::error("can't found right hand bone!");
 
-    if      (LHandBone = AnArchos->GetNodeByName("NPC L Finger20 [LF20]"); LHandBone)  {}
-    else if (LHandBone = AnArchos->GetNodeByName("NPC L MagicNode [LMag]"); LHandBone) {}
-    else if (LHandBone = AnArchos->GetNodeByName("NPC L Hand [LHnd]"); LHandBone)      {}
-    else    spdlog::error("can't found left hand bone!");
-
-    WeaponBone = AnArchos->GetNodeByName("Weapon");
-    ShieldBone = AnArchos->GetNodeByName("Shield");
-    AnimObjectRBone = AnArchos->GetNodeByName("AnimObjectR");
-    //  spdlog::debug("Right hand bone is {}", RHandBone->name);
+    RHandBone = GetRhandBone(AnArchos);
+    LHandBone = GetLhandBone(AnArchos);
+    WeaponBone = GetWeaponBone(AnArchos);
+    ShieldBone = GetShieldBone(AnArchos);
+    AnimObjectRBone = GetAnimObjectRBone(AnArchos);
 
     auto pcSkillArchery = AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kArchery);
     auto pcSkill1Handed = AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kOneHanded);
@@ -468,6 +459,37 @@ void WeaponIdentify::WeaponCheck(const bool a_specialityCheck)
         Config::SpecialShield->value = (uint8_t)Kratos::Shield::kNone;
         AnArchos->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
     }
+}
+RE::NiAVObject* WeaponIdentify::GetRhandBone(RE::Actor* a_actor)
+{
+    if      (RHandBone = ObjectUtil::Actor::GetBoneByName(a_actor, "NPC R Finger20 [RF20]"); RHandBone)  {}
+    else if (RHandBone = ObjectUtil::Actor::GetBoneByName(a_actor, "NPC R MagicNode [RMag]"); RHandBone) {}
+    else if (RHandBone = ObjectUtil::Actor::GetBoneByName(a_actor, "NPC R Hand [RHnd]"); RHandBone)      {}
+    else    spdlog::error("can't found right hand bone!");
+    return RHandBone;
+}
+RE::NiAVObject* WeaponIdentify::GetLhandBone(RE::Actor* a_actor)
+{
+    if      (LHandBone = ObjectUtil::Actor::GetBoneByName(a_actor, "NPC L Finger20 [LF20]"); LHandBone)  {}
+    else if (LHandBone = ObjectUtil::Actor::GetBoneByName(a_actor, "NPC L MagicNode [LMag]"); LHandBone) {}
+    else if (LHandBone = ObjectUtil::Actor::GetBoneByName(a_actor, "NPC L Hand [LHnd]"); LHandBone)      {}
+    else    spdlog::error("can't found right hand bone!");
+    return LHandBone;
+}
+RE::NiAVObject* WeaponIdentify::GetWeaponBone(RE::Actor* a_actor)
+{
+    WeaponBone =ObjectUtil::Actor::GetBoneByName(a_actor, "Weapon");
+    return WeaponBone;
+}
+RE::NiAVObject* WeaponIdentify::GetShieldBone(RE::Actor* a_actor)
+{
+    ShieldBone =ObjectUtil::Actor::GetBoneByName(a_actor, "Shield");
+    return ShieldBone;
+}
+RE::NiAVObject* WeaponIdentify::GetAnimObjectRBone(RE::Actor* a_actor)
+{
+    AnimObjectRBone =ObjectUtil::Actor::GetBoneByName(a_actor, "AnimObjectR");
+    return AnimObjectRBone;
 }
 bool WeaponIdentify::IsRelic(RE::BGSProjectile *a_baseProj, Kratos::Relic a_relic)
 {
@@ -905,7 +927,7 @@ void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Act
                 return;
             }
             ObjectUtil::Actor::CastSpell(SpellSpartanRage, a_actor, a_actor, a_actor, 3.f);
-            if (VFXeffect.fury) a_actor->ApplyArtObject(VFXeffect.fury, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
+            if (VFXeffect.fury) a_actor->ApplyArtObject(VFXeffect.fury, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
             if (WeaponIdentify::EquippedObjR)
                 ObjectUtil::Actor::UnEquipItem(a_actor, false, false, false, false, true, true);
             if (WeaponIdentify::EquippedObjL && WeaponIdentify::EquippedObjL != WeaponIdentify::GuardianShield)
@@ -922,17 +944,17 @@ void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Act
                 a_actor->NotifyAnimationGraph("DoKratosAction");
                 RestoreRage(a_actor, -(*values.rageDamageAmount * 5.f), true);
             }
-            if (VFXeffect.valor) a_actor->ApplyArtObject(VFXeffect.valor, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
+            if (VFXeffect.valor) a_actor->ApplyArtObject(VFXeffect.valor, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
             break;
         case Kratos::Rage::kWrath:
-            if (VFXeffect.wrath) a_actor->ApplyArtObject(VFXeffect.wrath, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
+            if (VFXeffect.wrath) a_actor->ApplyArtObject(VFXeffect.wrath, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
             return;
         case Kratos::Rage::kLegacy:
             if (WeaponIdentify::BladeOfOlympus) {
             //    if (auto mCaster = a_actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant); mCaster && SpellSpartanRage) {
             //        mCaster->CastSpellImmediate(SpellSpartanRage, false, a_actor, 1.f, false, 2.f, a_actor);
             //    }
-                if (VFXeffect.legacy) a_actor->ApplyArtObject(VFXeffect.legacy, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
+                if (VFXeffect.legacy) a_actor->ApplyArtObject(VFXeffect.legacy, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
                 ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::BladeOfOlympus);
                 ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
             }
@@ -1151,6 +1173,7 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const bool isHoming, RE::Actor* a_actor)
 {
     if (!a_actor) {spdlog::error("LeviathanAxe::Throw - a_actor is null"); return;}
+    WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
     if (!WeaponIdentify::RHandBone) {spdlog::error("LeviathanAxe::Throw - RHandBone is null"); return;}
 
     trailRemoveUpdate.Done();
@@ -1361,6 +1384,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             }
 
             RE::NiPoint3 startPoint = data.position;
+            WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
             RE::NiPoint3  targetPoint = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
             if (!a_justContinue) {
                 soundData.PlayCallingHandSounds(WeaponIdentify::RHandBone);
@@ -1389,7 +1413,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
             if (a_justContinue) {
                 arrivingLevi = ArrivingWeapon(arrivingLevi, pHandle.get().get(), startPoint);
             } else {
-                arrivingLevi = ArrivingWeapon(this, pHandle.get().get(), a_actor, WeaponIdentify::RHandBone, startPoint);
+                arrivingLevi = ArrivingWeapon(this, pHandle.get().get(), a_actor, &WeaponIdentify::RHandBone, startPoint);
                 spdlog::debug("Levi call is started");
             }
             SetThrowState(ThrowState::kArriving);
@@ -1417,7 +1441,7 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         SetThrowState(ThrowState::kArrived);
 
         auto kratos = Kratos::GetSingleton();
-
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
         if (auto handEffect = kratos->VFXeffect.handFrost; handEffect) 
             a_actor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
 
@@ -1643,6 +1667,7 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
     auto enchEffect = ench ? ench->effects[0] : nullptr;
     auto enchBase   = enchEffect ? enchEffect->baseEffect : nullptr;
     const auto leviDam  = data.damage;
+    WeaponIdentify::WeaponBone = WeaponIdentify::GetWeaponBone(AnArchos);
 
     if (data.weap && chargeHitCount <= 0) {
         if (enchBase) {
@@ -1795,6 +1820,7 @@ void LeviathanAxe::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
         kratos->_soundHandle.Stop();
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
         ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeLeviLoop, kratos->_soundHandle, WeaponIdentify::RHandBone, 5.f);
         a_actor->ApplyArtObject(kratos->VFXeffect.handFrostBright, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
@@ -1843,7 +1869,7 @@ RE::NiColorA LeviathanAxe::TrailData::GetColorByIndex(const uint32_t a_index)
 #pragma region Arriving
 void LeviathanAxe::ArrivingWeapon::UpdateRotation()
 {
-    if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent && WeaponIdentify::WeaponBone) {
+    if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent && WeaponIdentify::GetWeaponBone()) {
         auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
         auto& localRotation = replacedPMParent->local.rotate;
         RE::NiMatrix3 targetLocalRotation;
@@ -1894,7 +1920,9 @@ void LeviathanAxe::ArrivingWeapon::UpdateAI(RE::NiPoint3& a_outVel)
 }
 void LeviathanAxe::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
 {
-    if (caller && parent && callerBreastBone) {
+    if (RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
+
+    } else if (caller && parent && callerBreastBone) {
         if (parent->GetThrowState() == ThrowState::kThrowable || isCatchable) {
 
         } else if (a_initial || linearDistance > 100.f) {
@@ -1998,6 +2026,7 @@ void LeviathanAxe::ArrivingWeapon::Update(const float a_delta)
     model = parent->data.model;
     if (!model) return;
 
+    callerHandBone = GetCallerHandBone();
     if (!callerHandBone) return;
     handPosition = callerHandBone->world.translate;
 
@@ -2220,15 +2249,15 @@ void LeviathanAxe::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
 {
     if (IsSoundValid(SoundName::kArrivingLoop)) {
         if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 5.f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 0.5f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
         if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 2.f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 0.5f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
     //    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
-    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 0.5f);
     //        soundState[SoundName::kArrivingLoop] = State::kTriggered;
     //    }
     } else {
@@ -2269,11 +2298,11 @@ void LeviathanAxe::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
 {
     if (IsSoundValid(SoundName::kThrowingLoop)) {
         if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 5.f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 0.5f);
             soundState[SoundName::kThrowingLoop] = State::kTriggered;
         }
     //    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
-    //        ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 0.5f);
     //        soundState[SoundName::kThrowingLoop] = State::kTriggered;
     //    }
     } else {
@@ -2560,6 +2589,7 @@ void Draupnir::Throw()
         data.gravity /= (std::powf(data.throwingChargeDuration + 1.f, 3.f));
         data.gravity = std::max(data.gravity, 0.5f);
 
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(AnArchos);
         auto origin = WeaponIdentify::RHandBone->world.translate;
         RE::ProjectileHandle pHandle;
         RE::Projectile::ProjectileRot pRot = {AnArchos->GetAimAngle(), AnArchos->GetAimHeading()};
@@ -2604,9 +2634,11 @@ void Draupnir::MeleeThrow()
         auto& leviProjEffSetting = effDraupnir->effectItem;
         leviProjEffSetting.magnitude = 0.f;
 
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(AnArchos);
         auto origin = WeaponIdentify::RHandBone->world.translate;
         RE::ProjectileHandle pHandle;
         RE::Projectile::ProjectileRot pRot{};
+        WeaponIdentify::WeaponBone = WeaponIdentify::GetWeaponBone(AnArchos);
         origin = WeaponIdentify::WeaponBone->world.translate;
         AnArchos->Unk_A0(WeaponIdentify::WeaponBone, pRot.x, pRot.z, origin);
         RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
@@ -2781,6 +2813,7 @@ void Draupnir::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
         kratos->_soundHandle.Stop();
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
     //    ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeLeviLoop, WeaponIdentify::RHandBone, 5.f, &kratos->_soundHandle);
         a_actor->ApplyArtObject(kratos->VFXeffect.handFlame, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
@@ -2950,6 +2983,8 @@ bool Mjolnir::GetPosition(RE::NiPoint3& a_point, RE::Actor* a_actor)
 void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool isHoming, RE::Actor* a_actor)
 {
     if (!a_actor) {spdlog::warn("Mjolnir::Throw - a_actor is null"); return;}
+    WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
+    if (!WeaponIdentify::RHandBone) {spdlog::error("Mjolnir::Throw - RHandBone is null"); return;}
 
     trailRemoveUpdate.Done();
 
@@ -3082,8 +3117,9 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
     homingMjolnir.proj.reset();
     RE::NiPoint3 startPoint = data.position;
     GetPosition(startPoint, a_actor);
+    WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
     if (!isMjolnirCalled)
-        arrivingMjolnir = ArrivingWeapon(this, a_actor, WeaponIdentify::RHandBone, startPoint);
+        arrivingMjolnir = ArrivingWeapon(this, a_actor, &WeaponIdentify::RHandBone, startPoint);
     auto kratos = Kratos::GetSingleton();
     const bool isDelayed = a_delay.has_value() && a_delay != 0.f;
     const bool isDelayedConfig = Config::MjolnirArrivingDelay.has_value() && Config::MjolnirArrivingDelay != 0.f;
@@ -3191,6 +3227,7 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
         SetThrowState(ThrowState::kArrived);
 
         auto kratos = Kratos::GetSingleton();
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
 
         if (auto handEffect = kratos->VFXeffect.handShock; handEffect) 
             a_actor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
@@ -3319,6 +3356,7 @@ void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, co
     const auto mjolnirDam  = data.damage;
 
     if (data.weap) {
+        WeaponIdentify::WeaponBone = WeaponIdentify::GetWeaponBone(AnArchos);
         if (auto handEffect = kratos->VFXeffect.handShock; handEffect) AnArchos->ApplyArtObject(handEffect, a_chargeHitCount * 2, nullptr, false, false, WeaponIdentify::WeaponBone);
         if (auto soundEffect = kratos->soundEffect.chargeMjolnirEnd; soundEffect) ObjectUtil::Sound::PlaySound(soundEffect, WeaponIdentify::WeaponBone, 5.f);
         if (kratos && (kratos->vanillaSpell.thunderbolt || kratos->kittyTailSpell.lightningFlood)) {
@@ -3477,6 +3515,7 @@ void Mjolnir::StartChargingThrow(RE::Actor* a_actor)
 {
     if (auto kratos = Kratos::GetSingleton(); a_actor && kratos) {
         kratos->_soundHandle.Stop();
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
         ObjectUtil::Sound::PlaySound(kratos->soundEffect.chargeMjolnir, kratos->_soundHandle, WeaponIdentify::RHandBone, 5.f);
         a_actor->ApplyArtObject(kratos->VFXeffect.handShock, 5.f, nullptr, false, false, WeaponIdentify::RHandBone);
         kratos->SetIsChargingThrow(true);
@@ -3525,7 +3564,7 @@ RE::NiColorA Mjolnir::TrailData::GetColorByIndex(const uint32_t a_index)
 #pragma region Arriving
 void Mjolnir::ArrivingWeapon::UpdateRotation()
 {
-    if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent && WeaponIdentify::WeaponBone) {
+    if (parent->data.replacedProjectileModel && parent->data.replacedProjectileModel->parent && WeaponIdentify::GetWeaponBone()) {
         auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
         auto& localRotation = replacedPMParent->local.rotate;
         RE::NiMatrix3 targetLocalRotation;
@@ -3584,7 +3623,9 @@ void Mjolnir::ArrivingWeapon::UpdateAI(RE::NiPoint3& a_outVel)
 }
 void Mjolnir::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
 {
-    if (caller && parent && callerBreastBone) {
+    if (RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
+
+    } else if (caller && parent && callerBreastBone) {
         if (parent->GetThrowState() == ThrowState::kThrowable || isCatchable) {
 
         } else if (a_initial || linearDistance > 100.f) {
@@ -3687,7 +3728,8 @@ void Mjolnir::ArrivingWeapon::Update(const float a_delta)
 
     model = parent->data.model;
     if (!model) return;
-
+    
+    callerHandBone = GetCallerHandBone();
     if (!callerHandBone) return;
     handPosition = callerHandBone->world.translate;
 
@@ -3910,15 +3952,15 @@ void Mjolnir::SoundData::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
 {
     if (IsSoundValid(SoundName::kArrivingLoop)) {
         if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop0; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 5.f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 0.5f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
         if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop1; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 2.f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 0.5f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
     //    if (auto soundEffect = kratos->soundEffect.arrivingLeviLoop2; soundEffect) {
-    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 5.f);
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 0.5f);
     //        soundState[SoundName::kArrivingLoop] = State::kTriggered;
     //    }
     } else {
@@ -3959,11 +4001,11 @@ void Mjolnir::SoundData::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
 {
     if (IsSoundValid(SoundName::kThrowingLoop)) {
         if (auto soundEffect = kratos->soundEffect.throwingLeviLoop0; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 5.f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 0.5f);
             soundState[SoundName::kThrowingLoop] = State::kTriggered;
         }
     //    if (auto soundEffect = kratos->soundEffect.throwingLeviLoop1; soundEffect) {
-    //        ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 5.f);
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop1SH, a_source, 0.5f);
     //        soundState[SoundName::kThrowingLoop] = State::kTriggered;
     //    }
     } else {
@@ -4102,6 +4144,7 @@ void Trident::Throw(const bool justContinue, RE::Actor* a_actor)
             data.explosionThrow->data.damage = data.damage;
         }
 
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
         auto origin = justContinue ? data.position : WeaponIdentify::RHandBone->world.translate;
         RE::ProjectileHandle pHandle;
         RE::Projectile::ProjectileRot pRot = RE::Projectile::ProjectileRot(a_actor->GetAimAngle(), a_actor->GetAimHeading());
@@ -4196,6 +4239,7 @@ void Trident::Call(const float a_damage, const float a_force, RE::Actor* a_actor
         ObjectUtil::Actor::SendAnimationEvent(a_actor, "weaponDraw");           //  loads the 3d model of the weapon
         ObjectUtil::Actor::SendAnimationEvent(a_actor, "WeapEquip_Out");
         ObjectUtil::Actor::SendAnimationEvent(a_actor, "WeapEquip_OutMoving");
+        WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(a_actor);
         if (auto handEffect = kratos->VFXeffect.handFlame; handEffect) 
             a_actor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, WeaponIdentify::RHandBone);
 

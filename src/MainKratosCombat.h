@@ -282,6 +282,11 @@ public:
 
     static inline float DamageMult = 1.f;
 
+    static inline RE::NiAVObject* GetRhandBone(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    static inline RE::NiAVObject* GetLhandBone(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    static inline RE::NiAVObject* GetWeaponBone(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    static inline RE::NiAVObject* GetShieldBone(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
+    static inline RE::NiAVObject* GetAnimObjectRBone(RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton());
     static bool IsRelic(RE::Projectile *a_proj, const Kratos::Relic a_relic = Kratos::Relic::kNone) {return IsRelic(a_proj->GetProjectileBase(), a_relic);}
     static bool IsRelic(RE::BGSProjectile *a_baseProj, const Kratos::Relic a_relic = Kratos::Relic::kNone);
 
@@ -388,7 +393,8 @@ public:
 
         LeviathanAxe* parent;
         RE::NiPointer<RE::Actor> caller;
-        RE::NiPointer<RE::NiAVObject> callerHandBone;
+        RE::NiAVObject** callerHandBoneSource;
+        RE::NiAVObject* callerHandBone;
         RE::NiPointer<RE::NiAVObject> callerBreastBone;
         RE::NiPointer<RE::Projectile> proj;
         RE::NiPointer<RE::NiAVObject> model;
@@ -426,6 +432,7 @@ public:
         float speed = 0.f;
 
         float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
+        RE::NiAVObject* GetCallerHandBone() const {return callerHandBoneSource ? *callerHandBoneSource : nullptr;}
         std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
             targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller.get(), linearDistance, true);
             CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
@@ -478,12 +485,13 @@ public:
         ArrivingWeapon() = default;
         ArrivingWeapon(LeviathanAxe* a_parent, RE::Projectile* a_proj, 
             RE::Actor* a_caller, 
-            RE::NiAVObject* a_callerHandBone, 
+            RE::NiAVObject** a_callerHandBone, 
             RE::NiPoint3& a_startPosition) : parent(a_parent), proj(a_proj),
-            caller(a_caller), callerHandBone(a_callerHandBone), startPosition(a_startPosition)
+            caller(a_caller), callerHandBoneSource(a_callerHandBone), startPosition(a_startPosition)
         {
             throwedTime = AsyncUtil::GameTime::GetEngineTime();
             callerBreastBone.reset(caller ? caller->GetNodeByName("NPC Spine2 [Spn2]") : nullptr);
+            callerHandBone = GetCallerHandBone();
             auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
             linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();
@@ -506,6 +514,7 @@ public:
         {
             throwedTime = a_aWeapon.throwedTime;
             callerBreastBone = a_aWeapon.callerBreastBone;
+            callerHandBone = GetCallerHandBone();
             auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
             linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();
@@ -1150,7 +1159,8 @@ public:
 
         Mjolnir* parent;
         RE::NiPointer<RE::Actor> caller;
-        RE::NiPointer<RE::NiAVObject> callerHandBone;
+        RE::NiAVObject** callerHandBoneSource;
+        RE::NiAVObject* callerHandBone;
         RE::NiPointer<RE::NiAVObject> callerBreastBone;
         RE::NiPointer<RE::Projectile> proj;
         RE::NiPointer<RE::NiAVObject> model;
@@ -1190,6 +1200,7 @@ public:
         float speed = 0.f;
 
         float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - (launchTime > callTime ? launchTime : callTime);}
+        RE::NiAVObject* GetCallerHandBone() const {return callerHandBoneSource ? *callerHandBoneSource : nullptr;}
         std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
             targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller.get(), linearDistance, true);
             CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
@@ -1241,6 +1252,7 @@ public:
         {
             proj.reset(a_proj);
             startPosition = a_startPosition;
+            callerHandBone = GetCallerHandBone();
             auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
             linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();
@@ -1256,11 +1268,12 @@ public:
         virtual ~ArrivingWeapon() = default;
         ArrivingWeapon() = default;
         ArrivingWeapon(Mjolnir* a_parent, RE::Actor* a_caller, 
-            RE::NiAVObject* a_callerHandBone, 
-            RE::NiPoint3& a_startPosition) : parent(a_parent), caller(a_caller), callerHandBone(a_callerHandBone), startPosition(a_startPosition)
+            RE::NiAVObject** a_callerHandBone, 
+            RE::NiPoint3& a_startPosition) : parent(a_parent), caller(a_caller), callerHandBoneSource(a_callerHandBone), startPosition(a_startPosition)
         {
             callTime = AsyncUtil::GameTime::GetEngineTime();
             callerBreastBone.reset(caller ? caller->GetNodeByName("NPC Spine2 [Spn2]") : nullptr);
+            callerHandBone = GetCallerHandBone();
             auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
             linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();
@@ -1270,10 +1283,11 @@ public:
         }
         ArrivingWeapon(const ArrivingWeapon& a_aWeapon, RE::Projectile* a_proj, 
             RE::NiPoint3& a_startPosition) : parent(a_aWeapon.parent), proj(a_proj),
-            caller(a_aWeapon.caller), callerHandBone(a_aWeapon.callerHandBone), startPosition(a_startPosition)
+            caller(a_aWeapon.caller), callerHandBoneSource(a_aWeapon.callerHandBoneSource), startPosition(a_startPosition)
         {
             launchTime = AsyncUtil::GameTime::GetEngineTime();
             callerBreastBone.reset(caller ? caller->GetNodeByName("NPC Spine2 [Spn2]") : nullptr);
+            callerHandBone = GetCallerHandBone();
             auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
             linearArrivingDir = (callerHandPosition - startPosition);
             linearArrivingDir.Unitize();

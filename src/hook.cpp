@@ -94,6 +94,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
         if (WeaponIdentify::IsRelic(projBase, Kratos::Relic::kLeviathanAxe)) {
             auto kratos = Kratos::GetSingleton();
 
+            WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(AnArchos);
             const auto targetPoint = WeaponIdentify::RHandBone;
             if (!targetPoint) {spdlog::warn("can't found your hand node for axe call!!"); return;}
             auto& handPos   = targetPoint->world.translate;
@@ -234,6 +235,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
         else if (WeaponIdentify::IsRelic(projBase, Kratos::Relic::kMjolnir)) {
             auto kratos = Kratos::GetSingleton();
 
+            WeaponIdentify::RHandBone = WeaponIdentify::GetRhandBone(AnArchos);
             const auto targetPoint = WeaponIdentify::RHandBone;
             if (!targetPoint) {spdlog::warn("can't found your hand node for Mjolnir call!!"); return;}
             auto& handPos   = targetPoint->world.translate;
