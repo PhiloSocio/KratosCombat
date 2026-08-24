@@ -119,12 +119,12 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     ReadFloatSetting(ini, "Main", "fMaxAxeStuckAngle", MaxAxeStuckAngle);
     ReadFloatSetting(ini, "Main", "fMinAxeStuckAngle", MinAxeStuckAngle);
 
-    ReadBoolSetting(ini, "Main", "bDrawTrails", DrawTrails);
-    ReadFloatSetting(ini, "Main", "bTrailColorScaleMult", TrailColorScaleMult);
-    ReadFloatSetting(ini, "Main", "bTrailLifetimeMult", TrailLifetimeMult);
-    ReadIntSetting(ini, "Main", "bTrailColorIndexLeviathan", TrailColorIndexLeviathan);
-    ReadIntSetting(ini, "Main", "bTrailColorIndexMjolnir", TrailColorIndexMjolnir);
-    ReadIntSetting(ini, "Main", "bTrailColorIndexDraupnir", TrailColorIndexDraupnir);
+    ReadBoolSetting(ini, "Trails", "bDrawTrails", DrawTrails);
+    ReadFloatSetting(ini, "Trails", "fTrailColorMult", TrailColorScaleMult);
+    ReadFloatSetting(ini, "Trails", "fTrailLifetimeMult", TrailLifetimeMult);
+    ReadIntSetting(ini, "Trails", "uTrailColorIndexLeviathan", TrailColorIndexLeviathan);
+    ReadIntSetting(ini, "Trails", "uTrailColorIndexMjolnir", TrailColorIndexMjolnir);
+    ReadIntSetting(ini, "Trails", "uTrailColorIndexDraupnir", TrailColorIndexDraupnir);
 
     ReadBoolSetting(ini, "Main", "bReturnHProjectileAfterLoops", ReturnHProjectileAfterLoops);
 

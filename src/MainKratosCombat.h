@@ -860,7 +860,7 @@ public:
         TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.f) {
             trailOverride = TrailOverride(
                 Config::TrailLifetimeMult * a_intensity, 
-                GetColorByIndex(Config::TrailColorIndexLeviathan), 
+                GetColorByIndex(Config::TrailColorIndexDraupnir), 
                 Config::TrailColorScaleMult * a_intensity, 
                 a_meshDirectory
             );
@@ -975,7 +975,7 @@ public:
         TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.f) {
             trailOverride = TrailOverride(
                 Config::TrailLifetimeMult * a_intensity, 
-                GetColorByIndex(Config::TrailColorIndexLeviathan), 
+                GetColorByIndex(Config::TrailColorIndexMjolnir), 
                 Config::TrailColorScaleMult * a_intensity, 
                 a_meshDirectory
             );

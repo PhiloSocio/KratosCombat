@@ -556,7 +556,7 @@
         ]
     },
     {
-        "pageDisplayName": "$KratosComat_TrailsPage",
+        "pageDisplayName": "$KratosCombat_TrailsPage",
         "cursorFillMode": "topToBottom",
         "content": [
             {
@@ -569,7 +569,7 @@
                 }
             },
             {
-                "id": "bUsePrecisionTrailsg:Trails",
+                "id": "bUsePrecisionTrails:Trails",
                 "text": "$KratosCombat_UsePrecisionTrails_OptionText",
                 "type": "toggle",
                 "help": "$KratosCombat_UsePrecisionTrails_InfoText",
@@ -583,8 +583,8 @@
                 "type": "slider",
                 "help": "$KratosCombat_TrailColorMult_InfoText",
                 "valueOptions": {
-                    "min": 0.2,
-                    "max": 20,
+                    "min": 0.0,
+                    "max": 2,
                     "step": 0.01,
                     "formatString": "{2}",
                     "sourceType": "ModSettingFloat"
@@ -597,14 +597,14 @@
                 "help": "$KratosCombat_TrailLifetimeMult_InfoText",
                 "valueOptions": {
                     "min": 0.2,
-                    "max": 20,
+                    "max": 2,
                     "step": 0.01,
                     "formatString": "{2}",
                     "sourceType": "ModSettingFloat"
                 }
             },
             {
-                "id": "bTrailColorIndexLeviathan:Trails",
+                "id": "uTrailColorIndexLeviathan:Trails",
                 "text": "$KratosCombat_LeviathanTrailColor_OptionText",
                 "type": "enum",
                 "help": "$KratosCombat_LeviathanTrailColor_InfoText",
@@ -622,7 +622,7 @@
                 }
             },
             {
-                "id": "bTrailColorIndexMjolnir:Trails",
+                "id": "uTrailColorIndexMjolnir:Trails",
                 "text": "$KratosCombat_MjolnirTrailColor_OptionText",
                 "type": "enum",
                 "help": "$KratosCombat_MjolnirTrailColor_InfoText",
@@ -640,7 +640,7 @@
                 }
             },
             {
-                "id": "bTrailColorIndexDraupnir:Trails",
+                "id": "uTrailColorIndexDraupnir:Trails",
                 "text": "$KratosCombat_DraupnirTrailColor_OptionText",
                 "type": "enum",
                 "help": "$KratosCombat_DraupnirTrailColor_InfoText",

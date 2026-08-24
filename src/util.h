@@ -39,7 +39,7 @@ inline constexpr RE::NiColorA DARK_GREEN(0.f, 0.5f, 0.f, 1.f);
 inline constexpr RE::NiColorA DARK_BLUE(0.f, 0.f, 0.5f, 1.f);
 inline constexpr RE::NiColorA DARK_RED(0.5f, 0.f, 0.f, 1.f);
 inline constexpr RE::NiColorA SKYBLUE(0.35f, 0.75f, 1.0f, 1.0f);
-inline constexpr RE::NiColorA ICEBLUE(0.55f, 0.85f, 1.0f, 1.0f);
+inline constexpr RE::NiColorA ICEBLUE(0.6f, 0.9f, 1.0f, 1.0f);
 inline constexpr RE::NiColorA GRAY(0.5f, 0.5f, 0.5f, 1.f);
 inline constexpr RE::NiColorA SEMITRANSPARENT(1.f, 1.f, 1.f, 0.5f);
 inline constexpr RE::NiColorA BLACK(0.f, 0.f, 0.f, 1.f);
