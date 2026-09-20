@@ -168,7 +168,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     } else {
                         if (hLivingTime > 2.2f && livingTime > 0.3f && hLevi.targets.empty()) {
                             if (hLevi.isBoomerang && !WeaponIdentify::isRelic && !kratos->IsInRage(AnArchos)) kratos->DoKratosAction(Kratos::Action::kWeaponCharge, AnArchos);
-                            else hLevi.proj = nullptr;  //  stop homing
+                            hLevi.proj.reset();  //  stop homing
                         }
 
                         // waving effect
@@ -285,7 +285,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     } else {
                         if (hLivingTime > 2.2f && livingTime > 0.3f && hMjolnir.targets.empty()) {
                             if (hMjolnir.isBoomerang && !WeaponIdentify::isRelic && !kratos->IsInRage(AnArchos)) kratos->DoKratosAction(Kratos::Action::kWeaponCharge, AnArchos);
-                            else hMjolnir.proj = nullptr;  //  stop homing
+                            hMjolnir.proj.reset();  //  stop homing
                         }
 
                         // waving effect
@@ -496,7 +496,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                                     shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
 
                                     auto kratos = Kratos::GetSingleton();
-                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(rtData.weaponDamage, 0.5f));
+                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(*kratos->values.rageBuffAmount, 0.25f), true);
                                 }
                             }
                         }
@@ -564,7 +564,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                                 if (shooter && !isArriving) {
                                     shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
 
-                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(rtData.weaponDamage, 0.5f));
+                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(*kratos->values.rageBuffAmount, 0.25f), true);
                                 }
 #ifdef EXPERIMENTAL_PROJECTILE_HIT_EXPLOSION
                                 mjolnir->data.isPenetrating = true;
@@ -650,7 +650,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                                     shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
 
                                     auto kratos = Kratos::GetSingleton();
-                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(rtData.weaponDamage, 0.5f));
+                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(*kratos->values.rageBuffAmount, 0.25f), true);
                                 }
                             }
                         }
@@ -686,7 +686,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
                                     shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
 
                                     auto kratos = Kratos::GetSingleton();
-                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(rtData.weaponDamage, 0.5f));
+                                    kratos->RestoreRage(shooter, kratos->CalcRageDamageOrBuffAmount(*kratos->values.rageBuffAmount, 0.25f), true);
                             }
                         }
                     }
@@ -985,7 +985,7 @@ inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
             if (a_target->IsPlayerRef()) {
                 if (kratos->IsInRage(a_target)) {
                     if (kratos->GetLastTriggeredRageType() == Kratos::Rage::kFury) {
-                        kratos->RestoreRage(a_target, kratos->CalcRageDamageOrBuffAmount(-a_this.totalDamage));
+                        kratos->RestoreRage(a_target, kratos->CalcRageDamageOrBuffAmount(-std::max(a_this.totalDamage, 0.f)));
                         a_this.totalDamage = 0.f;
                     } else if (kratos->GetLastTriggeredRageType() == Kratos::Rage::kValor) {
                         kratos->_gettingHittedInValor = true;
@@ -1000,14 +1000,14 @@ inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
                     if (agressor->AsActorValueOwner())
                         agressor->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, a_this.totalDamage);
                     return;
-              //      kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(a_this.totalDamage));
+              //      kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(std::max(a_this.totalDamage), 0.f), true);
                 }
                 else if (WeaponIdentify::isBarehanded) {
                     if (!(a_this.flags & RE::HitData::Flag::kBash))
                         a_this.totalDamage = a_this.totalDamage + a_this.totalDamage * (Config::BarehandedDamageMult - 1.f);
               //      a_this.totalDamage = Config::BarehandedDamage / (RE::PlayerCharacter::GetSingleton()->GetGameStatsData().difficulty);
-                    kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(a_this.totalDamage, 2.f));
-                } else kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(a_this.totalDamage));
+                    kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(std::min(std::max(a_this.totalDamage, 0.f), *kratos->values.rageBuffAmount), 2.f), true);
+                } else kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(std::min(std::max(a_this.totalDamage, 0.f), *kratos->values.rageBuffAmount)), true);
             }
         }
     }
@@ -1024,7 +1024,7 @@ inline void AttackHook::BeforeDamage(RE::Projectile* a_this, RE::hkpAllCdPointCo
                 if (const auto victim = target->As<RE::Actor>(); victim && victim->IsPlayerRef()) {
                     if (auto kratos = Kratos::GetSingleton(); kratos->IsInRage(victim)) {
                         if (kratos->GetLastTriggeredRageType() == Kratos::Rage::kFury) {
-                            kratos->RestoreRage(victim, kratos->CalcRageDamageOrBuffAmount(-rtData.weaponDamage));
+                            kratos->RestoreRage(victim, kratos->CalcRageDamageOrBuffAmount(-std::max(rtData.weaponDamage, 0.f)));
                             rtData.weaponDamage = 0.f;
                         } else if (kratos->GetLastTriggeredRageType() == Kratos::Rage::kValor) {
                             kratos->_gettingHittedInValor = true;

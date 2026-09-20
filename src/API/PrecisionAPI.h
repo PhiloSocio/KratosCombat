@@ -453,12 +453,12 @@ namespace PRECISION_API
 		/// <param name="a_projectile">Projectile</param>
 		/// <param name="a_trailOverride">Trail override</param>
 		/// <param name="a_transformOverride">Transform override</param>
-		virtual void AddTrailEffect(RE::NiNode* a_trailParentNode, RE::ActorHandle a_sourceActorHandle, RE::TESObjectCELL* a_sourceActorParentCell, std::optional<TrailOverride> a_trailOverride, std::optional<TrailTransformOverride> a_transformOverride) noexcept = 0;
+		virtual void AddTrailEffect(RE::NiNode* a_trailParentNode, RE::TESObjectCELL* a_sourceActorParentCell, std::optional<TrailOverride> a_trailOverride, std::optional<TrailTransformOverride> a_transformOverride) noexcept = 0;
 
 		virtual void AddAttackCollision(RE::ActorHandle a_actorHandle, const RE::BSAnimationGraphEvent a_event) noexcept = 0;
-		virtual void AddAttackCollision(RE::ActorHandle a_actorHandle, CollisionDefinition& a_collisionDefinition, RE::Projectile* a_projectile) noexcept = 0;
+		virtual void AddNodeCollision(RE::ActorHandle a_actorHandle, RE::NiNode* a_node, CollisionDefinition& a_collisionDefinition, std::optional<TrailTransformOverride> a_transformOverride) noexcept = 0;
 		virtual bool RemoveAttackCollision(RE::ActorHandle a_actorHandle, const CollisionDefinition& a_collisionDefinition) noexcept = 0;
-		virtual bool RemoveProjectileCollision(RE::ActorHandle a_actorHandle, const CollisionDefinition& a_collisionDefinition) noexcept = 0;
+		virtual bool RemoveNodeCollision(RE::ActorHandle a_actorHandle, const CollisionDefinition& a_collisionDefinition) noexcept = 0;
 	};
 
 	typedef void* (*_RequestPluginAPI)(const InterfaceVersion interfaceVersion);

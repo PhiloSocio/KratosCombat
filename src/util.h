@@ -972,10 +972,46 @@ namespace ObjectUtil
             node->local = invParent * world;
         }
 
-        static  bool GetCapsuleParams(RE::NiAVObject* a_node, Capsule& a_outCapsule)
+        [[nodiscard]] inline static RE::hkpRigidBody* GetHKPRigidBody(RE::NiAVObject* a_object)
         {
-            if (a_node && a_node->collisionObject) {
-                auto collisionObject = static_cast<RE::bhkCollisionObject*>(a_node->collisionObject.get());
+            if (!a_object)
+                return {};
+
+            for (RE::NiAVObject* current = a_object; current; current = current->parent) {
+                if (!current->collisionObject)
+                    continue;
+
+                auto* collisionObject = Collision::GetRigidBody(current);
+
+                if (!collisionObject)
+                    continue;
+
+                auto* rigidBody = collisionObject->GetRigidBody();
+
+                if (rigidBody)
+                    return rigidBody;
+            }
+
+            return nullptr;
+        }
+        static  bool GetCapsuleParams(RE::NiAVObject* a_object, Capsule& a_outCapsule, const bool a_checkParents = false)
+        {
+            if (a_checkParents) {
+                if (auto hkpRigidBody = GetHKPRigidBody(a_object)) {
+                    const RE::hkpShape* hkpShape = hkpRigidBody->collidable.shape;
+                    if (hkpShape->type == RE::hkpShapeType::kCapsule) {
+                        auto hkpCapsuleShape = static_cast<const RE::hkpCapsuleShape*>(hkpShape);
+                        float bhkInvWorldScale = RE::bhkWorld::GetWorldScaleInverse();
+
+                        a_outCapsule.radius = hkpCapsuleShape->radius * bhkInvWorldScale;
+                        a_outCapsule.a = MathUtil::Algebra::HkVectorToNiPoint(hkpCapsuleShape->vertexA) * bhkInvWorldScale;
+                        a_outCapsule.b = MathUtil::Algebra::HkVectorToNiPoint(hkpCapsuleShape->vertexB) * bhkInvWorldScale;
+
+                        return true;
+                    }
+                }
+            } else if (a_object && a_object->collisionObject) {
+                auto collisionObject = static_cast<RE::bhkCollisionObject*>(a_object->collisionObject.get());
                 auto rigidBody = collisionObject->GetRigidBody();
 
                 if (rigidBody && rigidBody->referencedObject) {
@@ -996,7 +1032,6 @@ namespace ObjectUtil
 
             return false;
         }
-
         [[nodiscard]] inline static RE::NiTransform GetHavokBHKRigidBodyWorldTransform(RE::NiAVObject* a_object)
         {
             if (!a_object)
@@ -1061,23 +1096,7 @@ namespace ObjectUtil
         }
         [[nodiscard]] inline static RE::NiTransform GetHavokHKPRigidBodyWorldTransform(RE::NiAVObject* a_object)
         {
-            if (!a_object)
-                return {};
-
-            for (RE::NiAVObject* current = a_object; current; current = current->parent) {
-                if (!current->collisionObject)
-                    continue;
-
-                auto* collisionObject = Collision::GetRigidBody(current);
-
-                if (!collisionObject)
-                    continue;
-
-                auto* rigidBody = collisionObject->GetRigidBody();
-
-                if (!rigidBody)
-                    continue;
-
+            if (auto* rigidBody = GetHKPRigidBody(a_object); rigidBody) {
                 RE::NiTransform niTransform;
                 rigidBody->GetUserData()->GetTransform(niTransform);
                 return niTransform;

@@ -539,7 +539,7 @@ bool WeaponIdentify::IsRelic(RE::BGSProjectile *a_baseProj, Kratos::Relic a_reli
 #pragma region KRATOS
 void Kratos::Update(RE::Actor* a_actor, const float a_delta)
 {
-    if (IsInRage()) RestoreRage(a_actor, -(*values.rageDamageAmount * (*g_deltaTimeRealTime)));
+    if (IsInRage()) RestoreRage(a_actor, -(*values.rageDamageAmount * (*g_deltaTimeRealTime)), true);
 
     LeviathanAxe::GetSingleton()->Update(a_delta);
     Draupnir::Update(a_delta);
@@ -662,7 +662,8 @@ bool Kratos::Initialize()
 }
 float Kratos::CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult)
 {
-    if (a_amount > 0.f) {
+    if (a_amount == 0.f) return 0.f;
+    else if (a_amount > 0.f) {
         if (IsInRage()) return -(*values.rageDamageAmount * a_mult * (5.f + a_amount / 300.f));
         else return (*values.rageBuffAmount * a_mult * (1.f + sqrtf(a_amount) / 100.f));
     } return (*values.rageDamageAmount * a_mult * (a_amount - 1.f) / 5.f);
@@ -913,7 +914,7 @@ void Kratos::CloseShield(RE::Actor* a_actor)
 void Kratos::StartRage(const Kratos::Rage a_rage, const bool a_justAnim, RE::Actor* a_actor)
 {
     if (a_actor) {
-        if ((*values.rage - *values.rageDamageAmount * 6.f) < 0.f) return;
+        if ((*values.rage - *values.rageDamageAmount * 10.f) < 0.f) return;
         a_actor->SetGraphVariableInt("iRageType", Config::RageType);
         if (WeaponIdentify::EquippedObjR) _LastEquippedObjectR = WeaponIdentify::EquippedObjR;
         if (WeaponIdentify::EquippedObjL) _LastEquippedObjectL = WeaponIdentify::EquippedObjL;
@@ -1511,7 +1512,6 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
                 bone->AttachChild(node, false);
                 APIs::precision->AddTrailEffect(
                     node, 
-                    RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                     RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
                     trailData.trailOverride, 
                     trailData.transformOverride);
@@ -1519,7 +1519,6 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
                     trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
                     APIs::precision->AddTrailEffect(
                         node, 
-                        RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                         RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
                         trailData.trailOverride, 
                         trailData.transformOverride);
@@ -2545,7 +2544,6 @@ void Draupnir::Update(const float a_delta)
                     bone->AttachChild(node, false);
                     APIs::precision->AddTrailEffect(
                         node, 
-                        RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                         RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
                         trailData.trailOverride, 
                         trailData.transformOverride);
@@ -3295,7 +3293,6 @@ void Mjolnir::AddProjectileTrail(const float a_delta)
                 bone->AttachChild(node, false);
                 APIs::precision->AddTrailEffect(
                     node, 
-                    RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                     RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
                     trailData.trailOverride, 
                     trailData.transformOverride);
@@ -3303,7 +3300,6 @@ void Mjolnir::AddProjectileTrail(const float a_delta)
                     trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
                     APIs::precision->AddTrailEffect(
                         node, 
-                        RE::PlayerCharacter::GetSingleton()->GetHandle(), 
                         RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
                         trailData.trailOverride, 
                         trailData.transformOverride);
@@ -3603,11 +3599,12 @@ void Mjolnir::ArrivingWeapon::UpdateAI(RE::NiPoint3& a_outVel)
             if (parent->data.replacedProjectileModel) {
                 auto& replacedPMParent = parent->data.replacedProjectileModel->parent;
                 auto& localRotation = replacedPMParent->local.rotate;
-                RE::NiMatrix3 targetLocalRotation;
-                MathUtil::Algebra::SetRotationMatrix(targetLocalRotation, -targetDir.x, targetDir.y, targetDir.z);
-                constexpr float smoothTime = 0.0069f;
-                const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
-                MathUtil::Algebra::InterpolateRotation(localRotation, targetLocalRotation, alpha);
+                localRotation = RE::NiMatrix3();
+            //    RE::NiMatrix3 targetLocalRotation;
+            //    MathUtil::Algebra::SetRotationMatrix(targetLocalRotation, -targetDir.x, targetDir.y, targetDir.z);
+            //    constexpr float smoothTime = 0.0069f;
+            //    const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
+            //    MathUtil::Algebra::InterpolateRotation(localRotation, targetLocalRotation, alpha);
                 auto& mjolnirAngle = parent->data.lastEulerAngles;
                 mjolnirAngle.x = asin(desiredDir.z);
                 mjolnirAngle.z = atan2(desiredDir.x, desiredDir.y);

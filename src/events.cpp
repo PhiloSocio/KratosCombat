@@ -248,7 +248,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             break;
         case "weaponSwing"_h:
             if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsInRage())
-                kratos->RestoreRage(RE::PlayerCharacter::GetSingleton(), kratos->CalcRageDamageOrBuffAmount(360.f));
+                kratos->RestoreRage(RE::PlayerCharacter::GetSingleton(), kratos->CalcRageDamageOrBuffAmount(360.f), true);
             break;
     //    case "CastOKStart"_h:
         case "MCO_AttackInitiate"_h:
@@ -256,6 +256,8 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "MCO_SprintAttackInitiate"_h:
         case "MCO_SprintPowerAttackInitiate"_h:
         case "Bfco_AttackStartFX"_h:
+            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsInRage())
+                kratos->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*kratos->values.rageDamageAmount * 0.25f, false);
             if (WeaponIdentify::isLeviathanAxe) {
                 if (auto Levi = LeviathanAxe::GetSingleton()) {
                     Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag);
@@ -273,6 +275,8 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "BFCO_NextWinStart"_h:
         case "BFCO_NextPowerWinStart"_h:
         case "Collision_AttackEnd"_h:
+            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsInRage())
+                kratos->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*kratos->values.rageDamageAmount * 0.25f, false);
             if (WeaponIdentify::isLeviathanAxe) {
                 if (auto Levi = LeviathanAxe::GetSingleton()) {
                     Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, true);
@@ -332,6 +336,8 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "attackStop"_h:
         case "IdleStop"_h:
         case "CastOKStop"_h:
+            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsInRage())
+                kratos->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*kratos->values.rageDamageAmount * 0.25f, false);
             if (WeaponIdentify::unequipWhenAnimEnds) {
                 if (auto AnArchos = PlayerCharacter::GetSingleton(); AnArchos) {
                     ObjectUtil::Actor::UnEquipItem(AnArchos, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
@@ -379,6 +385,12 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             if (Config::IsAdvancedThrowingInstalled) {
                 if (auto kratos = Kratos::GetSingleton(); kratos) kratos->SetIsChargingThrow(false);
             }
+            break;
+        case "FootLeft"_h:
+        case "FootRight"_h:
+        case "PickNewIdle"_h:
+            if (auto kratos = Kratos::GetSingleton(); kratos && kratos->IsInRage())
+                kratos->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*kratos->values.rageDamageAmount * 0.25f, false);
             break;
         }
     }

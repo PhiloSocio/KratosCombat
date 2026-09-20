@@ -305,12 +305,12 @@ public:
     bool Initialize();
 
     enum class ThrowState : std::uint_fast8_t {
-        kNone = 0,
-        kThrowable = 1,
-        kThrown = 2,
-        kCanArrive = 3,
-        kArriving = 4,
-        kArrived = 5
+        kNone,
+        kThrowable,
+        kThrown,
+        kCanArrive,
+        kArriving,
+        kArrived
     };
     enum class ProjectileState : std::uint_fast8_t {
         kNone,
@@ -319,14 +319,15 @@ public:
         kHavok
     };
     enum class TrailColor : std::uint32_t {
-        kWhite = 0u,
-        kIceBlue = 1u,
-        kSkyBlue = 2u,
-        kBlue = 3u,
-        kYellow = 4u,
-        kGold = 5u,
-        kSilver = 6u
+        kWhite,
+        kIceBlue,
+        kSkyBlue,
+        kBlue,
+        kYellow,
+        kGold,
+        kSilver
     };
+
     struct TrailData {
         std::vector<RE::NiPointer<RE::BSTempEffectParticle>> projTrails;
         RE::NiTransform trailTransform;
@@ -510,7 +511,7 @@ public:
             bezierControlPoints[1] = startPosition + linearArrivingDir * linearDistanceFromLastCallPos * 0.33f;
         }
         ArrivingWeapon(const ArrivingWeapon& a_aWeapon, RE::Projectile* a_proj, RE::NiPoint3& a_startPosition) : parent(a_aWeapon.parent), proj(a_proj),
-            caller(a_aWeapon.caller), callerHandBone(a_aWeapon.callerHandBone), startPosition(a_startPosition)
+            caller(a_aWeapon.caller), callerHandBoneSource(a_aWeapon.callerHandBoneSource), startPosition(a_startPosition)
         {
             throwedTime = a_aWeapon.throwedTime;
             callerBreastBone = a_aWeapon.callerBreastBone;
