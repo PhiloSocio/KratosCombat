@@ -994,7 +994,7 @@ void Kratos::EndRage(const Kratos::Rage a_rage, const bool a_fromAnnotation, con
         case Kratos::Rage::kValor:
             if (a_fromAnnotation) {
                 ObjectUtil::Actor::SendAnimationEvent(a_actor, "weaponSwing");
-                a_actor->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, (*values.rageBuffAmount * 10.f));
+                a_actor->AsActorValueOwner()->RestoreActorValue(RE::ActorValue::kHealth, (*values.rageBuffAmount * 10.f));
                 if (_gettingHittedInValor) ObjectUtil::Actor::CastSpell(SpellStrenghtBuff, a_actor, a_actor, a_actor);
                 _gettingHittedInValor = false;
             }
@@ -1244,7 +1244,8 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         if (WeaponIdentify::isLeviathanAxe) {
             const auto root = a_actor->Get3D1(false);
             auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
-            auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
+            auto copyWeaponModelObj = weapon3D ? weapon3D->Clone() : nullptr;
+            auto copyWeaponModel = copyWeaponModelObj ? copyWeaponModelObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelObj);
             if (copyWeaponModel) {
                 copyWeaponModel->RemoveExtraData("BSX");
                 copyWeaponModel->RemoveExtraData("BSXFlags");
@@ -1583,44 +1584,6 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
                     }
                 }
             }
-        }
-    } else if (trailData.projTrail) {
-        trailData.projTrail->age += trailData.projTrail->lifetime;
-        if (trailData.projTrail->particleObject && trailData.projTrail->particleObject->AsGeometry()) {
-            auto effect = trailData.projTrail->particleObject->AsGeometry()->properties[RE::BSGeometry::States::kEffect];
-            auto effectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect.get());
-            if (effectShader) {
-                auto effectShaderMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShader->material);
-                if (effectShaderMaterial) {
-                    if (auto newMaterial = static_cast<RE::BSEffectShaderMaterial*>(effectShaderMaterial->Create())) {
-                        newMaterial->CopyMembers(effectShaderMaterial);
-                        effectShader->SetMaterial(newMaterial, false);
-                        newMaterial->~BSEffectShaderMaterial();
-                        RE::free(newMaterial);
-
-                        effectShaderMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShader->material);
-                        if (effectShaderMaterial->baseColor.alpha > 0.f)
-                            effectShaderMaterial->baseColor.alpha -= a_delta / 1.5f;
-                        else {
-                            effectShaderMaterial->baseColor.alpha = 0.f;
-                            trailData.projTrail.reset();
-                            trailData.trailRootNode.reset();
-                        }
-                    }
-                }
-            }
-        } else if (auto fadeNode = trailData.projTrail->particleObject ? trailData.projTrail->particleObject->AsFadeNode() : nullptr; fadeNode) {
-            if (fadeNode->currentFade > 0.f) {
-                float fadeDuration = 0.5f;
-                fadeNode->currentFade -= a_delta / fadeDuration;
-            } else {
-                fadeNode->currentFade = 0.f;
-                trailData.projTrail.reset();
-                trailData.trailRootNode.reset();
-            }
-        } else {
-            trailData.projTrail.reset();
-            trailData.trailRootNode.reset();
         }
     }
 }
@@ -2607,15 +2570,20 @@ void Draupnir::Throw()
         if (WeaponIdentify::isDraupnirSpear) {
             const auto root = AnArchos->Get3D1(false);
             auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
-            auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
-            copyWeaponModel->RemoveExtraData("BSXFlags");
-            copyWeaponModel->GetCollisionObject()->flags &= RE::bhkCollisionObject::Flag::kActive;
-            copyWeaponModel->collisionObject.reset();
-            auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-            data.weaponModelCopy.reset(copyWeaponModelNode);
-            if (data.weaponModelCopy) {
-                data.weaponModelCopy->local = RE::NiTransform();
-                data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            auto copyWeaponModelObj = weapon3D ? weapon3D->Clone() : nullptr;
+            auto copyWeaponModel = copyWeaponModelObj ? copyWeaponModelObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelObj);
+            if (copyWeaponModel) {
+                copyWeaponModel->RemoveExtraData("BSX");
+                copyWeaponModel->RemoveExtraData("BSXFlags");
+                if (copyWeaponModel->GetCollisionObject())
+                    copyWeaponModel->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
+                copyWeaponModel->collisionObject.reset();
+                auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
+                data.weaponModelCopy.reset(copyWeaponModelNode);
+                if (data.weaponModelCopy) {
+                    data.weaponModelCopy->local = RE::NiTransform();
+                    data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+                }
             }
 
             projectileUpdate.RegisterForUpdate(0.0f, false);
@@ -2654,15 +2622,20 @@ void Draupnir::MeleeThrow()
         if (WeaponIdentify::isDraupnirSpear) {
             const auto root = AnArchos->Get3D1(false);
             auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
-            auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
-            copyWeaponModel->RemoveExtraData("BSXFlags");
-            copyWeaponModel->GetCollisionObject()->flags &= RE::bhkCollisionObject::Flag::kActive;
-            copyWeaponModel->collisionObject.reset();
-            auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-            data.weaponModelCopy.reset(copyWeaponModelNode);
-            if (data.weaponModelCopy) {
-                data.weaponModelCopy->local = RE::NiTransform();
-                data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            auto copyWeaponModelObj = weapon3D ? weapon3D->Clone() : nullptr;
+            auto copyWeaponModel = copyWeaponModelObj ? copyWeaponModelObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelObj);
+            if (copyWeaponModel) {
+                copyWeaponModel->RemoveExtraData("BSX");
+                copyWeaponModel->RemoveExtraData("BSXFlags");
+                if (copyWeaponModel->GetCollisionObject())
+                    copyWeaponModel->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
+                copyWeaponModel->collisionObject.reset();
+                auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
+                data.weaponModelCopy.reset(copyWeaponModelNode);
+                if (data.weaponModelCopy) {
+                    data.weaponModelCopy->local = RE::NiTransform();
+                    data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+                }
             }
 
             projectileUpdate.RegisterForUpdate(0.0f, false);
@@ -2708,15 +2681,20 @@ void Draupnir::RainOfDraupnir()
     if (WeaponIdentify::isDraupnirSpear) {
         const auto root = AnArchos->Get3D1(false);
         auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
-        auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
-        copyWeaponModel->RemoveExtraData("BSXFlags");
-        copyWeaponModel->GetCollisionObject()->flags &= RE::bhkCollisionObject::Flag::kActive;
-        copyWeaponModel->collisionObject.reset();
-        auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-        data.weaponModelCopy.reset(copyWeaponModelNode);
-        if (data.weaponModelCopy) {
-            data.weaponModelCopy->local = RE::NiTransform();
-            data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+        auto copyWeaponModelObj = weapon3D ? weapon3D->Clone() : nullptr;
+        auto copyWeaponModel = copyWeaponModelObj ? copyWeaponModelObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelObj);
+        if (copyWeaponModel) {
+            copyWeaponModel->RemoveExtraData("BSX");
+            copyWeaponModel->RemoveExtraData("BSXFlags");
+            if (copyWeaponModel->GetCollisionObject())
+                copyWeaponModel->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
+            copyWeaponModel->collisionObject.reset();
+            auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
+            data.weaponModelCopy.reset(copyWeaponModelNode);
+            if (data.weaponModelCopy) {
+                data.weaponModelCopy->local = RE::NiTransform();
+                data.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            }
         }
 
         projectileUpdate.RegisterForUpdate(0.0f, false);
@@ -2805,7 +2783,7 @@ inline void Draupnir::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::Project
     damage *= explosionMagnitude;
     FenixUtils::stagger(std::clamp(damage/10.f, 0.1f, 100.f), a_target, RE::PlayerCharacter::GetSingleton());
     if (auto targetAVO = a_target->AsActorValueOwner(); targetAVO)
-        targetAVO->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -damage);
+        targetAVO->RestoreActorValue(RE::ActorValue::kHealth, -damage);
 }
 void Draupnir::StartChargingThrow(RE::Actor* a_actor)
 {
@@ -2822,7 +2800,8 @@ void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
     if (a_proj && a_proj->Get3D() && data.model) {
         auto projModel = a_proj->Get3D();
         auto projNode = projModel ? projModel->AsFadeNode() : nullptr;
-        auto copyModel = data.model->Clone();
+        auto copyModelObj = data.model->Clone();
+        auto copyModel = copyModelObj ? copyModelObj->AsNode() : static_cast<RE::NiAVObject*>(copyModelObj);
         if (projNode && copyModel) {
             const RE::BSFixedString stuckedModelNodeName = "DraupnirSpearBlade";
             auto stuckedModel = copyModel->GetObjectByName(stuckedModelNodeName);
@@ -3049,7 +3028,8 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         if (WeaponIdentify::isMjolnir) {
             const auto root = a_actor->Get3D1(false);
             auto weapon3D = root ? root->GetObjectByName("WEAPON") : nullptr;
-            auto copyWeaponModel = weapon3D ? weapon3D->Clone() : nullptr;
+            auto copyWeaponModelObj = weapon3D ? weapon3D->Clone() : nullptr;
+            auto copyWeaponModel = copyWeaponModelObj ? copyWeaponModelObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelObj);
             if (copyWeaponModel) {
                 copyWeaponModel->RemoveExtraData("BSX");
                 copyWeaponModel->RemoveExtraData("BSXFlags");

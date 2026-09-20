@@ -56,15 +56,8 @@
                 "CMAKE_CXX_COMPILER": "cl.exe"
             },
             "environment": {
-                "COMMONLIBSSE_COMPILER": "/permissive- /Zc:preprocessor /EHsc /Z7 $penv{CXXFLAGS} /MP",
+                "COMMONLIBSSE_COMPILER": "/permissive- /Zc:preprocessor /EHsc $penv{CXXFLAGS} /MP",
                 "COMMONLIBSSE_TEXT": "-DUNICODE -D_UNICODE"
-            },
-            "vendor": {
-                "microsoft.com/VisualStudioSettings/CMake/1.0": {
-                    "intelliSenseMode": "windows-msvc-x64",
-                    "enableMicrosoftCodeAnalysis": true,
-                    "enableClangTidyCodeAnalysis": true
-                }
             }
         },
         {
@@ -121,7 +114,5 @@
             "configurePreset": "build-debug-msvc",
             "description": "Debug build for testing."
         }
-    ],
-    "testPresets": [
     ]
 }

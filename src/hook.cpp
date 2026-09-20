@@ -998,7 +998,7 @@ inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
                         a_this.totalDamage = a_this.totalDamage + a_this.totalDamage * (Config::BarehandedDamageMult - 1.f);
               //      a_this.totalDamage = Config::BarehandedDamage / (RE::PlayerCharacter::GetSingleton()->GetGameStatsData().difficulty);
                     if (agressor->AsActorValueOwner())
-                        agressor->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, a_this.totalDamage);
+                        agressor->AsActorValueOwner()->RestoreActorValue(RE::ActorValue::kHealth, a_this.totalDamage);
                     return;
               //      kratos->RestoreRage(agressor, kratos->CalcRageDamageOrBuffAmount(std::max(a_this.totalDamage), 0.f), true);
                 }

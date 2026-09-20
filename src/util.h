@@ -895,14 +895,14 @@ namespace ObjectUtil
             }
             static bool ToggleMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
             {
-                constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flag::kNoCollision);
+                constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flags::kNoCollision);
                         if (root && world) {
                             
                                 RE::BSWriteLockGuard locker(world->worldLock);
 
                                 RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
                                     if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
-                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo;
+                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo.filter;
                                         if (!collisionState) {
                                             filter |= no_collision_flag;
                                         } else {
@@ -920,14 +920,14 @@ namespace ObjectUtil
             }
             static bool RemoveMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
             {
-                constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flag::kNoCollision);
+                constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flags::kNoCollision);
                         if (root && world) {
                             
                                 RE::BSWriteLockGuard locker(world->worldLock);
 
                                 RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
                                     if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
-                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo;
+                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo.filter;
                                         if (!collisionState) {
                                             filter |= no_collision_flag;
                                         } else {
@@ -1214,7 +1214,7 @@ namespace ObjectUtil
                     for (auto& animationGraph : graphManager->graphs) {
                         if (auto eventSource = animationGraph->GetEventSource<RE::BSAnimationGraphEvent>(); eventSource) {
                             RE::BSAnimationGraphEvent event = {a_tag, a_this, a_payload};
-                            a_this->ProcessEvent(&event, eventSource);
+                            eventSource->SendEvent(&event);
                             break;
                         }
                     }
@@ -1450,7 +1450,7 @@ namespace ObjectUtil
                 const auto av = a_isLeft ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kRightItemCharge;
                 const float sum = a_charge + a_actor->AsActorValueOwner()->GetActorValue(av);
                 const float charge = sum >= maxCharge ? maxCharge : sum;
-                a_actor->AsActorValueOwner()->ModActorValue(av, charge);
+                a_actor->AsActorValueOwner()->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, av, charge);
             }
         }
         static void ChargeInventoryWeapon(RE::Actor* a_actor, RE::TESBoundObject* a_weap, const uint16_t  a_charge)
@@ -1632,7 +1632,7 @@ namespace ObjectUtil
             if (a_sound && a_source) {
                 auto audioManager = RE::BSAudioManager::GetSingleton();
                 if (audioManager)
-                    audioManager->BuildSoundDataFromDescriptor(handle, a_sound->soundDescriptor);
+                    audioManager->GetSoundHandle(handle, a_sound->soundDescriptor);
                 handle.SetObjectToFollow(a_source);
                 handle.SetVolume(a_volume);
                 if (a_fadeInDuration != 0u)
@@ -1647,7 +1647,7 @@ namespace ObjectUtil
             if (a_sound && a_source) {
                 auto audioManager = RE::BSAudioManager::GetSingleton();
                 if (audioManager)
-                    audioManager->BuildSoundDataFromDescriptor(a_handle, a_sound->soundDescriptor);
+                    audioManager->GetSoundHandle(a_handle, a_sound->soundDescriptor);
                 a_handle.SetObjectToFollow(a_source);
                 a_handle.SetVolume(a_volume);
                 if (a_fadeInDuration != 0u)

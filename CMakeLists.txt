@@ -10,54 +10,65 @@ set(ADD_COMMONLIBSSE_PLUGIN_AUTHOR "AnArchos" CACHE STRING "Plugin author")
 set(ADD_COMMONLIBSSE_PLUGIN_EMAIL "patreon.com/AnArchos" CACHE STRING "Plugin email")
 set(commonlibSSE_min_skse_version "2.0.0.2" CACHE STRING "Minimum SKSE version")
 
-option(COPY_OUTPUT "Copy the output of build operations to the game directory" ON)
-option(ENABLE_SKYRIM_SE "Enable support for Skyrim SE in the dynamic runtime feature." ON)
-option(ENABLE_SKYRIM_AE "Enable support for Skyrim AE in the dynamic runtime feature." ON)
-option(ENABLE_SKYRIM_VR "Enable support for Skyrim VR in the dynamic runtime feature." OFF)
-set(BUILD_TESTS OFF)
-#
 
-# YOU DO NOT NEED TO EDIT ANYTHING BELOW HERE
-#
-# Please see the "Project setup" section of README.md
-#
-
-# If you're not using a mod manager, you probably want the SKSE plugin to go
-# inside of your Skyrim "Data" folder.
-#
-# To do this automatically, set the `SKYRIM_FOLDER` environment variable
-# to the path of your Skyrim Special Edition folder
 if(DEFINED ENV{SKYRIM_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_FOLDER}/Data")
     set(OUTPUT_FOLDER "$ENV{SKYRIM_FOLDER}/Data")
 endif()
 
-# If you're using Mod Organizer 2 or Vortex, you might want this to go inside
-# of your "mods" folder, inside of a subfolder named "<your mod>".
-#
-# To do this automatically, set the `SKYRIM_MODS_FOLDER` environment variable
-# to the path of your "mods" folder
 if(DEFINED ENV{SKYRIM_MODS_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_MODS_FOLDER}")
     set(OUTPUT_FOLDER "$ENV{SKYRIM_MODS_FOLDER}/${FULL_PROJECT_NAME}")
 endif()
 
-# Otherwise, you can set OUTPUT_FOLDER to any place you'd like :)
-# set(OUTPUT_FOLDER "C:/path/to/any/folder")
+if(DEFINED ENV{CommonLibSSEPath})
+    set(CommonLibSSEPath "$ENV{CommonLibSSEPath}")
+else()
+    message(FATAL_ERROR "CommonLibSSEPath could not find!")
+endif()
 
-# Setup your SKSE plugin as an SKSE plugin!
-find_package(CommonLibSSE CONFIG REQUIRED)
+message(STATUS "CommonLibSSE path: ${CommonLibSSEPath}")
+
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ENABLE_SKYRIM_SE ON CACHE BOOL "" FORCE)
+set(ENABLE_SKYRIM_AE ON CACHE BOOL "" FORCE)
+set(ENABLE_SKYRIM_VR OFF CACHE BOOL "" FORCE)
+
+add_subdirectory("${CommonLibSSEPath}" commonlibsse_build)
+
+file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "src/*.h" "src/*.hpp" "include/*.h" "include/*.hpp")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+
+add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS})
+
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(xbyak CONFIG REQUIRED)
 find_package(directxtk CONFIG REQUIRED)
-include(cmake/headerlist.cmake)
-include(cmake/sourcelist.cmake)
-add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources}) # <--- specifies plugin.cpp
+find_package(rapidcsv CONFIG REQUIRED)
 
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
-target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h) # <--- PCH.h is required!
+target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE
+        CommonLibSSE::CommonLibSSE
+        nlohmann_json::nlohmann_json
+        fmt::fmt
+        spdlog::spdlog
+        xbyak::xbyak
+        Microsoft::DirectXTK
+)
 
-target_include_directories(${PROJECT_NAME} PRIVATE "lib/glm")
-target_include_directories(
-	"${PROJECT_NAME}"
-	PRIVATE
-		${SIMPLEINI_INCLUDE_DIRS}
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    AUTHOR="${ADD_COMMONLIBSSE_PLUGIN_AUTHOR}"
+    EMAIL="${ADD_COMMONLIBSSE_PLUGIN_EMAIL}"
+)
+
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    src
+    lib/glm
+    ${SIMPLEINI_INCLUDE_DIRS}
 )
 # When your SKSE .dll is compiled, this will automatically copy the .dll into your mods folder.
 # Only works if you configure DEPLOY_ROOT above (or set the SKYRIM_MODS_FOLDER environment variable)
@@ -66,7 +77,8 @@ if(DEFINED OUTPUT_FOLDER)
     # then we'll copy your mod files into Skyrim or a mod manager for you!
 
     # Copy the SKSE plugin .dll files into the SKSE/Plugins/ folder
-    set(DLL_FOLDER "${OUTPUT_FOLDER}/SKSE/Plugins")
+    file(TO_CMAKE_PATH "${OUTPUT_FOLDER}" SANITIZED_OUTPUT_FOLDER)
+    set(DLL_FOLDER "${SANITIZED_OUTPUT_FOLDER}/SKSE/Plugins")
 
     message(STATUS "SKSE plugin output folder: ${DLL_FOLDER}")
 
@@ -84,27 +96,14 @@ if(DEFINED OUTPUT_FOLDER)
             TARGET "${PROJECT_NAME}"
             POST_BUILD
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_PDB_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>"
-    #        COMMAND "C:/Program Files (x86)/Windows Kits/10/Debuggers/x64/pdbcopy.exe" "$<TARGET_PDB_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>" -p
             VERBATIM
         )
     endif()
 endif()
 
-if (MSVC)
-    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-
-    target_compile_options(${PROJECT_NAME} PRIVATE
-        /Gw
-        /Gy
-        /Zc:inline
-        /ZH:SHA_256
-    )
-
+if(MSVC)
     target_link_options(${PROJECT_NAME} PRIVATE
-        $<$<CONFIG:Debug>:/INCREMENTAL:NO>
-        $<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>
+        $<$<CONFIG:Release>:/OPT:REF>
         $<$<CONFIG:RelWithDebInfo>:/OPT:REF>
-        $<$<CONFIG:RelWithDebInfo>:/OPT:ICF>
     )
 endif()
