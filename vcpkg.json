@@ -1,10 +1,13 @@
 {
-    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-    "name": "hello-world",
-    "version-string": "0.0.1",
+    "name": "kratos-combat",
+    "version-string": "2.0.8.9",
     "dependencies": [
-        "commonlibsse-ng-fork",
+        "directxtk",
+        "fmt",
+        "nlohmann-json",
+        "rapidcsv",
         "simpleini",
-        "nlohmann-json"
+        "spdlog",
+        "xbyak"
     ]
 }

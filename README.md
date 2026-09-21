@@ -11,7 +11,7 @@ Because this uses [CommonLibSSE NG](https://github.com/alandtse/CommonLibSSE-NG)
 
 Hook IDs and offsets must still be found manually for each version.
 
-- Set the `CommonLibSSEPath_NG` environment variable to the path of your CommonlibSSE-NG folder. 
+- Set the `CommonLibSSEPath` environment variable to the path of your CommonlibSSE-NG folder. 
 
 # Requirements
 

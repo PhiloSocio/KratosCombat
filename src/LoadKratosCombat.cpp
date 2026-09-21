@@ -64,14 +64,14 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 }
 
 SKSEPluginInfo(SKSE::PluginDeclaration::PluginDeclarationInfo{
-		.Version = { 2, 0, 8, 9 },
-		.Name = "KratosCombat",
-		.Author = "AnArchos",
-		.SupportEmail = "patreon.com/AnArchos",
-		.StructCompatibility = ::SKSE::StructCompatibility::Independent,
-		.RuntimeCompatibility = ::SKSE::VersionIndependence::AddressLibrary,
-		.MinimumSKSEVersion = { 2, 0, 0, 2 }
-	}
+        .Version = { 2, 0, 8, 9 },
+        .Name = "KratosCombat",
+        .Author = "AnArchos",
+        .SupportEmail = "patreon.com/AnArchos",
+        .StructCompatibility = ::SKSE::StructCompatibility::Independent,
+        .RuntimeCompatibility = ::SKSE::VersionIndependence::AddressLibrary,
+        .MinimumSKSEVersion = { 2, 0, 0, 2 }
+    }
 );
 SKSE_PLUGIN_LOAD(const SKSE::LoadInterface *skse)
 {
