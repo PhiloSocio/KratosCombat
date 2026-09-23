@@ -13,6 +13,7 @@
 
 using namespace std::literals;
 
+	using ProjectileRot = RE::Projectile::ProjectileRot;
 	using EventChecker = RE::BSEventNotifyControl;
 	using rFlag = RE::TESForm::RecordFlags;
 	using pFlag = RE::Projectile::Flags;

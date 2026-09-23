@@ -68,6 +68,31 @@ private:
     static inline REL::Relocation<decltype(OnEquipItem)>    _OnEquipItem;
 };
 
+class NPCHook
+{
+public:
+    static void Hook()
+    {
+        REL::Relocation<std::uintptr_t> ActorVtbl{ RE::VTABLE_Actor[0] };
+
+        _Update             = ActorVtbl.write_vfunc(0xAD, Update);
+//      _ProcessEventPC     = PlayerActorVtbl.write_vfunc(0x01, ProcessEventPC);
+//      _UnequipItem        = PlayerActorVtbl.write_vfunc(0xA1, UnequipItem);
+        _OnEquipItem        = ActorVtbl.write_vfunc(0xB2, OnEquipItem);
+    }
+private:
+    using EventChecker = RE::BSEventNotifyControl;
+    static void Update(RE::Actor* a_this, const float a_delta);
+    static EventChecker ProcessEventPC(RE::BSTEventSink<RE::BSAnimationGraphEvent>* a_sink, RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_dispatcher);
+//  static void UnequipItem(RE::Actor* a_this, std::uint64_t a_arg1, RE::TESBoundObject* a_object);
+    static void OnEquipItem(RE::Actor* a_this, bool a_playAnim);
+
+    static inline REL::Relocation<decltype(Update)>         _Update;
+    static inline REL::Relocation<decltype(ProcessEventPC)> _ProcessEventPC;
+//  static inline REL::Relocation<decltype(UnequipItem)>    _UnequipItem;
+    static inline REL::Relocation<decltype(OnEquipItem)>    _OnEquipItem;
+};
+
 class AttackHook
 {
 public:

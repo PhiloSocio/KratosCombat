@@ -72,6 +72,8 @@ public:
 
     static inline float MaxAxeStuckAngle            = 350.f;        //  cm/s
     static inline float MinAxeStuckAngle            = 80.f;         //  cm/s
+    static inline float HitRotationZ                = 0.69f;        //  rad     0.39 - 0.78
+    static inline float HitRotationZcos             = 0.f;
 
     //Charging system
     static inline uint32_t ChargeHitCount           = 1;            //  charge will be reset when this count of hits is made

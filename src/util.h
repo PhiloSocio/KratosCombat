@@ -9,6 +9,7 @@
 #define PI4 0.7853981633974483f
 #define PI8 0.3926990816987242f
 #define PI16 0.1963495408493621f
+#define PI32 0.09817477042468105f
 
 #define downVec     {0.f, 0.f, -1.f}
 #define upVec       {0.f, 0.f, 1.f}
@@ -868,6 +869,15 @@ namespace MathUtil
             auto qTo   = MatrixToQuaternion(target);
             auto qBlend = Slerp(qFrom, qTo, t);
             matrix = QuaternionToMatrix(qBlend);
+        }
+        template<typename T>
+        [[nodiscard]] static T Remap(T value, T inMin, T inMax, T outMin, T outMax) noexcept {
+            T t = (value - inMin) / (inMax - inMin);
+            return std::lerp(outMin, outMax, t);
+        }
+        template<typename T>
+        [[nodiscard]] static T Interpolate(const float t, const T& min, const T& max) noexcept {
+            return (min * (1.f - t) + max * t);
         }
     };
 }
