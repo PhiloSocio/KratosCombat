@@ -32,10 +32,14 @@ public:
         RE::NiTransform transformW   = RE::NiTransform();
         RE::NiTransform transformL   = RE::NiTransform();
 
-        std::vector<RE::Actor*>         lastHitActors;
+        std::vector<RE::ActorHandle>    lastHitActors;
         std::vector<RE::TESObjectREFR*> lastHitForms;
         ProjectileState projState = ProjectileState::kNone;
     };
+    RuntimeData smartWeaponRuntimeData;
+
+    RE::Projectile* ArrivingWeaponProjectile = nullptr;
+    RE::BGSProjectile* ArrivingWeaponProjectileBase = nullptr;
 
     bool Initialize() override;
     void Update() override;
@@ -70,7 +74,6 @@ protected:
 
 private:
     ThrowState _throwState = ThrowState::kNone;
-    RuntimeData smartWeaponRuntimeData;
 };
 
 using ProjectileState = SmartRelicWeapon::ProjectileState;

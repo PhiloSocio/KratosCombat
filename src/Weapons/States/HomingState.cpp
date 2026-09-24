@@ -2,15 +2,14 @@
 #include "Actors/Rager.h"
 #include "Actors/Caller.h"
 
-template <class TWeapon>
-HomingState<TWeapon>::HomingState(
-    TWeapon& a_weapon,
-    std::vector<RE::Actor*> a_targets,
+HomingState::HomingState(
+    SmartRelicWeapon& a_weapon,
+    std::vector<RE::ActorHandle> a_targets,
     uint8_t a_hitCount,
     bool a_isBoomerang,
     float a_speed,
     float a_angularVelocity)
-    : Base(a_weapon),
+    : ThrowableWeaponState(a_weapon),
         targets(std::move(a_targets)),
         hitCount(a_hitCount),
         isBoomerang(a_isBoomerang),
@@ -19,8 +18,7 @@ HomingState<TWeapon>::HomingState(
 {
 }
 
-template <class TWeapon>
-void HomingState<TWeapon>::InitializeTargets()
+void HomingState::InitializeTargets()
 {
     if (targets.empty()) {
         return;
@@ -48,15 +46,14 @@ void HomingState<TWeapon>::InitializeTargets()
             targets.begin() + (i * originalSize));
     }
 }
-template <class TWeapon>
-void HomingState<TWeapon>::RemoveInvalidTargets()
+void HomingState::RemoveInvalidTargets()
 {
-    std::erase_if(targets, [](const RE::Actor* actor) {
+    std::erase_if(targets, [](const RE::ActorHandle actorHandle) {
+        auto actor = actorHandle.get().get();
         return !actor || actor->IsDead() || actor->IsUnconscious();
     });
 }
-template <class TWeapon>
-RE::Actor* HomingState<TWeapon>::GetNextTarget(RE::NiPoint3 a_origin)
+RE::Actor* HomingState::GetNextTarget(RE::NiPoint3 a_origin)
 {
     RemoveInvalidTargets();
 //        if (targets.size() > 2u) {
@@ -68,7 +65,7 @@ RE::Actor* HomingState<TWeapon>::GetNextTarget(RE::NiPoint3 a_origin)
 //                    }
 //                );
 //            } else {
-//                std::vector<RE::Actor*> sortedTargets;
+//                std::vector<RE::ActorHandle> sortedTargets;
 //                sortedTargets.push_back(targets.front());
 //                targets.erase(targets.begin());
 //                while (!targets.empty()) {
@@ -92,20 +89,17 @@ RE::Actor* HomingState<TWeapon>::GetNextTarget(RE::NiPoint3 a_origin)
 //                }
 //            }
 //        }
-    return !targets.empty() ? targets.front() : nullptr;
+    return !targets.empty() ? targets.front().get().get() : nullptr;
 }
 
-
-template <class TWeapon>
-void HomingState<TWeapon>::Enter()
+void HomingState::Enter()
 {
     startingTime = AsyncUtil::GameTime::GetEngineTime();
     InitializeTargets();
 }
-template <class TWeapon>
-Status HomingState<TWeapon>::Update(float a_delta)
+Status HomingState::Update(float a_delta)
 {
-    auto proj = weapon.data.projectile;
+    auto proj = weapon.smartWeaponRuntimeData.projectile;
     if (!proj) return Status::kCancelled;
 
     auto& projectileRTD = proj->GetProjectileRuntimeData();
@@ -114,14 +108,14 @@ Status HomingState<TWeapon>::Update(float a_delta)
     const float livingTime = projectileRTD.livingTime;
     const float hLivingTime = GetLivingTime();
 
-    auto hTarget = GetNextTarget(weapon.data.position);
+    auto hTarget = GetNextTarget(weapon.smartWeaponRuntimeData.position);
     if (hLivingTime > 1.2f && livingTime > 0.2f && hTarget) {
         auto targetPos = hTarget->GetPosition() + (hTarget->GetBoundMax() + hTarget->GetBoundMin()) * 0.75f;
-        auto targetDir = (targetPos - weapon.data.position);
-        float height = weapon.data.position.z - hTarget->GetPosition().z;
+        auto targetDir = (targetPos - weapon.smartWeaponRuntimeData.position);
+        float height = weapon.smartWeaponRuntimeData.position.z - hTarget->GetPosition().z;
         targetDir.Unitize();
-        const float speed = speed * (livingTime < 1.2f ? livingTime : 1.2f);
-        vel = MathUtil::Angle::BlendVectors(weapon.data.lastOrientation, targetDir, ((livingTime - 0.2f) / 3.f), true) * speed;
+        const float targetSpeed = speed * (livingTime < 1.2f ? livingTime : 1.2f);
+        vel = MathUtil::Angle::BlendVectors(weapon.smartWeaponRuntimeData.direction, targetDir, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
     } else {
@@ -133,21 +127,25 @@ Status HomingState<TWeapon>::Update(float a_delta)
         float waveSin = waveAmplitude * cos(waveFrequency * hLivingTime);
         float waveCos = waveAmplitude * sin(waveFrequency * hLivingTime);
 
-        auto targetPos = weapon.data.thrower->GetPosition() + (weapon.data.thrower->GetBoundMax() + weapon.data.thrower->GetBoundMin()) * 0.75f;
-        float distance = targetPos.GetDistance(weapon.data.position);
-        float height = weapon.data.position.z - weapon.data.thrower->GetPosition().z;
-        auto targetDir = targetPos - weapon.data.position;
+        auto thrower = weapon.smartWeaponRuntimeData.thrower;
+        auto throwerActor = thrower ? thrower->GetActor() : nullptr;
+        if (!throwerActor) return Status::kCancelled;
+
+        auto targetPos = throwerActor->GetPosition() + (throwerActor->GetBoundMax() + throwerActor->GetBoundMin()) * 0.75f;
+        float distance = targetPos.GetDistance(weapon.smartWeaponRuntimeData.position);
+        float height = weapon.smartWeaponRuntimeData.position.z - throwerActor->GetPosition().z;
+        auto targetDir = targetPos - weapon.smartWeaponRuntimeData.position;
         targetDir.Unitize();
         RE::NiPoint3 circularVel;
-        RE::NiPoint3 originVelocity; weapon.data.thrower->GetLinearVelocity(originVelocity);
+        RE::NiPoint3 originVelocity; throwerActor->GetLinearVelocity(originVelocity);
         circularVel.x = -speed * targetDir.y + originVelocity.x + waveSin;
         circularVel.y = speed * targetDir.x + originVelocity.y + waveCos;
         circularVel.z = speed * targetDir.z + originVelocity.z + waveCos;
 
         circularVel += targetDir * (distance - 100.f) / 0.2f;
         circularVel.Unitize();
-        const float speed = speed * (hLivingTime > 0.5f && livingTime < 1.f ? livingTime + 0.2f : 1.f);
-        vel = MathUtil::Angle::BlendVectors(weapon.data.lastOrientation, circularVel, ((livingTime - 0.2f) / 3.f), true) * speed;
+        const float targetSpeed = speed * (hLivingTime > 0.5f && livingTime < 1.f ? livingTime + 0.2f : 1.f);
+        vel = MathUtil::Angle::BlendVectors(weapon.smartWeaponRuntimeData.direction, circularVel, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
     }
@@ -158,8 +156,7 @@ Status HomingState<TWeapon>::Update(float a_delta)
     angles.z = atan2(curvyDir.x, curvyDir.y);
     return Status::kRunning;
 }
-template <class TWeapon>
-void HomingState<TWeapon>::Exit()
+void HomingState::Exit()
 {
     if (auto thrower = weapon.GetThrower(); isBoomerang && thrower) {
         if (auto caller = dynamic_cast<Caller*>(thrower); caller) {

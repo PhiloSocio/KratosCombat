@@ -245,7 +245,7 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         //    if (justContinue) {
         //        //
         //    } else {
-                std::vector<RE::Actor*> nearCombatTargets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(throwerActor, Config::HProjectileTargetRange, true);
+                std::vector<RE::ActorHandle> nearCombatTargets = ObjectUtil::Actor::GetNearCombatTargetHandles<std::vector<RE::ActorHandle>>(throwerActor, Config::HProjectileTargetRange, true);
                 SetState(std::make_unique<LeviathanHomingState>(*this, std::move(nearCombatTargets)));
         //    }
         }
@@ -380,7 +380,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, std
 
             projectileUpdate.RegisterForUpdate(0.0f, false);
 
-            auto previous = dynamic_cast<ArrivingState<LeviathanAxe>*>(currentState.get());
+            auto previous = dynamic_cast<LeviathanArrivingState*>(currentState.get());
             if (a_justContinue && previous) {
                 SetState(std::make_unique<LeviathanArrivingState>(*previous, startPoint));
             } else {
@@ -539,8 +539,8 @@ void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, c
         } else if (!a_justCheck) {chargeHitCount -= 1;}
     }
 }
-bool LeviathanAxe::IsArriving() const {return currentState ? static_cast<ArrivingState<LeviathanAxe>*>(GetState()) != nullptr : false;}
-bool LeviathanAxe::IsHoming() const {return currentState ? static_cast<HomingState<LeviathanAxe>*>(GetState()) != nullptr : false;}
+bool LeviathanAxe::IsArriving() const {return currentState ? static_cast<ArrivingState*>(GetState()) != nullptr : false;}
+bool LeviathanAxe::IsHoming() const {return currentState ? static_cast<HomingState*>(GetState()) != nullptr : false;}
 void LeviathanAxe::StartChargingThrow()
 {
     if (auto assets = Assets::GetSingleton(); assets) {

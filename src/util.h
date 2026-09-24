@@ -1374,6 +1374,34 @@ namespace ObjectUtil
             }
             return nearTargets;
         }
+        template <typename T>
+        static T GetNearCombatTargetHandles(RE::Actor* a_this, const float a_distance, const bool a_orderFromNearest = false) {
+            T nearTargets; nearTargets.clear();
+            if (a_this && a_this->IsInCombat()) {
+                auto allyCombatGroup = a_this->GetCombatGroup();
+                if (!allyCombatGroup) return nearTargets;
+                auto enemyCombatGroupArray = allyCombatGroup->targets;
+                nearTargets.reserve(enemyCombatGroupArray.size());
+                for (auto& enemyCombatGroup : enemyCombatGroupArray) {
+                    if (auto target = enemyCombatGroup.targetHandle.get().get(); target) {
+                        if (target->GetPosition().GetDistance(a_this->GetPosition()) <= a_distance) {
+                            nearTargets.emplace_back(enemyCombatGroup.targetHandle);
+                        }
+                    }
+                }
+                if (a_orderFromNearest) {
+                    std::sort(nearTargets.begin(), nearTargets.end(), 
+                        [&](const RE::ActorHandle& a, const RE::ActorHandle& b) {
+                            auto aRaw = a.get().get();
+                            auto bRaw = b.get().get();
+                            return aRaw->GetPosition().GetDistance(a_this->GetPosition()) < 
+                                   bRaw->GetPosition().GetDistance(a_this->GetPosition());
+                        }
+                    );
+                }
+            }
+            return nearTargets;
+        }
     };
 
     struct Spell

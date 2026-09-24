@@ -1,19 +1,16 @@
 #pragma once
 #include "RelicWeaponState.h"
+#include "Weapons/SmartRelicWeapon.h"
 
-template <class TWeapon>
 class ThrowableWeaponState : public RelicWeaponState
 {
-protected:
-    TWeapon& weapon;
-
-    void Enter() override;
-    Status Update(float a_delta) override;
-    void Exit() override;
-
-    virtual ~ThrowableWeaponState() = default;
 public:
-    explicit ThrowableWeaponState(TWeapon& a_weapon) :
+    explicit ThrowableWeaponState(SmartRelicWeapon& a_weapon) :
         weapon(a_weapon)
     {}
+    ~ThrowableWeaponState() override = default;
+
+protected:
+    SmartRelicWeapon& weapon;
+
 };

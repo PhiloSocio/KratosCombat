@@ -9,7 +9,7 @@ class Thrower : virtual public BaseActor
 public:
     explicit Thrower(RE::ActorHandle a_actorHandle) :
         BaseActor(a_actorHandle)
-    {}
+    {titles.set(ActorType::kThrower);}
     virtual ~Thrower() = default;
 
     void ThrowWeapon(const bool isVertical, const bool isHoming = false);

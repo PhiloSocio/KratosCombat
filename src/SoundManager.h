@@ -1,7 +1,6 @@
 #pragma once
 #include "util.h"
 #include "settings.h"
-#include "Weapons/ThrowableRelicWeapon.h"
 
 struct SoundDefinition
 {
@@ -47,7 +46,7 @@ public:
     AsyncUtil::GameTime throwingLoopStopUpdate;
     AsyncUtil::GameTime arrivingLoopStopUpdate;
 
-    ThrowableRelicWeapon::RuntimeData weaponData;
+    RE::NiAVObject** source = nullptr;
     SoundDefinition soundDefinition;
 
     RE::BSSoundHandle ChargingLoop0SH;
@@ -141,5 +140,6 @@ public:
         } return false;
     }
 
-    SoundManager(SoundDefinition a_soundDefinition, ThrowableRelicWeapon::RuntimeData& a_weaponData) : soundDefinition(a_soundDefinition), weaponData(a_weaponData) {};
+    SoundManager(SoundDefinition a_soundDefinition) 
+    : soundDefinition(a_soundDefinition) {};
 };

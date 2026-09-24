@@ -8,7 +8,7 @@ class Charger : virtual public BaseActor
 public:
     explicit Charger(RE::ActorHandle a_actorHandle) :
         BaseActor(a_actorHandle)
-    {}
+    {titles.set(ActorType::kCharger);}
     virtual ~Charger() = default;
 
     bool IsCanCharge(const RelicType a_relic) const

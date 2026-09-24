@@ -27,16 +27,16 @@ public:
 //    [[nodiscard]] RE::NiAVObject* GetShieldBone() const { return ShieldBone; };
 //    [[nodiscard]] RE::NiAVObject* GetAnimObjectRBone() const { return AnimObjectRBone; };
 
-    [[nodiscard]] RE::NiAVObject* GetUpdateRHandBone();
-    [[nodiscard]] RE::NiAVObject* GetUpdateLHandBone();
-    [[nodiscard]] RE::NiAVObject* GetUpdateWeaponBone();
-    [[nodiscard]] RE::NiAVObject* GetUpdateShieldBone();
-    [[nodiscard]] RE::NiAVObject* GetUpdateAnimObjectRBone();
-    [[nodiscard]] RE::NiAVObject* GetRHandBone() { return GetUpdateRHandBone(); };
-    [[nodiscard]] RE::NiAVObject* GetLHandBone() { return GetUpdateLHandBone(); };
-    [[nodiscard]] RE::NiAVObject* GetWeaponBone() { return GetUpdateWeaponBone(); };
-    [[nodiscard]] RE::NiAVObject* GetShieldBone() { return GetUpdateShieldBone(); };
-    [[nodiscard]] RE::NiAVObject* GetAnimObjectRBone() { return GetUpdateAnimObjectRBone(); };
+    [[nodiscard]] RE::NiAVObject*& GetUpdateRHandBone();
+    [[nodiscard]] RE::NiAVObject*& GetUpdateLHandBone();
+    [[nodiscard]] RE::NiAVObject*& GetUpdateWeaponBone();
+    [[nodiscard]] RE::NiAVObject*& GetUpdateShieldBone();
+    [[nodiscard]] RE::NiAVObject*& GetUpdateAnimObjectRBone();
+    [[nodiscard]] RE::NiAVObject*& GetRHandBone() { return GetUpdateRHandBone(); };
+    [[nodiscard]] RE::NiAVObject*& GetLHandBone() { return GetUpdateLHandBone(); };
+    [[nodiscard]] RE::NiAVObject*& GetWeaponBone() { return GetUpdateWeaponBone(); };
+    [[nodiscard]] RE::NiAVObject*& GetShieldBone() { return GetUpdateShieldBone(); };
+    [[nodiscard]] RE::NiAVObject*& GetAnimObjectRBone() { return GetUpdateAnimObjectRBone(); };
 
 
     [[nodiscard]] RE::TESBoundObject* GetEquippedObjectR() const { return equippedObjectR; };

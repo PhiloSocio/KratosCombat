@@ -7,14 +7,20 @@ class Rager : virtual public BaseActor
 public:
     explicit Rager(RE::ActorHandle a_actorHandle) :
         BaseActor(a_actorHandle)
-    {}
+    {titles.set(ActorType::kRager);}
     virtual ~Rager() = default;
 
-    void InitiateRage();
-    void StartRage();
+    void UpdateRager(float a_delta);
+
+    void StartRage(const bool a_justAnim = false);
     void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);
 
-    [[nodiscard]] bool IsInRage() const { return isInRage; }
+    float CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult = 1.f);
+    void RestoreRage(const float a_value, const bool a_justRestore);
+
+    [[nodiscard]] bool IsInRage() const { return _isInRage; }
+    [[nodiscard]] bool IsCanRage() const { return (rage > rageDamageAmount * 6.f) && !_isInRage; }
+    [[nodiscard]] bool IsWantFinishRage() const {return _isWantFinishRage;}
 
     [[nodiscard]] RageType GetRageType() const { return rageType; }
     [[nodiscard]] float GetRageAmount() const { return rage; }
@@ -29,9 +35,10 @@ public:
     void SetRageType(RageType a_rageType) noexcept { rageType = a_rageType; }
 
 protected:
-    bool isInRage             = false;
-    bool isWantFinishRage     = false;
-    bool gettingHittedInValor = false;
+    RE::SpellItem*      SpellSpartanRage    = nullptr;
+    RE::SpellItem*      SpellStrenghtBuff   = nullptr;
+    RE::EffectSetting*  EffectSpartanRage   = nullptr;
+    RE::EffectSetting*  EffectStrenghtBuff  = nullptr;
 
     float rage             = 0.f;
     float rageLimit        = 0.f;
@@ -40,4 +47,11 @@ protected:
 
     RageType rageType = RageType::kFury;
     RageType lastTriggeredRage = RageType::kFury;
+
+private:
+    RE::TESBoundObject* _LastEquippedObjectR = nullptr;
+    RE::TESBoundObject* _LastEquippedObjectL = nullptr;
+    bool _isInRage             = false;
+    bool _isWantFinishRage     = false;
+    bool _gettingHittedInValor = false;
 };

@@ -11,14 +11,13 @@ public:
     explicit Kratos(RE::ActorHandle a_actorHandle);
     ~Kratos() override = default;
 
-    void Update(float a_delta) override;
     void DoAction(const ActionType a_action) override
     {
         if (IsValid())
             switch (a_action)
             {
             case ActionType::kRage:
-                if (!IsInRage()) InitiateRage();
+                if (!IsInRage()) StartRage(true);
                 else EndRage();
                 break;
             case ActionType::kWeaponCharge:

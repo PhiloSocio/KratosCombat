@@ -1,17 +1,15 @@
 #include "ArrivingState.h"
 #include "Weapons/SmartRelicWeapon.h"
 
-template <class TWeapon>
-ArrivingState<TWeapon>::ArrivingState(TWeapon& a_weapon, const RE::NiPoint3& a_startPosition, RE::NiAVObject** a_targetBone)
-    : Base(a_weapon),
+ArrivingState::ArrivingState(SmartRelicWeapon& a_weapon, const RE::NiPoint3& a_startPosition, RE::NiAVObject** a_targetBone)
+    : ThrowableWeaponState(a_weapon),
         callerHandBoneSource(a_targetBone),
         startPosition(a_startPosition),
         _justContinue(false)
 {
 }
-template <class TWeapon>
-ArrivingState<TWeapon>::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3& a_startPosition)
-    : Base(a_previous.weapon),
+ArrivingState::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3& a_startPosition)
+    : ThrowableWeaponState(a_previous.weapon),
         callerHandBoneSource(
             a_previous.callerHandBoneSource),
         startPosition(a_startPosition),
@@ -23,16 +21,15 @@ ArrivingState<TWeapon>::ArrivingState(const ArrivingState& a_previous, const RE:
 {
 }
 
-template <class TWeapon>
-void ArrivingState<TWeapon>::UpdateRotation()
+void ArrivingState::UpdateRotation()
 {
-    if (weapon.data.replacedProjectileModel && weapon.data.replacedProjectileModel->weapon) {
-        auto& replacedPMParent = weapon.data.replacedProjectileModel->weapon;
+    if (weapon.smartWeaponRuntimeData.replacedProjectileModel && weapon.smartWeaponRuntimeData.replacedProjectileModel->parent) {
+        auto& replacedPMParent = weapon.smartWeaponRuntimeData.replacedProjectileModel->parent;
         auto& localRotation = replacedPMParent->local.rotate;
         RE::NiMatrix3 targetLocalRotation;
     //    float targetAngleZ;
-        if (replacedPMParent->weapon) {
-            targetLocalRotation = replacedPMParent->weapon.world.rotate.Transpose() * callerWeaponBone->world.rotate;
+        if (replacedPMParent->parent) {
+            targetLocalRotation = replacedPMParent->parent->world.rotate.Transpose() * callerWeaponBone->world.rotate;
         //    targetAngleZ = std::atan2(
         //        targetLocalRotation.entry[0][1],
         //        targetLocalRotation.entry[0][0]
@@ -62,10 +59,9 @@ void ArrivingState<TWeapon>::UpdateRotation()
 //        leviAngle.z += PI;
 //    }
 }
-template <class TWeapon>
-void ArrivingState<TWeapon>::UpdateAI(RE::NiPoint3& a_outVel)
+void ArrivingState::UpdateAI(RE::NiPoint3& a_outVel)
 {
-    float height = position.z - weapon.data.caller->GetPosition().z;
+    float height = position.z - callerActor->GetPosition().z;
     if (!Config::DontDamageWhileArrive && tReal < 0.69f) {
         if (auto aTarget = GetNextTarget(position); aTarget) {
             auto targetPos = aTarget->GetPosition() + (aTarget->GetBoundMax() + aTarget->GetBoundMin()) * 0.75f;
@@ -76,12 +72,11 @@ void ArrivingState<TWeapon>::UpdateAI(RE::NiPoint3& a_outVel)
         }
     }
 }
-template <class TWeapon>
-void ArrivingState<TWeapon>::UpdateArrivingDirection(const bool a_initial)
+void ArrivingState::UpdateArrivingDirection(const bool a_initial)
 {
     if (RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
 
-    } else if (weapon.data.caller && callerBreastBone) {
+    } else if (callerActor && callerBreastBone) {
         if (weapon.GetThrowState() == ThrowState::kThrowable || isCatchable) {
 
         } else if (a_initial || linearDistance > 100.f) {
@@ -107,7 +102,7 @@ void ArrivingState<TWeapon>::UpdateArrivingDirection(const bool a_initial)
             }
 
             if (!a_initial) {
-                float previousAngle; weapon.data.caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle); previousAngle *= TWO_PI;
+                float previousAngle; callerActor->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle); previousAngle *= TWO_PI;
                 const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
                 constexpr float smoothTime = 0.369f;
                 const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
@@ -118,11 +113,10 @@ void ArrivingState<TWeapon>::UpdateArrivingDirection(const bool a_initial)
             }
             arrivingRelativeAngleZ /= TWO_PI;
         }
-        weapon.data.caller->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
+        callerActor->SetGraphVariableFloat("fArrivingWeaponDirection", arrivingRelativeAngleZ);
     }
 }
-template <class TWeapon>
-void ArrivingState<TWeapon>::UpdateArrivingRoute()
+void ArrivingState::UpdateArrivingRoute()
 {
     RE::NiMatrix3 handRot   = callerHandBone->world.rotate;
     const float alphaHandRot = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
@@ -180,29 +174,27 @@ void ArrivingState<TWeapon>::UpdateArrivingRoute()
     bezierDir.Unitize();
 }
 
-template <class TWeapon>
-void ArrivingState<TWeapon>::Enter()
+void ArrivingState::Enter()
 {
     InitializeCallerData();
     UpdateTargets();
     UpdateArrivingDirection(!_justContinue);
     InitializeRoute();
-    smoothedDesiredVelocity = weapon.data.lastVelocity;
+    smoothedDesiredVelocity = weapon.smartWeaponRuntimeData.velocity;
 
     if (!_justContinue) {
         startingTime = AsyncUtil::GameTime::GetEngineTime();
         const bool doBlend = 
-            weapon.data.projState == ProjectileState::kNone ||
-            weapon.data.projState == ProjectileState::kLaunched;
-        smoothedDesiredVelocity = doBlend ? weapon.data.lastVelocity : linearArrivingDir * speed;
+            weapon.smartWeaponRuntimeData.projState == ProjectileState::kNone ||
+            weapon.smartWeaponRuntimeData.projState == ProjectileState::kLaunched;
+        smoothedDesiredVelocity = doBlend ? weapon.smartWeaponRuntimeData.velocity : linearArrivingDir * speed;
     }
 }
-template <class TWeapon>
-Status ArrivingState<TWeapon>::Update(const float a_delta)
+Status ArrivingState::Update(const float a_delta)
 {
-    if (!weapon) return Status::kCancelled;
+    if (!weapon.GetCaller() || !weapon.GetCaller()->IsValid()) return Status::kCancelled;
 
-    model = weapon.data.model;
+    model = weapon.smartWeaponRuntimeData.projectileModel;
     if (!model) return Status::kCancelled;
 
     callerHandBone = GetCallerHandBone();
@@ -212,7 +204,7 @@ Status ArrivingState<TWeapon>::Update(const float a_delta)
     callerWeaponBone = GetCallerWeaponBone();
     if (!callerWeaponBone) return Status::kCancelled;
 
-    auto proj = weapon.data.projectile;
+    auto proj = weapon.smartWeaponRuntimeData.projectile;
     if (!proj) return Status::kCancelled;
     auto& rtData = proj->GetProjectileRuntimeData();
     auto& vel = rtData.linearVelocity;
@@ -228,12 +220,12 @@ Status ArrivingState<TWeapon>::Update(const float a_delta)
 
     isCatchable = (linearDistance <= Config::CatchingTreshold) || (linearDistance <= (*g_deltaTime * vel.Length()));
 
-    if (weapon.LeviathanAxeProjectileA != proj.get()) {  //  first frame of the arriving projectile
-        weapon.LeviathanAxeProjectileA = proj.get();
+    if (weapon.ArrivingWeaponProjectile != proj) {  //  first frame of the arriving projectile
+        weapon.ArrivingWeaponProjectile = proj;
 
         if (!isCatchable) {
-            weapon.soundData.PlayArrivingStartSounds(model.get());
-            weapon.soundData.PlayArrivingLoopSounds(model.get());
+            weapon.GetSoundManager().PlayArrivingStartSounds(model);
+            weapon.GetSoundManager().PlayArrivingLoopSounds(model);
         }
     }
     Status status = Status::kRunning;
@@ -244,15 +236,15 @@ Status ArrivingState<TWeapon>::Update(const float a_delta)
         status = Status::kCompleted;
     }
     if (false && startRotation == RE::NiMatrix3()) {
-        if (weapon.data.replacedProjectileModel && weapon.data.replacedProjectileModel->weapon) {
-            model.get()->world = weapon.data.transformPW;
-            model.get()->local = weapon.data.transformPL;
-            auto& replacedPMParent = weapon.data.replacedProjectileModel->weapon;
+        if (weapon.smartWeaponRuntimeData.replacedProjectileModel && weapon.smartWeaponRuntimeData.replacedProjectileModel->parent) {
+            model->world = weapon.smartWeaponRuntimeData.transformPW;
+            model->local = weapon.smartWeaponRuntimeData.transformPL;
+            auto& replacedPMParent = weapon.smartWeaponRuntimeData.replacedProjectileModel->parent;
             auto parentWorldInverse = replacedPMParent->world.Invert();
-            auto previousWorld = weapon.data.transformW;
+            auto previousWorld = weapon.smartWeaponRuntimeData.transformW;
             auto& localRotation = replacedPMParent->local.rotate;
             auto& localPosition = replacedPMParent->local.translate;
-            if (replacedPMParent->weapon) {
+            if (replacedPMParent->parent) {
                 localRotation = parentWorldInverse.rotate * previousWorld.rotate;
             //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
             } else {
@@ -289,11 +281,11 @@ Status ArrivingState<TWeapon>::Update(const float a_delta)
     isAlmostArrived = remainingTimeToArrive < (almostArrivedTimeThreshold < timeToArrive ? almostArrivedTimeThreshold : timeToArrive * 0.5f);
     if (isAlmostArrived || isCatchable) {
         uint16_t fadeDuration = (uint16_t)(almostArrivedTimeThreshold * 1000.f) + 200u;
-        weapon.soundData.FadeArrivingStartSounds(fadeDuration);
-        weapon.soundData.FadeArrivingLoopSounds(fadeDuration);
-        weapon.soundData.FadeCallingHandSounds(fadeDuration);
+        weapon.GetSoundManager().FadeArrivingStartSounds(fadeDuration);
+        weapon.GetSoundManager().FadeArrivingLoopSounds(fadeDuration);
+        weapon.GetSoundManager().FadeCallingHandSounds(fadeDuration);
     } else if (isNear) {
-        weapon.soundData.PlayArrivingNearSounds(model.get());
+        weapon.GetSoundManager().PlayArrivingNearSounds(model);
     }
 //    spdlog::debug(
 //        "AFTER ACCEL speed={:.1f}, accel={:.1f}, L={:.1f}, T={:.3f}",
@@ -325,9 +317,9 @@ Status ArrivingState<TWeapon>::Update(const float a_delta)
     desiredDir = smoothedDesiredVelocity;
     desiredDir.Unitize();
     const bool doBlend = 
-        weapon.data.projState == ProjectileState::kNone ||
-        weapon.data.projState == ProjectileState::kLaunched;
-    vel = MathUtil::Angle::BlendVectors(doBlend ? weapon.data.lastVelocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
+        weapon.smartWeaponRuntimeData.projState == ProjectileState::kNone ||
+        weapon.smartWeaponRuntimeData.projState == ProjectileState::kLaunched;
+    vel = MathUtil::Angle::BlendVectors(doBlend ? weapon.smartWeaponRuntimeData.velocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
     if (vel.z < 0.f) {
         constexpr float minHeight = -40.f;
         constexpr float dampingRange = 69.f;
@@ -341,7 +333,6 @@ Status ArrivingState<TWeapon>::Update(const float a_delta)
     UpdateArrivingDirection();
     return status;
 }
-template <class TWeapon>
-void ArrivingState<TWeapon>::Exit()
+void ArrivingState::Exit()
 {
 }

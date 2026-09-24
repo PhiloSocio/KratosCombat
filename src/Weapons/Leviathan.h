@@ -5,7 +5,6 @@
 #include "SmartRelicWeapon.h"
 #include "Weapons/States/HomingState.h"
 #include "Weapons/States/ArrivingState.h"
-#include "SoundManager.h"
 
 class LeviathanAxe : public SmartRelicWeapon
 {
@@ -17,22 +16,6 @@ public:
 
     RuntimeData runtimeData;
     TrailData trailData;
-    SoundManager soundData{
-        SoundDefinition{
-            .chargingLoop0 = nullptr,
-            .throwingStart = nullptr,
-            .throwingLoop0 = nullptr,
-            .throwingLoop1 = nullptr,
-            .callStart = nullptr,
-            .arrivingStart = nullptr,
-            .arrivingLoop0 = nullptr,
-            .arrivingLoop1 = nullptr,
-            .arrivingLoop2 = nullptr,
-            .arrivingNear = nullptr,
-            .catching = nullptr
-        },
-        runtimeData
-    };
 
     bool Initialize() override;
     void Update() override;
@@ -87,17 +70,15 @@ friend class ProjectileHook;
     ~LeviathanAxe() = default;
 };
 
-class LeviathanHomingState
-    : public HomingState<LeviathanAxe>
+class LeviathanHomingState : public HomingState
 {
 public:
-    using HomingState<LeviathanAxe>::HomingState;
-
     virtual ~LeviathanHomingState() = default;
+
     LeviathanHomingState(
         LeviathanAxe& a_weapon,
-        std::vector<RE::Actor*> a_targets,
-        uint8_t a_hitCount = 1u,
+        std::vector<RE::ActorHandle> a_targets,
+        uint8_t a_hitCount = 2u,
         bool a_isBoomerang = true,
         float a_speed = 2000.f,
         float a_angularVelocity = 5.f)
@@ -106,13 +87,11 @@ public:
 protected:
 };
 
-class LeviathanArrivingState
-    : public ArrivingState<LeviathanAxe>
+class LeviathanArrivingState : public ArrivingState
 {
 public:
-    using ArrivingState<LeviathanAxe>::ArrivingState;
+    ~LeviathanArrivingState() override = default;
 
-    virtual ~LeviathanArrivingState() = default;
     LeviathanArrivingState(
         LeviathanAxe& a_weapon,
         const RE::NiPoint3& a_startPosition,
@@ -124,6 +103,7 @@ public:
         const RE::NiPoint3& a_startPosition)
         : ArrivingState(a_previous, a_startPosition)
         {};
+
 protected:
 //    void UpdateRotation() override;
 //    void UpdateAI(RE::NiPoint3& a_outVel) override;

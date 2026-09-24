@@ -1,117 +1,137 @@
 #include "Rager.h"
+#include "Assets.h"
+#include "util.h"
+
+float Rager::CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult)
+{
+    if (a_amount == 0.f) return 0.f;
+    else if (a_amount > 0.f) {
+        if (IsInRage()) return -(rageDamageAmount * a_mult * (5.f + a_amount / 300.f));
+        else return (rageBuffAmount * a_mult * (1.f + sqrtf(a_amount) / 100.f));
+    } return (rageDamageAmount * a_mult * (a_amount - 1.f) / 5.f);
+}
+
+void Rager::RestoreRage(const float a_value, const bool a_justRestore)
+{
+    rage += a_value;
+    if (rage < 0.f) {rage = 0.f; if (!a_justRestore) EndRage(false, true, true);}
+    else if (rage > rageLimit) rage = rageLimit;
+}
 
 void Rager::StartRage(const bool a_justAnim)
 {
-    if (a_actor) {
-        if ((*values.rage - *values.rageDamageAmount * 10.f) < 0.f) return;
-        a_actor->SetGraphVariableInt("iRageType", Config::RageType);
-        if (WeaponIdentify::EquippedObjR) _LastEquippedObjectR = WeaponIdentify::EquippedObjR;
-        if (WeaponIdentify::EquippedObjL) _LastEquippedObjectL = WeaponIdentify::EquippedObjL;
-        _lastTriggeredRage = a_rage;
-        switch (a_rage)
+    if (actor) {
+        if ((rage - rageDamageAmount * 10.f) < 0.f) return;
+        actor->SetGraphVariableInt("iRageType", (int32_t)rageType);
+        _LastEquippedObjectR = GetEquippedObjectR();
+        _LastEquippedObjectL = GetEquippedObjectL();
+        lastTriggeredRage = rageType;
+        auto assets = Assets::GetSingleton();
+        switch (rageType)
         {
-        case Kratos::Rage::kFury:
+        case RageType::kFury:
             if (a_justAnim) {
-                a_actor->SetGraphVariableInt("iKratosActionType", (uint8_t)Kratos::Action::kRage);
-                a_actor->NotifyAnimationGraph("DoKratosAction");
+                actor->SetGraphVariableInt("iKratosActionType", (uint32_t)ActionType::kRage);
+                actor->NotifyAnimationGraph("DoKratosAction");
                 return;
             }
-            ObjectUtil::Actor::CastSpell(SpellSpartanRage, a_actor, a_actor, a_actor, 3.f);
-            if (VFXeffect.fury) a_actor->ApplyArtObject(VFXeffect.fury, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
-            if (WeaponIdentify::EquippedObjR)
-                ObjectUtil::Actor::UnEquipItem(a_actor, false, false, false, false, true, true);
-            if (WeaponIdentify::EquippedObjL && WeaponIdentify::EquippedObjL != WeaponIdentify::GuardianShield)
-                ObjectUtil::Actor::UnEquipItem(a_actor, true, false, false, false, true, true);
-            if (WeaponIdentify::GuardianShield && !WeaponIdentify::isGuardianShield)
-                ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::GuardianShield, true);
+            ObjectUtil::Actor::CastSpell(SpellSpartanRage, actor, actor, actor, 3.f);
+            if (assets->VFXeffects.fury) actor->ApplyArtObject(assets->VFXeffects.fury, 1.f, nullptr, false, false, GetRHandBone());
+            if (GetEquippedObjectR())
+                ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
+            if (GetEquippedObjectL())
+                ObjectUtil::Actor::UnEquipItem(actor, true, false, false, false, true, true);
 
-            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
             break;
-        case Kratos::Rage::kValor:
+        case RageType::kValor:
             if (a_justAnim) {
                 _gettingHittedInValor = false;
-                a_actor->SetGraphVariableInt("iKratosActionType", (uint8_t)Kratos::Action::kRage);
-                a_actor->NotifyAnimationGraph("DoKratosAction");
-                RestoreRage(a_actor, -(*values.rageDamageAmount * 5.f), true);
+                actor->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kRage);
+                actor->NotifyAnimationGraph("DoKratosAction");
+                RestoreRage(-(rageDamageAmount * 5.f), true);
             }
-            if (VFXeffect.valor) a_actor->ApplyArtObject(VFXeffect.valor, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
+            if (assets->VFXeffects.valor) actor->ApplyArtObject(assets->VFXeffects.valor, 1.f, nullptr, false, false, GetRHandBone());
             break;
-        case Kratos::Rage::kWrath:
-            if (VFXeffect.wrath) a_actor->ApplyArtObject(VFXeffect.wrath, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
+        case RageType::kWrath:
+            if (assets->VFXeffects.wrath) actor->ApplyArtObject(assets->VFXeffects.wrath, 1.f, nullptr, false, false, GetRHandBone());
             return;
-        case Kratos::Rage::kLegacy:
-            if (WeaponIdentify::BladeOfOlympus) {
-            //    if (auto mCaster = a_actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant); mCaster && SpellSpartanRage) {
-            //        mCaster->CastSpellImmediate(SpellSpartanRage, false, a_actor, 1.f, false, 2.f, a_actor);
-            //    }
-                if (VFXeffect.legacy) a_actor->ApplyArtObject(VFXeffect.legacy, 1.f, nullptr, false, false, WeaponIdentify::GetRhandBone(a_actor));
-                ObjectUtil::Actor::EquipItem(a_actor, WeaponIdentify::BladeOfOlympus);
-                ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
-            }
+        case RageType::kLegacy:
+        //    if (BladeOfOlympus) {
+        //    //    if (auto mCaster = actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant); mCaster && SpellSpartanRage) {
+        //    //        mCaster->CastSpellImmediate(SpellSpartanRage, false, actor, 1.f, false, 2.f, actor);
+        //    //    }
+        //        if (assets->VFXeffects.legacy) actor->ApplyArtObject(assets->VFXeffects.legacy, 1.f, nullptr, false, false, GetRhandBone(actor));
+        //        ObjectUtil::Actor::EquipItem(actor, BladeOfOlympus);
+        //        ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
+        //    }
             break;
         default:
             break;
         }
-        ObjectUtil::Actor::SendAnimationEvent(a_actor, "weaponSwing");
-        a_actor->SetGraphVariableBool("IsInRage", true);
+        ObjectUtil::Actor::SendAnimationEvent(actor, "weaponSwing");
+        actor->SetGraphVariableBool("IsInRage", true);
+        _isInRage = true;
     }
 }
-void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bool a_justAnim, RE::Actor* a_actor)
+void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bool a_justAnim)
 {
-    if (a_actor) {
+    if (actor) {
         _isWantFinishRage = true;
-        switch (a_rage)
+        switch (rageType)
         {
-        case Kratos::Rage::kFury:
+        case RageType::kFury:
             if (a_playAnim) {
-                a_actor->NotifyAnimationGraph("DoKratosAction");
+                actor->NotifyAnimationGraph("DoKratosAction");
                 _isWantFinishRage = false;
                 if (a_justAnim) return;
             }
-            if (auto mTarget = a_actor->GetMagicTarget(); mTarget) {
-                auto aHandle = a_actor->GetHandle();
+            if (auto mTarget = actor->GetMagicTarget(); mTarget) {
+                auto aHandle = actor->GetHandle();
                 mTarget->DispelEffect(SpellSpartanRage, aHandle);
-                ObjectUtil::Actor::ResetEquipAnimationAfter(0, a_actor);
-                RestoreRage(a_actor, -(*values.rageDamageAmount * 3.f), true);
+                ObjectUtil::Actor::ResetEquipAnimationAfter(0, actor);
+                RestoreRage(-(rageDamageAmount * 3.f), true);
                 if (_LastEquippedObjectR)
-                    ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectR, true);
+                    ObjectUtil::Actor::EquipItem(actor, _LastEquippedObjectR, true);
                 if (_LastEquippedObjectL)
-                    ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectL, true);
-                ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
+                    ObjectUtil::Actor::EquipItem(actor, _LastEquippedObjectL, true);
+                ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
             }
             break;
-        case Kratos::Rage::kValor:
+        case RageType::kValor:
             if (a_fromAnnotation) {
-                ObjectUtil::Actor::SendAnimationEvent(a_actor, "weaponSwing");
-                a_actor->AsActorValueOwner()->RestoreActorValue(RE::ActorValue::kHealth, (*values.rageBuffAmount * 10.f));
-                if (_gettingHittedInValor) ObjectUtil::Actor::CastSpell(SpellStrenghtBuff, a_actor, a_actor, a_actor);
+                ObjectUtil::Actor::SendAnimationEvent(actor, "weaponSwing");
+                actor->AsActorValueOwner()->RestoreActorValue(RE::ActorValue::kHealth, (rageBuffAmount * 10.f));
+                if (_gettingHittedInValor) ObjectUtil::Actor::CastSpell(SpellStrenghtBuff, actor, actor, actor);
                 _gettingHittedInValor = false;
             }
             break;
-        case Kratos::Rage::kWrath:
+        case RageType::kWrath:
             break;
-        case Kratos::Rage::kLegacy:
+        case RageType::kLegacy:
             if (a_playAnim) {
-                a_actor->NotifyAnimationGraph("DoKratosAction");
+                actor->NotifyAnimationGraph("DoKratosAction");
                 _isWantFinishRage = false;
                 if (a_justAnim) return;
             }
-            ObjectUtil::Actor::ResetEquipAnimationAfter(0, a_actor);
-            if (_LastEquippedObjectR)
-                ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectR, true);
-            else if (WeaponIdentify::EquippedObjR) 
-                ObjectUtil::Actor::UnEquipItem(a_actor, false, false, false, false, true, true);
-            if (_LastEquippedObjectL)
-                ObjectUtil::Actor::EquipItem(a_actor, _LastEquippedObjectL, true);
-            ObjectUtil::Actor::ResetEquipAnimationAfter(100, a_actor);
+            if (GetEquippedObjectR()) {
+                ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
+                ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
+            }
             break;
 
         default:
             break;
         }
-        a_actor->SetGraphVariableBool("IsInRage", false);
+        actor->SetGraphVariableBool("IsInRage", false);
+        _isInRage = false;
         _isWantFinishRage = false;
         _LastEquippedObjectR = nullptr;
         _LastEquippedObjectL = nullptr;
     }
+}
+
+void Rager::UpdateRager(const float a_delta)
+{
+    if (IsInRage()) RestoreRage(-(rageDamageAmount * a_delta), true);
 }

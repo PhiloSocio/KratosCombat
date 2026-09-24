@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "RelicWeapon.h"
 #include "Actors/Thrower.h"
+#include "SoundManager.h"
 
 class Thrower;
 
@@ -84,12 +85,15 @@ public:
         bool isThrown = false;
     };
 
+    RuntimeData throwableWeaponRuntimeData;
+
     bool Initialize() override;
     void Update() override;
     bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
     void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
+    [[nodiscard]] SoundManager GetSoundManager() const {return soundData;}
     [[nodiscard]] bool IsCharged(const bool a_forLastThrow = false) const {return RelicWeapon::IsCharged() ? true : (a_forLastThrow ? _isLastThrowCharged : false);}
 
     [[nodiscard]] RuntimeData& GetThrableRuntimeData() {return throwableWeaponRuntimeData;}
@@ -105,6 +109,24 @@ public:
     virtual void DeleteProjectileTrail();
 
 protected:
+    SoundManager soundData{
+        SoundDefinition{
+            .chargingLoop0 = nullptr,
+            .throwingStart = nullptr,
+            .throwingLoop0 = nullptr,
+            .throwingLoop1 = nullptr,
+            .callStart = nullptr,
+            .arrivingStart = nullptr,
+            .arrivingLoop0 = nullptr,
+            .arrivingLoop1 = nullptr,
+            .arrivingLoop2 = nullptr,
+            .arrivingNear = nullptr,
+            .catching = nullptr
+        }
+    };
+
+    RE::BGSProjectile* ThrowingWeaponDummyProjectile = nullptr;
+
     AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;
     AsyncUtil::GameTime trailRemoveUpdate;
@@ -114,6 +136,4 @@ protected:
 
     bool _isLastThrowCharged = false;
     PRECISION_API::CollisionDefinition collisionDefinition;
-
-    RuntimeData throwableWeaponRuntimeData;
 };

@@ -3,24 +3,32 @@
 #include "Settings.h"
 #include "Util.h"
 
-template <class TWeapon>
-class ArrivingState : public ThrowableWeaponState<TWeapon>
+class ArrivingState : public ThrowableWeaponState
 {
 public:
-    using Base = ThrowableWeaponState<TWeapon>;
-    using Base::weapon;
-
     static constexpr std::array<float, 4> arrivingDirections {
         0.f, PI2, PI, ONEANDHALF_PI     //  b, r, f, l
     };
 
+    ~ArrivingState() override = default;
+
+    ArrivingState(
+        SmartRelicWeapon& a_weapon,
+        const RE::NiPoint3& a_startPosition,
+        RE::NiAVObject** a_targetBone);
+    ArrivingState(
+        const ArrivingState& a_previous,
+        const RE::NiPoint3& a_startPosition);
+
 protected:
+    RE::ActorHandle callerActorHandle;
+    RE::Actor* callerActor = nullptr;
     RE::NiAVObject** callerHandBoneSource = nullptr;
     RE::NiAVObject* callerHandBone = nullptr;
     RE::NiAVObject** callerWeaponBoneSource = nullptr;
     RE::NiAVObject* callerWeaponBone = nullptr;
     RE::NiPointer<RE::NiAVObject> callerBreastBone;
-    RE::NiPointer<RE::NiAVObject> model;
+    RE::NiAVObject* model;
     RE::NiMatrix3 startRotation = RE::NiMatrix3();
     RE::NiPoint3 handPosition;
     RE::NiPoint3 startPosition;
@@ -35,7 +43,7 @@ protected:
     RE::NiPoint3 bezierControlPoints[4];
     int arrivingRouteClosestIndex = 0;
     uint16_t routeResolution = 64;
-    std::vector<RE::Actor *> targets;
+    std::vector<RE::ActorHandle> targets;
     bool  isNear = false;
     bool  isAlmostArrived = false;
     bool  isCatchable = false;
@@ -57,20 +65,22 @@ protected:
 private:
     void InitializeCallerData()
     {
+        callerActor = (weapon.GetCaller() && weapon.GetCaller()->IsValid()) ? weapon.GetCaller()->GetActor() : nullptr;
+
         callerBreastBone.reset(
-            weapon.data.caller
-                ? weapon.data.caller->GetNodeByName("NPC Spine2 [Spn2]")
+            callerActor
+                ? callerActor->GetNodeByName("NPC Spine2 [Spn2]")
                 : nullptr);
 
-        callerWeaponBoneSource = weapon.data.caller->GetNodeByName("WEAPON");
+        callerWeaponBoneSource = &weapon.GetCaller()->GetWeaponBone();
         callerWeaponBone = GetCallerWeaponBone();
         callerHandBone = GetCallerHandBone();
 
         const auto callerHandPosition =
             callerHandBone
                 ? callerHandBone->world.translate
-                : weapon.data.caller
-                    ? weapon.data.caller->GetPosition()
+                : callerActor
+                    ? callerActor->GetPosition()
                     : RE::NiPoint3();
 
         linearArrivingDir = callerHandPosition - startPosition;
@@ -99,14 +109,16 @@ public:
     RE::NiAVObject* GetCallerHandBone() const {return callerHandBoneSource ? *callerHandBoneSource : nullptr;}
     RE::NiAVObject* GetCallerWeaponBone() const {return callerWeaponBoneSource ? *callerWeaponBoneSource : nullptr;}
     void UpdateTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
-        targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(weapon.data.caller.get(), linearDistance, true);
+        targets = ObjectUtil::Actor::GetNearCombatTargetHandles<std::vector<RE::ActorHandle>>(callerActor, linearDistance, true);
         CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
     }
     void CheckTargets(const RE::NiPoint3& a_origin) {
         if (!targets.empty()) {
-            std::erase_if(targets, [this](const RE::Actor* actor) {
+            std::erase_if(targets, [this, a_origin](const RE::ActorHandle actorHandle) {
                 bool result = false;
-                if (!actor || actor->IsDead() || std::find(weapon.data.lastHitActors.begin(), weapon.data.lastHitActors.end(), actor) != weapon.data.lastHitActors.end()) {
+                auto& weaponRTD = weapon.GetSmartWeaponRuntimeData();
+                auto actor = actorHandle.get().get();
+                if (!actor || actor->IsDead() || std::find(weaponRTD.lastHitActors.begin(), weaponRTD.lastHitActors.end(), actorHandle) != weaponRTD.lastHitActors.end()) {
                     result = true;
                 } else {
                     auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;
@@ -121,8 +133,10 @@ public:
             });
             std::sort(targets.begin(), targets.end(), 
                 [&](const auto& a, const auto& b) {
-                    return a->GetPosition().GetDistance(a_origin) < 
-                        b->GetPosition().GetDistance(a_origin);
+                    auto aRaw = a.get().get();
+                    auto bRaw = b.get().get();
+                    return aRaw->GetPosition().GetDistance(a_origin) < 
+                        bRaw->GetPosition().GetDistance(a_origin);
                 }
             );
         };
@@ -131,11 +145,11 @@ public:
         if (a_origin) {
             UpdateTargets(a_origin);
         }
-        return !targets.empty() ? targets.front() : nullptr;
+        return !targets.empty() ? targets.front().get().get() : nullptr;
     }
     bool IsInCallingAnimation() {
-        if (weapon.data.caller) {
-            weapon.data.caller->GetGraphVariableBool("bIsInCallingAnimation", isInCallingAnimation);
+        if (callerActor) {
+            callerActor->GetGraphVariableBool("bIsInCallingAnimation", isInCallingAnimation);
         } return isInCallingAnimation;
     }
 
@@ -149,16 +163,6 @@ public:
     void UpdateAI(RE::NiPoint3& a_outVel);
     void UpdateArrivingDirection(bool a_initial = false);
     void UpdateArrivingRoute();
-
-    virtual ~ArrivingState() = default;
-
-    ArrivingState(
-        TWeapon& a_weapon,
-        const RE::NiPoint3& a_startPosition,
-        RE::NiAVObject** a_targetBone);
-    ArrivingState(
-        const ArrivingState& a_previous,
-        const RE::NiPoint3& a_startPosition);
 
 private:
     bool _justContinue = false;

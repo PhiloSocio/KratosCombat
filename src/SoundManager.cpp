@@ -64,9 +64,9 @@ void SoundManager::PauseAllLoopingSounds()
 }
 void SoundManager::ContinueAllLoopingSounds()
 {
-    if (GetState(SoundName::kChargingLoop) == State::kPaused && weaponData.projectileModel) {PlayChargingLoopSounds(weaponData.projectileModel);}
-    if (GetState(SoundName::kThrowingLoop) == State::kPaused && weaponData.projectileModel) {PlayThrowingLoopSounds(weaponData.projectileModel);}// soundState[SoundName::kThrowingLoop] = State::kPlaying; spdlog::debug("ThrowingLoop sounds continuing...");}
-    if (GetState(SoundName::kArrivingLoop) == State::kPaused && weaponData.projectileModel) {PlayArrivingLoopSounds(weaponData.projectileModel);}// soundState[SoundName::kArrivingLoop] = State::kPlaying; spdlog::debug("ArrivingLoop sounds continuing...");}
+    if (GetState(SoundName::kChargingLoop) == State::kPaused && source) {PlayChargingLoopSounds(*source);}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused && source) {PlayThrowingLoopSounds(*source);}// soundState[SoundName::kThrowingLoop] = State::kPlaying; spdlog::debug("ThrowingLoop sounds continuing...");}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused && source) {PlayArrivingLoopSounds(*source);}// soundState[SoundName::kArrivingLoop] = State::kPlaying; spdlog::debug("ArrivingLoop sounds continuing...");}
 }
 
 void SoundManager::FadeAllSounds(const uint16_t a_durationMS)
@@ -82,6 +82,7 @@ void SoundManager::FadeAllSounds(const uint16_t a_durationMS)
 
 void SoundManager::PlayChargingLoopSounds(RE::NiAVObject* a_source)
 {
+    source = &a_source;
     if (IsSoundValid(SoundName::kChargingLoop)) {
         if (auto soundEffect = soundDefinition.chargingLoop0; soundEffect) {
             ObjectUtil::Sound::PlaySound(soundEffect, ChargingLoop0SH, a_source, 0.5f);
@@ -102,6 +103,7 @@ void SoundManager::PlayThrowingSounds(RE::NiAVObject* a_source)
 }
 void SoundManager::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
 {
+    source = &a_source;
     if (IsSoundValid(SoundName::kThrowingLoop)) {
         if (auto soundEffect = soundDefinition.throwingLoop0; soundEffect) {
             ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 0.5f);
@@ -139,6 +141,7 @@ void SoundManager::PlayArrivingStartSounds(RE::NiAVObject* a_source)
 }
 void SoundManager::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
 {
+    source = &a_source;
     if (IsSoundValid(SoundName::kArrivingLoop)) {
         if (auto soundEffect = soundDefinition.arrivingLoop0; soundEffect) {
             ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 0.5f);

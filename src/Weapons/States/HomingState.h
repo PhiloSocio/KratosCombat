@@ -2,15 +2,21 @@
 #include "util.h"
 #include "ThrowableWeaponState.h"
 
-template <class TWeapon>
-class HomingState : public ThrowableWeaponState<TWeapon>
+class HomingState : public ThrowableWeaponState
 {
 public:
-    using Base = ThrowableWeaponState<TWeapon>;
-    using Base::weapon;
+    ~HomingState() override = default;
+
+    HomingState(
+        SmartRelicWeapon& a_weapon,
+        std::vector<RE::ActorHandle> a_targets,
+        uint8_t a_hitCount = 2u,
+        bool a_isBoomerang = true,
+        float a_speed = 2000.f,
+        float a_angularVelocity = 5.f);
 
 protected:
-    std::vector<RE::Actor *> targets;
+    std::vector<RE::ActorHandle> targets;
 
     uint8_t hitCount = 2u;
     bool isBoomerang = true;
@@ -42,13 +48,4 @@ public:
     void UpdateHomingDirection(float a_delta) {};
     void UpdateHomingRoute(float a_delta) {};
 
-    virtual ~HomingState() = default;
-
-    HomingState(
-        TWeapon& a_weapon,
-        std::vector<RE::Actor*> a_targets,
-        uint8_t a_hitCount = 1u,
-        bool a_isBoomerang = true,
-        float a_speed = 2000.f,
-        float a_angularVelocity = 5.f);
 };

@@ -1,7 +1,7 @@
 #include "BaseActor.h"
 #include "util.h"
 
-RE::NiAVObject* BaseActor::GetUpdateRHandBone()
+RE::NiAVObject*& BaseActor::GetUpdateRHandBone()
 {
     if      (RHandBone = ObjectUtil::Actor::GetBoneByName(actor, "NPC R Finger20 [RF20]"); RHandBone)  {}
     else if (RHandBone = ObjectUtil::Actor::GetBoneByName(actor, "NPC R MagicNode [RMag]"); RHandBone) {}
@@ -9,7 +9,7 @@ RE::NiAVObject* BaseActor::GetUpdateRHandBone()
     else    spdlog::error("can't found right hand bone!");
     return RHandBone;
 }
-RE::NiAVObject* BaseActor::GetUpdateLHandBone()
+RE::NiAVObject*& BaseActor::GetUpdateLHandBone()
 {
     if      (LHandBone = ObjectUtil::Actor::GetBoneByName(actor, "NPC L Finger20 [LF20]"); LHandBone)  {}
     else if (LHandBone = ObjectUtil::Actor::GetBoneByName(actor, "NPC L MagicNode [LMag]"); LHandBone) {}
@@ -17,17 +17,17 @@ RE::NiAVObject* BaseActor::GetUpdateLHandBone()
     else    spdlog::error("can't found right hand bone!");
     return LHandBone;
 }
-RE::NiAVObject* BaseActor::GetUpdateWeaponBone()
+RE::NiAVObject*& BaseActor::GetUpdateWeaponBone()
 {
     WeaponBone = ObjectUtil::Actor::GetBoneByName(actor, "Weapon");
     return WeaponBone;
 }
-RE::NiAVObject* BaseActor::GetUpdateShieldBone()
+RE::NiAVObject*& BaseActor::GetUpdateShieldBone()
 {
     ShieldBone = ObjectUtil::Actor::GetBoneByName(actor, "Shield");
     return ShieldBone;
 }
-RE::NiAVObject* BaseActor::GetUpdateAnimObjectRBone()
+RE::NiAVObject*& BaseActor::GetUpdateAnimObjectRBone()
 {
     AnimObjectRBone = ObjectUtil::Actor::GetBoneByName(actor, "AnimObjectR");
     return AnimObjectRBone;
