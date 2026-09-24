@@ -7,6 +7,9 @@
 class SmartRelicWeapon : public ThrowableRelicWeapon
 {
 public:
+    ~SmartRelicWeapon() override = default;
+    explicit SmartRelicWeapon(RE::TESBoundObject* a_object);
+
     enum class ProjectileState : std::uint8_t {
         kNone,
         kLaunched,
@@ -61,9 +64,6 @@ public:
     virtual bool IsHoming() const = 0;
     virtual RE::NiTransform GetWorldTransform();
     virtual RE::NiTransform GetLocalTransform();
-
-    SmartRelicWeapon()  = default;
-    virtual ~SmartRelicWeapon() = default;
 
 protected:
     std::unique_ptr<RelicWeaponState> currentState;

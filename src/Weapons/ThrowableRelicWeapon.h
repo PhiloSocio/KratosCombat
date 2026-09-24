@@ -10,6 +10,9 @@ class Thrower;
 class ThrowableRelicWeapon : public RelicWeapon
 {
 public:
+    ~ThrowableRelicWeapon() override = default;
+    explicit ThrowableRelicWeapon(RE::TESBoundObject* a_object);
+
     enum class TrailColor : std::uint32_t {
         kWhite,
         kIceBlue,
@@ -130,9 +133,6 @@ protected:
     AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;
     AsyncUtil::GameTime trailRemoveUpdate;
-
-    ThrowableRelicWeapon()  = default;
-    virtual ~ThrowableRelicWeapon() = default;
 
     bool _isLastThrowCharged = false;
     PRECISION_API::CollisionDefinition collisionDefinition;

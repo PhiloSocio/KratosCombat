@@ -3,6 +3,11 @@
 
 using namespace Util;
 
+LeviathanAxe::LeviathanAxe(RE::TESBoundObject* a_object)
+    : SmartRelicWeapon(a_object)
+{
+}
+
 bool LeviathanAxe::Initialize()
 {
     bool found = true;

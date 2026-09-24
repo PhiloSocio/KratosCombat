@@ -27,6 +27,7 @@ enum class RelicType : std::uint8_t {
     kLeviathanAxe,
     kBladesOfChaos,
     kDraupnir,
+    kBladeOfOlympus,
     kMjolnir,
     kTrident,
     kCount

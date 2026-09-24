@@ -11,6 +11,7 @@ public:
 
     virtual void Update(float a_delta) = 0;
     virtual void DoAction(const ActionType a_action) = 0;
+    void OnEquip(RelicWeapon* a_relic);
 
     [[nodiscard]] RE::Actor* GetActor() const { return actor; };
     [[nodiscard]] const RE::ActorHandle& GetHandle() const { return actorHandle; };

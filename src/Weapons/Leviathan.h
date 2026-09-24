@@ -9,6 +9,9 @@
 class LeviathanAxe : public SmartRelicWeapon
 {
 public:
+    ~LeviathanAxe() override = default;
+    explicit LeviathanAxe(RE::TESBoundObject* a_object);
+
     struct RuntimeData : public SmartRelicWeapon::RuntimeData {
         RE::NiPointer<RE::NiNode> stuckedBone;
         RE::NiPointer<RE::Actor> stuckedActor;
@@ -65,9 +68,6 @@ friend class ProjectileHook;
     RE::SpellItem* SpellCatchLevi   = nullptr;
 
     RE::EffectSetting* EffCatchLevi = nullptr;
-
-    LeviathanAxe()  = default;
-    ~LeviathanAxe() = default;
 };
 
 class LeviathanHomingState : public HomingState

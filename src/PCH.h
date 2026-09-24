@@ -18,6 +18,20 @@ using namespace std::literals;
 	using rFlag = RE::TESForm::RecordFlags;
 	using pFlag = RE::Projectile::Flags;
 
+
+namespace std
+{
+	template <class T>
+	struct hash<RE::BSPointerHandle<T>>
+	{
+		uint32_t operator()(const RE::BSPointerHandle<T>& a_handle) const
+		{
+			uint32_t nativeHandle = const_cast<RE::BSPointerHandle<T>*>(&a_handle)->native_handle();  // ugh
+			return nativeHandle;
+		}
+	};
+}
+
 #define DEBUG_MODE
 //#undef DEBUG_MODE
 

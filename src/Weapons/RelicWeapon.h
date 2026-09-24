@@ -3,11 +3,17 @@
 #include "Types.h"
 #include "Actors/BaseActor.h"
 
+using RelicIdentity = std::uint64_t;
+
 class BaseActor;
 
 class RelicWeapon
 {
 public:
+    virtual ~RelicWeapon() = default;
+    explicit RelicWeapon(RE::TESBoundObject* a_object);
+
+    RelicIdentity        relicIdentity  = 0u;
     RelicType            type           = RelicType::kNone;
     RE::TESObjectWEAP*   weap           = nullptr;
     RE::EnchantmentItem* ench           = nullptr;
@@ -45,8 +51,6 @@ public:
     [[nodiscard]] BaseActor* GetWielder() const {return runtimeData.wielder;}
     [[nodiscard]] BaseActor* GetLastWielder() const {return runtimeData.lastWielder;}
     [[nodiscard]] bool IsEquipped() const {return runtimeData.isEquipped;}
-
-    virtual ~RelicWeapon() = default;
 
     RE::SpellItem* SpellChargeCD    = nullptr;
     RE::EnchantmentItem* EnchCharge = nullptr;
