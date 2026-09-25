@@ -41,7 +41,8 @@ public:
 
     virtual void OnEquip(BaseActor* a_actor);
     virtual bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) = 0;
-    virtual void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) = 0;
+    virtual void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) = 0;
+    virtual void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) = 0;
     virtual void OnMenuOpenCloseEvent(const bool a_opening) = 0;
 
     [[nodiscard]] virtual RelicType GetType() const = 0;

@@ -18,7 +18,7 @@ HomingState::HomingState(
 
 void HomingState::InitializeTargets()
 {
-    auto thrower = weapon.smartWeaponRuntimeData.thrower;
+    auto thrower = weapon.runtimeData.thrower;
     auto throwerActor = thrower ? thrower->GetActor() : nullptr;
 
     if (!throwerActor) return;
@@ -106,7 +106,7 @@ void HomingState::Enter()
 }
 Status HomingState::Update(float a_delta)
 {
-    auto proj = weapon.smartWeaponRuntimeData.projectile;
+    auto proj = weapon.runtimeData.projectile;
     if (!proj) return Status::kCancelled;
 
     auto& projectileRTD = proj->GetProjectileRuntimeData();
@@ -115,14 +115,14 @@ Status HomingState::Update(float a_delta)
     const float livingTime = projectileRTD.livingTime;
     const float hLivingTime = GetLivingTime();
 
-    auto hTarget = GetNextTarget(weapon.smartWeaponRuntimeData.position);
+    auto hTarget = GetNextTarget(weapon.runtimeData.position);
     if (hLivingTime > 1.2f && livingTime > 0.2f && hTarget) {
         auto targetPos = hTarget->GetPosition() + (hTarget->GetBoundMax() + hTarget->GetBoundMin()) * 0.75f;
-        auto targetDir = (targetPos - weapon.smartWeaponRuntimeData.position);
-        float height = weapon.smartWeaponRuntimeData.position.z - hTarget->GetPosition().z;
+        auto targetDir = (targetPos - weapon.runtimeData.position);
+        float height = weapon.runtimeData.position.z - hTarget->GetPosition().z;
         targetDir.Unitize();
         const float targetSpeed = speed * (livingTime < 1.2f ? livingTime : 1.2f);
-        vel = MathUtil::Angle::BlendVectors(weapon.smartWeaponRuntimeData.direction, targetDir, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
+        vel = MathUtil::Angle::BlendVectors(weapon.runtimeData.direction, targetDir, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
     } else {
@@ -134,14 +134,14 @@ Status HomingState::Update(float a_delta)
         float waveSin = waveAmplitude * cos(waveFrequency * hLivingTime);
         float waveCos = waveAmplitude * sin(waveFrequency * hLivingTime);
 
-        auto thrower = weapon.smartWeaponRuntimeData.thrower;
+        auto thrower = weapon.runtimeData.thrower;
         auto throwerActor = thrower ? thrower->GetActor() : nullptr;
         if (!throwerActor) return Status::kCancelled;
 
         auto targetPos = throwerActor->GetPosition() + (throwerActor->GetBoundMax() + throwerActor->GetBoundMin()) * 0.75f;
-        float distance = targetPos.GetDistance(weapon.smartWeaponRuntimeData.position);
-        float height = weapon.smartWeaponRuntimeData.position.z - throwerActor->GetPosition().z;
-        auto targetDir = targetPos - weapon.smartWeaponRuntimeData.position;
+        float distance = targetPos.GetDistance(weapon.runtimeData.position);
+        float height = weapon.runtimeData.position.z - throwerActor->GetPosition().z;
+        auto targetDir = targetPos - weapon.runtimeData.position;
         targetDir.Unitize();
         RE::NiPoint3 circularVel;
         RE::NiPoint3 originVelocity; throwerActor->GetLinearVelocity(originVelocity);
@@ -152,7 +152,7 @@ Status HomingState::Update(float a_delta)
         circularVel += targetDir * (distance - 100.f) / 0.2f;
         circularVel.Unitize();
         const float targetSpeed = speed * (hLivingTime > 0.5f && livingTime < 1.f ? livingTime + 0.2f : 1.f);
-        vel = MathUtil::Angle::BlendVectors(weapon.smartWeaponRuntimeData.direction, circularVel, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
+        vel = MathUtil::Angle::BlendVectors(weapon.runtimeData.direction, circularVel, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
     }

@@ -1,6 +1,7 @@
 #include "Thrower.h"
 #include "Weapons/SmartRelicWeapon.h"
 #include "util.h"
+#include "Assets.h"
 
 using namespace MathUtil;
 
@@ -27,8 +28,15 @@ bool Thrower::IsThrowing(const ThrowType a_type) noexcept
 }
 void Thrower::StartChargingThrow() noexcept
 {
+    if (!IsValid()) return;
     _chargeDuration = 0.f;
     _isCharging = true;
+    auto rHandBone = GetRHandBone();
+    auto rHandRelic = GetRightHandRelic() ? dynamic_cast<ThrowableRelicWeapon*>(GetRightHandRelic()) : nullptr;
+    if (auto assets = Assets::GetSingleton(); assets && rHandBone && rHandRelic) {
+        rHandRelic->GetSoundManager().PlayChargingLoopSounds(rHandBone);
+        GetActor()->ApplyArtObject(assets->VFXeffects.handFrostBright, 5.f, nullptr, false, false, rHandBone);
+    }
 }
 void Thrower::StopChargingThrow() noexcept
 {

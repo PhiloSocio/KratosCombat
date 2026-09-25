@@ -90,7 +90,6 @@ private:
 
         linearDistanceFromLastCallPos = linearDistanceFromStart;
     }
-
     void InitializeRoute()
     {
         arrivingRoute = MathUtil::Algebra::BezierCurve();
@@ -116,7 +115,7 @@ public:
         if (!targets.empty()) {
             std::erase_if(targets, [this, a_origin](const RE::ActorHandle actorHandle) {
                 bool result = false;
-                auto& weaponRTD = weapon.GetSmartWeaponRuntimeData();
+                auto& weaponRTD = weapon.GetruntimeData();
                 auto actor = actorHandle.get().get();
                 if (!actor || actor->IsDead() || std::find(weaponRTD.lastHitActors.begin(), weaponRTD.lastHitActors.end(), actorHandle) != weaponRTD.lastHitActors.end()) {
                     result = true;
@@ -158,6 +157,7 @@ public:
     void Exit() override;
 
     [[nodiscard]] Type GetType() const override { return Type::kArriving; };
+    [[nodiscard]] std::vector<RE::ActorHandle>& GetTargets() { return targets; };
 
     void UpdateRotation();
     void UpdateAI(RE::NiPoint3& a_outVel);

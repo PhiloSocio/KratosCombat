@@ -42,6 +42,7 @@ public:
     void Exit() override;
 
     [[nodiscard]] Type GetType() const override { return Type::kHoming; };
+    [[nodiscard]] std::vector<RE::ActorHandle>& GetTargets() { return targets; };
 
     void UpdateRotation() {};
     void UpdateHomingDirection(float a_delta) {};

@@ -13,18 +13,15 @@ public:
     explicit LeviathanAxe(RE::TESBoundObject* a_object);
 
     struct RuntimeData : public SmartRelicWeapon::RuntimeData {
-        RE::NiPointer<RE::NiNode> stuckedBone;
-        RE::NiPointer<RE::Actor> stuckedActor;
     };
 
     RuntimeData runtimeData;
-    TrailData trailData;
 
     bool Initialize() override;
     void Update() override;
     void SetState(RelicWeaponState::Type a_type) override;
-    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
-    void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
+//    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
+//    void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
     void GetPosition(RE::NiPoint3& a_point) override;
@@ -36,26 +33,13 @@ public:
     void Catch(bool a_justDestroy = false) override;
     void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_stage = 3u, const uint8_t a_coolDown = 15u) override;
     void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false) override;
-    void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical) override;
-    void SetHitRotation(RE::NiPoint3& a_angles, const RE::NiPoint3& a_direction, const bool a_vertical) override;
-    void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical) override;
-    bool IsArriving() const override;
-    bool IsHoming() const override;
-    void StartChargingThrow() override;
-    void AddProjectileTrail() override;
-    void FadeProjectileTrail() override;
-    void DeleteProjectileTrail() override;
-    RE::NiTransform GetWorldTransform() override;
-    RE::NiTransform GetLocalTransform() override;
+//    void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical) override;
+//    void SetHitRotation(RE::NiPoint3& a_angles, const RE::NiPoint3& a_direction, const bool a_vertical) override;
+//    void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical) override;
 
     bool isAxeCalled;
     bool isAxeThrowed;
-    bool isAxeStucked;
 private:
-friend class WeaponIdentify;
-friend class AnimationEventTracker;
-friend class ProjectileHook;
-
     RE::Projectile* LeviathanAxeProjectileL = nullptr;
     RE::Projectile* LeviathanAxeProjectileH = nullptr;
     RE::Projectile* LeviathanAxeProjectileA = nullptr;

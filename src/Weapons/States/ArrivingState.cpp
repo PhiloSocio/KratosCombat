@@ -23,8 +23,8 @@ ArrivingState::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3
 
 void ArrivingState::UpdateRotation()
 {
-    if (weapon.smartWeaponRuntimeData.replacedProjectileModel && weapon.smartWeaponRuntimeData.replacedProjectileModel->parent) {
-        auto& replacedPMParent = weapon.smartWeaponRuntimeData.replacedProjectileModel->parent;
+    if (weapon.runtimeData.replacedProjectileModel && weapon.runtimeData.replacedProjectileModel->parent) {
+        auto& replacedPMParent = weapon.runtimeData.replacedProjectileModel->parent;
         auto& localRotation = replacedPMParent->local.rotate;
         RE::NiMatrix3 targetLocalRotation;
     //    float targetAngleZ;
@@ -180,21 +180,21 @@ void ArrivingState::Enter()
     UpdateTargets();
     UpdateArrivingDirection(!_justContinue);
     InitializeRoute();
-    smoothedDesiredVelocity = weapon.smartWeaponRuntimeData.velocity;
+    smoothedDesiredVelocity = weapon.runtimeData.velocity;
 
     if (!_justContinue) {
         startingTime = AsyncUtil::GameTime::GetEngineTime();
         const bool doBlend = 
-            weapon.smartWeaponRuntimeData.projState == ProjectileState::kNone ||
-            weapon.smartWeaponRuntimeData.projState == ProjectileState::kLaunched;
-        smoothedDesiredVelocity = doBlend ? weapon.smartWeaponRuntimeData.velocity : linearArrivingDir * speed;
+            weapon.runtimeData.projState == ProjectileState::kNone ||
+            weapon.runtimeData.projState == ProjectileState::kLaunched;
+        smoothedDesiredVelocity = doBlend ? weapon.runtimeData.velocity : linearArrivingDir * speed;
     }
 }
 Status ArrivingState::Update(const float a_delta)
 {
     if (!weapon.GetCaller() || !weapon.GetCaller()->IsValid()) return Status::kCancelled;
 
-    model = weapon.smartWeaponRuntimeData.projectileModel;
+    model = weapon.runtimeData.projectileModel;
     if (!model) return Status::kCancelled;
 
     callerHandBone = GetCallerHandBone();
@@ -204,7 +204,7 @@ Status ArrivingState::Update(const float a_delta)
     callerWeaponBone = GetCallerWeaponBone();
     if (!callerWeaponBone) return Status::kCancelled;
 
-    auto proj = weapon.smartWeaponRuntimeData.projectile;
+    auto proj = weapon.runtimeData.projectile;
     if (!proj) return Status::kCancelled;
     auto& rtData = proj->GetProjectileRuntimeData();
     auto& vel = rtData.linearVelocity;
@@ -236,12 +236,12 @@ Status ArrivingState::Update(const float a_delta)
         status = Status::kCompleted;
     }
     if (false && startRotation == RE::NiMatrix3()) {
-        if (weapon.smartWeaponRuntimeData.replacedProjectileModel && weapon.smartWeaponRuntimeData.replacedProjectileModel->parent) {
-            model->world = weapon.smartWeaponRuntimeData.transformPW;
-            model->local = weapon.smartWeaponRuntimeData.transformPL;
-            auto& replacedPMParent = weapon.smartWeaponRuntimeData.replacedProjectileModel->parent;
+        if (weapon.runtimeData.replacedProjectileModel && weapon.runtimeData.replacedProjectileModel->parent) {
+            model->world = weapon.runtimeData.transformPW;
+            model->local = weapon.runtimeData.transformPL;
+            auto& replacedPMParent = weapon.runtimeData.replacedProjectileModel->parent;
             auto parentWorldInverse = replacedPMParent->world.Invert();
-            auto previousWorld = weapon.smartWeaponRuntimeData.transformW;
+            auto previousWorld = weapon.runtimeData.transformW;
             auto& localRotation = replacedPMParent->local.rotate;
             auto& localPosition = replacedPMParent->local.translate;
             if (replacedPMParent->parent) {
@@ -317,9 +317,9 @@ Status ArrivingState::Update(const float a_delta)
     desiredDir = smoothedDesiredVelocity;
     desiredDir.Unitize();
     const bool doBlend = 
-        weapon.smartWeaponRuntimeData.projState == ProjectileState::kNone ||
-        weapon.smartWeaponRuntimeData.projState == ProjectileState::kLaunched;
-    vel = MathUtil::Angle::BlendVectors(doBlend ? weapon.smartWeaponRuntimeData.velocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
+        weapon.runtimeData.projState == ProjectileState::kNone ||
+        weapon.runtimeData.projState == ProjectileState::kLaunched;
+    vel = MathUtil::Angle::BlendVectors(doBlend ? weapon.runtimeData.velocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
     if (vel.z < 0.f) {
         constexpr float minHeight = -40.f;
         constexpr float dampingRange = 69.f;

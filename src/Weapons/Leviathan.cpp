@@ -65,8 +65,8 @@ void LeviathanAxe::Update() {
     if (soundData.arrivingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopArrivingLoopSounds();}
     if (soundData.throwingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopThrowingLoopSounds();}
     if (Config::DrawTrails) {
-        AddProjectileTrail();
-        FadeProjectileTrail();
+        AddTrail();
+        FadeTrail();
     }
 //    if (runtimeData.replacedProjectileModel) {
 //        auto projNiTransform = runtimeData.replacedProjectileModel->world;
@@ -126,15 +126,6 @@ void LeviathanAxe::OnMenuOpenCloseEvent(const bool a_opening)
 
 void LeviathanAxe::GetPosition(RE::NiPoint3& a_point)
 {
-    auto throwerActor = runtimeData.thrower ? runtimeData.thrower->GetActor() : nullptr;
-    if (!throwerActor) return;
-    if (runtimeData.projectileModel) {
-        runtimeData.transformPW = runtimeData.projectileModel->world;
-        runtimeData.transformPL = runtimeData.projectileModel->local;
-    }
-    if (LastLeviProjectile) {
-        LastLeviProjectile->GetProjectileRuntimeData().flags |= pFlag::kDestroyed;
-    }
     if (runtimeData.replacedProjectileModel) {
         runtimeData.transformW = GetWorldTransform();
         a_point = runtimeData.transformW.translate * 70.f;
@@ -156,6 +147,9 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point)
             runtimeData.stuckedActor.reset();
         } else spdlog::debug("levi not stucked anybody");
     } else spdlog::debug("levi not stucked any bone");
+
+    auto throwerActor = runtimeData.thrower ? runtimeData.thrower->GetActor() : nullptr;
+    if (!throwerActor) return;
 
     if (GetThrowState() == ThrowState::kThrowable) {
         if (auto backWeaponSheathe = throwerActor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
@@ -655,131 +649,3 @@ void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, c
         } else if (!a_justCheck) {chargeHitCount -= 1;}
     }
 }
-bool LeviathanAxe::IsArriving() const {return currentState ? static_cast<ArrivingState*>(GetState()) != nullptr : false;}
-bool LeviathanAxe::IsHoming() const {return currentState ? static_cast<HomingState*>(GetState()) != nullptr : false;}
-void LeviathanAxe::StartChargingThrow()
-{
-    if (auto assets = Assets::GetSingleton(); assets) {
-        auto rHandBone = GetWielder()->GetRHandBone();
-        soundData.PlayChargingLoopSounds(rHandBone);
-        GetWielder()->GetActor()->ApplyArtObject(assets->VFXeffects.handFrostBright, 5.f, nullptr, false, false, rHandBone);
-    }
-}
-RE::NiTransform LeviathanAxe::GetWorldTransform()
-{
-    if (runtimeData.replacedProjectileModel) {
-        runtimeData.transformW = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(runtimeData.replacedProjectileModel.get());
-        return runtimeData.transformW;
-    } else return runtimeData.transformPW;
-    return {};
-}
-RE::NiTransform LeviathanAxe::GetLocalTransform()
-{
-    RE::NiTransform ret;
-    if (runtimeData.replacedProjectileModel) {
-        runtimeData.transformL = runtimeData.replacedProjectileModel->local;
-        ret = runtimeData.transformL;
-    } else ret = runtimeData.transformPL;
-    return ret;
-}
-#pragma region Trails
-void LeviathanAxe::AddProjectileTrail()
-{
-    if (trailUpdate.IsTimeToUpdate()) {
-        trailRemoveUpdate.Done();
-        DeleteProjectileTrail();
-        auto bone = runtimeData.replacedProjectileModel;
-        if (bone) {
-            const bool isCharged = IsCharged(true);
-            const float intensity = isCharged ? 3.f : 2.f;
-            const auto meshOverride = isCharged ? Config::TrailModelPathFrost : Config::TrailModelPathDef;
-            float length = bone->worldBound.radius;
-            ObjectUtil::Capsule capsule;
-            ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
-            float capsuleLength = capsule.a.GetDistance(capsule.b);
-            length = length > capsuleLength ? length : capsuleLength;
-            float scale = fmax(length, capsule.radius) * 0.01f;
-            float tipOffset = length;
-            trailData = TrailData(meshOverride, intensity);
-
-            if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
-                trailUpdate.Done();
-                trailData.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
-                trailData.transformOverride.scale = bone->worldBound.radius * 0.01f;
-                auto node = RE::NiNode::Create(0);
-                node->name = "trailParentNode";
-                bone->AttachChild(node, false);
-                APIs::precision->AddTrailEffect(
-                    node, 
-                    RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                    trailData.trailOverride, 
-                    trailData.transformOverride);
-                if (isCharged) {
-                    trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
-                    APIs::precision->AddTrailEffect(
-                        node, 
-                        RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                        trailData.trailOverride, 
-                        trailData.transformOverride);
-                }
-            //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastLeviProjectile);
-            }
-        }
-    }
-}
-void LeviathanAxe::FadeProjectileTrail()
-{
-    if (trailRemoveUpdate.IsTimeToUpdate()) {
-        if (runtimeData.replacedProjectileModel) {
-            if (runtimeData.projectile && runtimeData.projState == ProjectileState::kHavok) {
-        //        auto& rtData = runtimeData.projectile->GetProjectileRuntimeData();
-                auto velocity = (runtimeData.replacedProjectileModel->world.translate - runtimeData.replacedProjectileModel->previousWorld.translate) / *g_deltaTime;
-                auto speed = velocity.Length();//rtData.linearVelocity.Length();
-                spdlog::debug("projectile trail fading... current speed: {}", speed);
-                if (speed != 0.f && speed < 669.f) {
-                    DeleteProjectileTrail();
-                    trailRemoveUpdate.Done();
-                }
-            } else {
-                DeleteProjectileTrail();
-                runtimeData.replacedProjectileModel.reset();
-                trailRemoveUpdate.Done();
-            }
-        }
-    }
-}
-void LeviathanAxe::DeleteProjectileTrail()
-{
-    if (runtimeData.replacedProjectileModel) {
-        auto trailParentBone = runtimeData.replacedProjectileModel->GetObjectByName("trailParentNode");
-        runtimeData.replacedProjectileModel->DetachChild(trailParentBone);
-    //    if (runtimeData.replacedProjectileModel->parent)
-    //        runtimeData.replacedProjectileModel->parent->DetachChild(runtimeData.replacedProjectileModel.get());
-        if (runtimeData.caller->GetAnimObjectRBone()) {
-            runtimeData.caller->GetAnimObjectRBone()->AsNode()->DetachChild(runtimeData.replacedProjectileModel->parent);
-        }
-        spdlog::debug("projectile trail deleted");
-    }
-}
-RE::NiColorA LeviathanAxe::TrailData::GetColorByIndex(const uint32_t a_index)
-{
-    switch ((TrailColor)a_index) {
-    case TrailColor::kWhite:
-        return WHITE;
-    case TrailColor::kIceBlue:
-        return ICEBLUE;
-    case TrailColor::kSkyBlue:
-        return SKYBLUE;
-    case TrailColor::kBlue:
-        return BLUE;
-    case TrailColor::kYellow:
-        return YELLOW;
-    case TrailColor::kGold:
-        return GOLD;
-    case TrailColor::kSilver:
-        return SILVER;
-    default:
-        return WHITE;
-    }
-}
-#pragma endregion

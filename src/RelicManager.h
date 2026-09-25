@@ -92,7 +92,7 @@ public:
     void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable)
     {
         if (auto it = throwableRelics.find(a_this); it != throwableRelics.end() && it->second) {
-            it->second->OnImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
+            it->second->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
         }
     }
     void OnMenuOpenCloseEvent(const bool a_opening) {
