@@ -45,3 +45,4 @@ namespace std
 //#define TRIDENT
 //#define OVERPOWERED
 //#define EXPERIMENTAL_PROJECTILE_HIT_EXPLOSION
+#define KRATOS_COMBAT_3

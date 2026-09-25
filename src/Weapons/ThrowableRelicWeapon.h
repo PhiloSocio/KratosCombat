@@ -114,7 +114,7 @@ public:
     bool Initialize() override;
     void Update() override;
 //    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
-    void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
+    void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override {};
     void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 

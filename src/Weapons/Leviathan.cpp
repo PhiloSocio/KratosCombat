@@ -123,7 +123,7 @@ void LeviathanAxe::OnMenuOpenCloseEvent(const bool a_opening)
         soundData.ContinueAllLoopingSounds();
     }
 }
-
+/*
 void LeviathanAxe::GetPosition(RE::NiPoint3& a_point)
 {
     if (runtimeData.replacedProjectileModel) {
@@ -171,7 +171,7 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point)
         }
     }
 }
-
+*/
 /*
 void LeviathanAxe::Throw(const bool a_isVertical, const bool runtimeData.isPenetrating, const bool isHoming)
 {

@@ -22,7 +22,7 @@ public:
     void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
-    void GetPosition(RE::NiPoint3& a_point) override;
+//    void GetPosition(RE::NiPoint3& a_point) override;
     RelicType GetType() const override {return RelicType::kLeviathanAxe;}
 //    void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false) override;
     bool PreThrow() override;

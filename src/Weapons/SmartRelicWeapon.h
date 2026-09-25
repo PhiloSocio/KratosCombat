@@ -29,9 +29,6 @@ public:
     };
     RuntimeData runtimeData;
 
-    RE::Projectile* ArrivingWeaponProjectile = nullptr;
-    RE::BGSProjectile* ArrivingWeaponProjectileBase = nullptr;
-
     bool Initialize() override;
     void Update() override;
     bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
@@ -48,16 +45,17 @@ public:
     virtual void SetState(std::unique_ptr<RelicWeaponState> a_state);
     RelicWeaponState* GetCurrentState() const {return currentState.get();}
     ThrowState GetThrowState() const {return _throwState;}
-    virtual void GetPosition(RE::NiPoint3& a_point);
+    void GetPosition(RE::NiPoint3& a_point);
     virtual void Call(const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt);
     virtual void Catch(bool a_justDestroy = false);
     virtual bool IsArriving() const {return currentState ? currentState->GetType() == RelicWeaponState::Type::kArriving : false;}
     virtual bool IsHoming() const {return currentState ? currentState->GetType() == RelicWeaponState::Type::kHoming : false;}
-    virtual RE::NiTransform GetWorldTransform();
-    virtual RE::NiTransform GetLocalTransform();
 
 protected:
     std::unique_ptr<RelicWeaponState> currentState;
+
+    RE::BGSProjectile* ArrivingWeaponDummyProjectile = nullptr;
+    RE::TESAmmo*       ArrivingWeaponDummyAmmo = nullptr;
 
     AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;

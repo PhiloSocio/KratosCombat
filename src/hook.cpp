@@ -1,10 +1,16 @@
 #include "hook.h"
 #include "util.h"
 #include "settings.h"
-#include "MainKratosCombat.h"
-using namespace Util;
+
+#ifdef KRATOS_COMBAT_3
+    #include "RelicManager.h"
+#else
+    #include "MainKratosCombat.h"
 using tState = LeviathanAxe::ThrowState;
 using tStateM = Mjolnir::ThrowState;
+#endif
+
+using namespace Util;
 
 static std::mutex ThrowCallMutex;
 static double lastUpdate(0.0000);
@@ -70,11 +76,17 @@ void ProjectileHook::GetLinearVelocityArrow(RE::ArrowProjectile* a_this, RE::NiP
 //        lastUpdate = AsyncUtil::GameTime::GetEngineTime();
     //    spdlog::trace("delta t = {}, {}", *g_deltaTimeRealTime, *g_engineTime);
         if (ThrowCallMutex.try_lock()) {
+#ifdef KRATOS_COMBAT_3
+            RelicManager::GetSingleton()->UpdateRelic(a_this);
+#else
             LeviAndDraupnir(a_this);
+#endif
             ThrowCallMutex.unlock();
         }
 //    }
 }
+
+#ifndef KRATOS_COMBAT_3
 void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 {
     auto& runtimeData = a_this->GetProjectileRuntimeData();
@@ -442,10 +454,14 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 #endif
     }
 }
-
+#endif
 void ProjectileHook::GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
+#ifdef KRATOS_COMBAT_3
+    if (RelicManager::GetSingleton()->OnHit(a_this, a_AllCdPointCollector)) return;
+#else
     if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) return;
+#endif
     AttackHook::BeforeDamage(a_this, a_AllCdPointCollector);
     _GetCollisionArrow(a_this, a_AllCdPointCollector);
 }
@@ -454,6 +470,8 @@ void ProjectileHook::GetCollisionMissile(RE::MissileProjectile* a_this, RE::hkpA
     AttackHook::BeforeDamage(a_this, a_AllCdPointCollector);
     _GetCollisionMissile(a_this, a_AllCdPointCollector);
 }
+
+#ifndef KRATOS_COMBAT_3
 inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
     const auto projBase = a_this->GetProjectileBase();
@@ -698,7 +716,7 @@ inline bool ProjectileHook::LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAl
     }
     return false;
 }
-
+#endif
 RE::Projectile::ImpactData* ProjectileHook::GetMissileImpactData(RE::MissileProjectile *proj, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable, uint32_t a6, uint32_t a7)
 {
     auto impactData = _GetMissileImpactData(proj, a_target, a_targetLoc, a_velocity, a_collidable, a6, a7);
@@ -708,9 +726,15 @@ RE::Projectile::ImpactData* ProjectileHook::GetMissileImpactData(RE::MissileProj
 RE::Projectile::ImpactData* ProjectileHook::GetArrowImpactData(RE::ArrowProjectile *proj, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable, uint32_t a6, uint32_t a7)
 {
     auto impactData = _GetArrowImpactData(proj, a_target, a_targetLoc, a_velocity, a_collidable, a6, a7);
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->OnImpact(impactData, proj, a_target, a_targetLoc, a_velocity, a_collidable);
+#else
     LeviAndDraupnirImpactData(impactData, proj, a_target, a_targetLoc, a_velocity, a_collidable);
+#endif
     return impactData;
 }
+
+#ifndef KRATOS_COMBAT_3
 void ProjectileHook::LeviAndDraupnirImpactData(RE::Projectile::ImpactData* impactData, RE::MissileProjectile *proj, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable)
 {
     if (proj && impactData) {
@@ -894,13 +918,17 @@ void ProjectileHook::LeviAndDraupnirImpactData(RE::Projectile::ImpactData* impac
 #endif
     }
 }
-
+#endif
 bool ProjectileHook::GetKillOnCollisionArrow(RE::ArrowProjectile* a_this)
 {
     bool result = _GetKillOnCollisionArrow(a_this);
+
+#ifdef KRATOS_COMBAT_3
+#else
     if (WeaponIdentify::IsRelic(a_this, Kratos::Relic::kMjolnir))
         if (Mjolnir::GetSingleton()->data.isPenetrating)
             result = false;
+#endif
     return result;
 }
 
@@ -909,17 +937,32 @@ bool ProjectileHook::GetKillOnCollisionArrow(RE::ArrowProjectile* a_this)
 */
 void PlayerHook::OnEquipItem(RE::PlayerCharacter* a_this, bool a_playAnim)
 {
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->OnEquip(a_this);
+    _OnEquipItem(a_this, a_playAnim);
+#else
     _OnEquipItem(a_this, !SkipAnim(a_this, a_playAnim));
+#endif
 }
 bool PlayerHook::SkipAnim(RE::PlayerCharacter* a_this, bool a_playAnim)
 {
+
+#ifdef KRATOS_COMBAT_3
+#else
     WeaponIdentify::WeaponCheck();
+#endif
     return !a_playAnim;
 }
 
 void PlayerHook::Update(RE::PlayerCharacter* a_this, const float a_delta)
 {
+
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->UpdatePlayer(a_this, a_delta);
+#else
     Kratos::GetSingleton()->Update(a_this, a_delta);
+#endif
+
     _Update(a_this, a_delta);
 }
 EventChecker PlayerHook::ProcessEventPC(RE::BSTEventSink<RE::BSAnimationGraphEvent>* a_sink, RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_dispatcher)
@@ -946,6 +989,9 @@ bool PlayerHook::ModEvent(RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource
 
 bool AttackHook::ProcessButton(RE::AttackBlockHandler* a_handler, RE::ButtonEvent* a_event, RE::PlayerControlsData* a_data)
 {
+
+#ifdef KRATOS_COMBAT_3
+#else
     auto playerCamera = RE::PlayerCamera::GetSingleton();
     if (playerCamera && playerCamera->IsInFirstPerson()) {
         // In first person, so we skip processing
@@ -970,6 +1016,7 @@ bool AttackHook::ProcessButton(RE::AttackBlockHandler* a_handler, RE::ButtonEven
         }
         spdlog::debug("Attack type is kRight");
     }
+#endif
     return _ProcessButton(a_handler, a_event, a_data);
 }
 void AttackHook::OnMeleeHit(RE::Actor* a_target, RE::HitData& a_this)
@@ -980,6 +1027,8 @@ void AttackHook::OnMeleeHit(RE::Actor* a_target, RE::HitData& a_this)
 
 inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
 {
+#ifdef KRATOS_COMBAT_3
+#else
     if (a_target && a_this.aggressor.get().get()) {
         if (auto kratos = Kratos::GetSingleton()) {
             if (a_target->IsPlayerRef()) {
@@ -1011,9 +1060,12 @@ inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
             }
         }
     }
+#endif
 }
 inline void AttackHook::BeforeDamage(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
+#ifdef KRATOS_COMBAT_3
+#else
     if (a_this && a_AllCdPointCollector) {
         auto& rtData = a_this->GetProjectileRuntimeData();
         for (auto& point : a_AllCdPointCollector->hits) {
@@ -1035,4 +1087,5 @@ inline void AttackHook::BeforeDamage(RE::Projectile* a_this, RE::hkpAllCdPointCo
             }
         }
     }
+#endif
 }

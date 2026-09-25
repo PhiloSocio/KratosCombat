@@ -220,8 +220,8 @@ Status ArrivingState::Update(const float a_delta)
 
     isCatchable = (linearDistance <= Config::CatchingTreshold) || (linearDistance <= (*g_deltaTime * vel.Length()));
 
-    if (weapon.ArrivingWeaponProjectile != proj) {  //  first frame of the arriving projectile
-        weapon.ArrivingWeaponProjectile = proj;
+    if (weapon.GetThrowState() != ThrowState::kArriving) {  //  first frame of the arriving projectile
+        weapon.SetThrowState(ThrowState::kArriving);
 
         if (!isCatchable) {
             weapon.GetSoundManager().PlayArrivingStartSounds(model);

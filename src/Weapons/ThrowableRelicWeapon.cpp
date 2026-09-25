@@ -97,6 +97,28 @@ RE::TESAmmo* ThrowableRelicWeapon::CreateBaseAmmo(RE::BGSProjectile* a_baseProje
     return ammoBase;
 }
 
+RE::NiColorA ThrowableRelicWeapon::TrailData::GetColorByIndex(const uint32_t a_index)
+{
+    switch ((TrailColor)a_index) {
+    case TrailColor::kWhite:
+        return WHITE;
+    case TrailColor::kIceBlue:
+        return ICEBLUE;
+    case TrailColor::kSkyBlue:
+        return SKYBLUE;
+    case TrailColor::kBlue:
+        return BLUE;
+    case TrailColor::kYellow:
+        return YELLOW;
+    case TrailColor::kGold:
+        return GOLD;
+    case TrailColor::kSilver:
+        return SILVER;
+    default:
+        return WHITE;
+    }
+}
+
 bool ThrowableRelicWeapon::Initialize()
 {
     ThrowableWeaponDummyProjectile = CreateBaseProjectile("DummyProjectile", "Dummy Projectile");
@@ -367,4 +389,54 @@ void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
     } else {
         GetSoundManager().ContinueAllLoopingSounds();
     }
+}
+void ThrowableRelicWeapon::Update() {
+    if (projectileUpdate.IsTimeToUpdate()) {
+        if (runtimeData.projectileModel && runtimeData.projectile && runtimeData.projectile->Get3D() && runtimeData.weaponModelCopy && runtimeData.projectileModel == runtimeData.projectile->Get3D()) {
+            const RE::BSFixedString rotatingBoneName = "Cylinder02";
+            auto animatedBone = runtimeData.projectileModel->GetObjectByName(rotatingBoneName);
+            auto animatedNode = animatedBone ? animatedBone->AsNode() : nullptr;
+
+            auto cloneModel = runtimeData.weaponModelCopy.get()->Clone();
+            auto cloneNode = cloneModel ? cloneModel->AsNode() : nullptr;
+            runtimeData.replacedProjectileModel.reset(cloneNode);
+
+            if (animatedNode) {
+                animatedNode->AttachChild(runtimeData.replacedProjectileModel.get(), false);
+            //    auto oldWorld = runtimeData.transformW;
+            //    oldWorld.translate *= 70.f;
+            //    oldWorld.scale = runtimeData.replacedProjectileModel.get()->world.scale;
+            //    runtimeData.replacedProjectileModel.get()->local = ObjectUtil::Node::GetLocalTransform(runtimeData.replacedProjectileModel.get(), oldWorld);
+                projectileUpdate.Done();
+                trailUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
+                spdlog::debug("levi projectileModel changed!");
+            } else spdlog::warn("animated node or levinode null");
+        } else spdlog::warn("projectile or projectile->Get3D2() null");
+    }
+    if (soundData.arrivingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopArrivingLoopSounds();}
+    if (soundData.throwingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopThrowingLoopSounds();}
+    if (Config::DrawTrails) {
+        AddTrail();
+        FadeTrail();
+    }
+//    if (runtimeData.replacedProjectileModel) {
+//        auto projNiTransform = runtimeData.replacedProjectileModel->world;
+//        auto projBHKTransform = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(runtimeData.replacedProjectileModel.get());
+//        auto projHKPTransform = ObjectUtil::Node::GetHavokHKPRigidBodyWorldTransform(runtimeData.replacedProjectileModel.get());
+//        spdlog::debug(
+//            "NI: ({}, {}, {})  BHK: ({}, {}, {})",
+//            projNiTransform.translate.x,
+//            projNiTransform.translate.y,
+//            projNiTransform.translate.z,
+//            projBHKTransform.translate.x * 70.f,
+//            projBHKTransform.translate.y * 70.f,
+//            projBHKTransform.translate.z * 70.f
+//        );
+    //    spdlog::debug(
+    //        "NI - BHK: ({}, {}, {})",
+    //        projNiTransform.translate.x - projBHKTransform.translate.x * 70.f,
+    //        projNiTransform.translate.y - projBHKTransform.translate.y * 70.f,
+    //        projNiTransform.translate.z - projBHKTransform.translate.z * 70.f
+    //    );
+//    }
 }
