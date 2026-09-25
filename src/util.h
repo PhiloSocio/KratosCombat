@@ -57,6 +57,26 @@ static inline int _load3Ddelay;
 
 using namespace RE;
 
+namespace GameSettingUtil
+{
+    constexpr float PlayerAttackDamageMultByDifficulty(const uint32_t a_difficulty) noexcept {
+        switch (a_difficulty) {
+        case 0u:    //  novice
+            return 0.36666f;
+        case 1u:    //  apprentice
+            return 0.36666f;
+        case 2u:    //  adept
+            return 0.36666f;
+        case 3u:    //  expert
+            return 0.36666f;
+        case 4u:    //  master
+            return 0.36666f;
+        case 5u:    //  legendary
+            return 0.36666f;
+        }   return 1.f;
+    }
+}
+
 namespace FenixUtils {  //credits to master fenix https://github.com/fenix31415/UselessFenixUtils
     static void stagger(float val, RE::Actor* victim, RE::Actor* attacker = nullptr)
     {

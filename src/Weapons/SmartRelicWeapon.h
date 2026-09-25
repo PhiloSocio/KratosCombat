@@ -48,17 +48,17 @@ public:
     void Update() override;
     bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
     void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
-    void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false) override;
 
     [[nodiscard]] RuntimeData& GetSmartWeaponRuntimeData() {return smartWeaponRuntimeData;}
     [[nodiscard]] Caller* GetCaller() {return smartWeaponRuntimeData.caller && smartWeaponRuntimeData.caller->IsValid() ? smartWeaponRuntimeData.caller : nullptr;}
     [[nodiscard]] RelicWeaponState* GetState() const {return currentState.get();}
 
-    void SetState(std::unique_ptr<RelicWeaponState> a_state);
-    virtual void SetThrowState(const ThrowState a_throwState);
+    void SetThrowState(const ThrowState a_throwState);
     virtual ThrowState GetThrowState() const {return _throwState;}
+    virtual void SetState(RelicWeaponState::Type a_type) = 0;
+    virtual void SetState(std::unique_ptr<RelicWeaponState> a_state);
     virtual void GetPosition(RE::NiPoint3& a_point);
-    virtual void Call(const bool a_justDestroy = false, const bool a_justContinue = false, std::optional<float> a_delay = std::nullopt);
+    virtual void Call(const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt);
     virtual void Catch(bool a_justDestroy = false);
     virtual bool IsArriving() const = 0;
     virtual bool IsHoming() const = 0;

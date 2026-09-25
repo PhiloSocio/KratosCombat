@@ -22,14 +22,17 @@ public:
 
     bool Initialize() override;
     void Update() override;
+    void SetState(RelicWeaponState::Type a_type) override;
     bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
     void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
     void GetPosition(RE::NiPoint3& a_point) override;
     RelicType GetType() const override {return RelicType::kLeviathanAxe;}
-    void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false) override;
-    void Call(const bool a_justDestroy = false, const bool a_justContinue = false, std::optional<float> a_delay = std::nullopt) override;
+//    void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false) override;
+    bool PreThrow() override;
+    void PostThrow() override;
+    void Call(const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt) override;
     void Catch(bool a_justDestroy = false) override;
     void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_stage = 3u, const uint8_t a_coolDown = 15u) override;
     void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false) override;
@@ -77,12 +80,11 @@ public:
 
     LeviathanHomingState(
         LeviathanAxe& a_weapon,
-        std::vector<RE::ActorHandle> a_targets,
         uint8_t a_hitCount = 2u,
         bool a_isBoomerang = true,
         float a_speed = 2000.f,
         float a_angularVelocity = 5.f)
-        : HomingState(a_weapon, a_targets, a_hitCount, a_isBoomerang, a_speed, a_angularVelocity)
+        : HomingState(a_weapon, a_hitCount, a_isBoomerang, a_speed, a_angularVelocity)
         {};
 protected:
 };

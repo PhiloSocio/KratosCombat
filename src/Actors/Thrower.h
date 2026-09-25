@@ -12,7 +12,7 @@ public:
     {titles.set(ActorType::kThrower);}
     virtual ~Thrower() = default;
 
-    void ThrowWeapon(const bool isVertical, const bool isHoming = false);
+    void ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType);
 
     void Update(float a_delta) override;
     [[nodiscard]] float GetImpulsePower(const float a_mass) noexcept;     //  [mN.s] (linear impulse)

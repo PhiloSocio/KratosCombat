@@ -9,7 +9,6 @@ public:
 
     HomingState(
         SmartRelicWeapon& a_weapon,
-        std::vector<RE::ActorHandle> a_targets,
         uint8_t a_hitCount = 2u,
         bool a_isBoomerang = true,
         float a_speed = 2000.f,

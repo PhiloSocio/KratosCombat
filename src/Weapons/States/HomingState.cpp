@@ -4,13 +4,11 @@
 
 HomingState::HomingState(
     SmartRelicWeapon& a_weapon,
-    std::vector<RE::ActorHandle> a_targets,
     uint8_t a_hitCount,
     bool a_isBoomerang,
     float a_speed,
     float a_angularVelocity)
     : ThrowableWeaponState(a_weapon),
-        targets(std::move(a_targets)),
         hitCount(a_hitCount),
         isBoomerang(a_isBoomerang),
         speed(a_speed),
@@ -20,6 +18,15 @@ HomingState::HomingState(
 
 void HomingState::InitializeTargets()
 {
+    auto thrower = weapon.smartWeaponRuntimeData.thrower;
+    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
+
+    if (!throwerActor) return;
+
+    const bool orderTargetsFromNearest = true;
+    targets = 
+        ObjectUtil::Actor::GetNearCombatTargetHandles<decltype(targets)>(
+            throwerActor, Config::HProjectileTargetRange, orderTargetsFromNearest);
     if (targets.empty()) {
         return;
     }

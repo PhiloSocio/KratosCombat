@@ -1,5 +1,5 @@
 #include "Thrower.h"
-#include "Weapons/ThrowableRelicWeapon.h"
+#include "Weapons/SmartRelicWeapon.h"
 #include "util.h"
 
 using namespace MathUtil;
@@ -48,11 +48,17 @@ float Thrower::GetChargeMultiplier() const noexcept
     return 1.f + maxEffectiveChargeDuration * _chargeDuration / (maxChargeDuration * maxChargeDuration);
 }
 
-void Thrower::ThrowWeapon(const bool isVertical, const bool isHoming)
+void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
 {
     auto relic = GetRightHandRelic();
     if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(relic)) {
-        throwableRelic->Throw(isVertical, false, isHoming);
+        if(const bool success =throwableRelic->Throw(a_rotationType); success) {
+            if (a_throwType == ThrowType::kHomingThrow) {
+                if (auto smartRelicWeapon = dynamic_cast<SmartRelicWeapon*>(throwableRelic); smartRelicWeapon) {
+                    smartRelicWeapon->SetState(RelicWeaponState::Type::kHoming);
+                }
+            }
+        }
     }
 }
 

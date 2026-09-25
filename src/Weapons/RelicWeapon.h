@@ -35,8 +35,8 @@ public:
     virtual bool Initialize() = 0;
     virtual void Update() = 0;
     virtual bool IsCharged() const {return _isCharged;}
-    virtual void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_stage = 3u, const uint8_t a_coolDown = 15u);
-    virtual void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false);
+    virtual void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_stage = 3u, const uint8_t a_coolDown = 15u) = 0;
+    virtual void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false) = 0;
     virtual void SetWielder(BaseActor* a_actor);
 
     virtual void OnEquip(BaseActor* a_actor);

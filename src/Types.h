@@ -58,5 +58,6 @@ enum class ThrowType : std::uint8_t {
     kNormalThrowing,
     kPowerThrowing,
     kChargingThrow,
-    kPowerChargingThrow
+    kPowerChargingThrow,
+    kHomingThrow
 };

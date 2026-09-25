@@ -68,6 +68,8 @@ public:
     struct RuntimeData : public RelicWeapon::RuntimeData {
         Thrower* thrower = nullptr;
 
+        RE::ObjectRefHandle droppedWeaponKeep;
+
         RE::ProjectileHandle*   projectileHandle = nullptr;
         RE::Projectile*         projectile = nullptr;
         RE::NiNode*             projectileModel = nullptr;
@@ -86,6 +88,7 @@ public:
         RE::NiPoint3 angles;
 
         bool isThrown = false;
+        float isPenetrating = false;
     };
 
     RuntimeData throwableWeaponRuntimeData;
@@ -96,13 +99,21 @@ public:
     void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
+    [[nodiscard]] RE::BGSProjectile* CreateBaseProjectile(const char* a_editorID, const char* a_name);
+    [[nodiscard]] RE::TESAmmo* CreateBaseAmmo(RE::BGSProjectile* a_baseProjectile, const char* a_editorID, const char* a_name);
+
     [[nodiscard]] SoundManager GetSoundManager() const {return soundData;}
     [[nodiscard]] bool IsCharged(const bool a_forLastThrow = false) const {return RelicWeapon::IsCharged() ? true : (a_forLastThrow ? _isLastThrowCharged : false);}
 
     [[nodiscard]] RuntimeData& GetThrableRuntimeData() {return throwableWeaponRuntimeData;}
     [[nodiscard]] Thrower* GetThrower() {return throwableWeaponRuntimeData.thrower;}
+    [[nodiscard]] RE::Actor* GetThrowerActor() {return GetThrower() ? GetThrower()->GetActor() : nullptr;}
+    [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return throwableWeaponRuntimeData.droppedWeaponKeep.get().get(); }
 
-    virtual void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false);
+    bool Throw(const RotationType a_rotationType);
+
+    virtual bool PreThrow();
+    virtual void PostThrow();
     virtual void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical);
     virtual void SetHitRotation(RE::NiPoint3& a_angles, const RE::NiPoint3& a_direction, const bool a_vertical);
     virtual void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical);
@@ -128,7 +139,9 @@ protected:
         }
     };
 
-    RE::BGSProjectile* ThrowingWeaponDummyProjectile = nullptr;
+    RE::BGSProjectile* ThrowableWeaponDummyProjectile = nullptr;
+    RE::TESAmmo*       ThrowableWeaponDummyAmmo = nullptr;
+    RE::TESObjectLIGH* ThrowableWeaponLight = nullptr;
 
     AsyncUtil::GameTime projectileUpdate;
     AsyncUtil::GameTime trailUpdate;

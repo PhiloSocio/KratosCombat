@@ -123,6 +123,8 @@ public:
     RE::TESGlobal* gMjolnirFormID           = nullptr;
     RE::TESGlobal* gTridentFormID           = nullptr;
     RE::TESGlobal* gGuardianShieldFormID    = nullptr;
+
+    RE::TESObjectCONT* ThrowableWeaponContainer = nullptr;
 private:
     ~Assets() = default;
 };

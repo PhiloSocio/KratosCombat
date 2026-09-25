@@ -98,6 +98,9 @@ bool Assets::Initialize()
     EffLongDistButton   = SpellLongDistButton ? SpellLongDistButton->effects[0]->baseEffect : nullptr;
     found = EffectAxeThrownState && EffectSpartanRage && EffectStrenghtBuff && EffectLeviChargeCD && EffectAimButton && EffectAxeCallButton
     && EffRunicButton && EffFinisherButton;
+
+    ThrowableWeaponContainer = dataHandler->LookupForm<RE::TESObjectCONT>(0x1D13C, "Skyrim.esm");
+
     if (found) {
         spellIDs.aim = EffectAimButton->GetFormID();
         spellIDs.call = EffectAxeCallButton->GetFormID();

@@ -90,6 +90,31 @@ void LeviathanAxe::Update() {
 //    }
 }
 
+void LeviathanAxe::SetState(RelicWeaponState::Type a_type)
+{
+    switch (a_type)
+    {
+    case RelicWeaponState::Type::kArriving:
+        {
+            auto previous = dynamic_cast<LeviathanArrivingState*>(currentState.get());
+            auto rHandBone = runtimeData.thrower->GetRHandBone();
+            RE::NiPoint3 startPoint; GetPosition(startPoint);
+            if (runtimeData.isPenetrating && previous) {
+                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*previous, startPoint));
+            } else {
+                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this, startPoint, &rHandBone));
+                spdlog::debug("Levi call is started");
+            }
+        }
+        break;
+    case RelicWeaponState::Type::kHoming:
+        SmartRelicWeapon::SetState(std::make_unique<LeviathanHomingState>(*this));
+        break;
+
+    default:
+        break;
+    }
+}
 void LeviathanAxe::OnMenuOpenCloseEvent(const bool a_opening)
 {
     if (a_opening) {
@@ -152,7 +177,9 @@ void LeviathanAxe::GetPosition(RE::NiPoint3& a_point)
         }
     }
 }
-void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const bool isHoming)
+
+/*
+void LeviathanAxe::Throw(const bool a_isVertical, const bool runtimeData.isPenetrating, const bool isHoming)
 {
     auto rHandBone = runtimeData.thrower->GetRHandBone();
     if (!rHandBone) {spdlog::error("LeviathanAxe::Throw - RHandBone is null"); return;}
@@ -173,30 +200,30 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
     }
     const auto leviThrowSpell = (a_isVertical || isVertical ? SpellLeviProjH : SpellLeviProjL);
 //  auto leviBaseProj = (isVertical ? LeviProjBaseH : LeviProjBaseL);
-    if (leviThrowSpell && (isLeviathanAxe || justContinue)) 
+    if (leviThrowSpell && (isLeviathanAxe || runtimeData.isPenetrating)) 
     {   //  calculate damage
         const auto leviProjEff = leviThrowSpell->effects[0];
         auto& leviProjEffSetting = leviProjEff->effectItem;
-        auto& mag = leviProjEffSetting.magnitude;
+        auto& projectileDamage = leviProjEffSetting.magnitude;
         const auto leviDamage = damage;
-        mag = leviDamage * runtimeData.thrower->GetDamageMult() * Config::ThrowingDamageMult;
+        projectileDamage = leviDamage * runtimeData.thrower->GetDamageMult() * Config::ThrowingDamageMult;
         bool isPowerThrow; throwerActor->GetGraphVariableBool("IsPowerThrowing", isPowerThrow);
-        if (isVertical || isPowerThrow) {mag *= 1.5f; yAngle = 1.57f;}
+        if (isVertical || isPowerThrow) {projectileDamage *= 1.5f; yAngle = 1.57f;}
         else yAngle = 0.35f;
         float throwChargeDamageMult = std::sqrtf(throwingChargeDuration + 1.f);
         if (throwChargeDamageMult > 2.f) throwChargeDamageMult = 2.f;
-        mag *= throwChargeDamageMult;
+        projectileDamage *= throwChargeDamageMult;
 
         if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff && leviProjBaseEff->data.projectileBase) {
         //  //  leviProjBaseEff->projectileBase->defaultWeaponSource = WeaponIdentify::LeviathanAxe;
         //  //  leviProjBaseEff->associatedForm = WeaponIdentify::LeviathanAxe;
             auto& pbData = leviProjBaseEff->data.projectileBase->data;
-            pbData.speed = !justContinue ? Config::ThrowSpeed * std::clamp(throwChargeDamageMult / 2.f, 1.f, 1.25f) : pbData.speed * 0.7f;
-            pbData.force = mag;
+            pbData.speed = !runtimeData.isPenetrating ? Config::ThrowSpeed * std::clamp(throwChargeDamageMult / 2.f, 1.f, 1.25f) : pbData.speed * 0.7f;
+            pbData.force = projectileDamage;
             pbData.gravity = 3.21f;
         } else spdlog::warn("not found Levi throwing effect!");
 
-        if (!justContinue) {
+        if (!runtimeData.isPenetrating) {
             soundData.PlayThrowingSounds(rHandBone);
 
             gravity = 3.21f;
@@ -205,10 +232,10 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         }
 
         //  set the launch data
-        auto origin = justContinue ? runtimeData.position : rHandBone->world.translate;
+        auto origin = runtimeData.isPenetrating ? runtimeData.position : rHandBone->world.translate;
         RE::ProjectileHandle pHandle;
         RE::Projectile::ProjectileRot pRot = {throwerActor->GetAimAngle(), throwerActor->GetAimHeading()};
-        if (runtimeData.projectileModel && (justContinue/* || isHoming*/)) throwerActor->Unk_A0(runtimeData.projectileModel, pRot.x, pRot.z, origin);
+        if (runtimeData.projectileModel && (runtimeData.isPenetrating)) throwerActor->Unk_A0(runtimeData.projectileModel, pRot.x, pRot.z, origin);
         RE::Projectile::LaunchData lData(throwerActor, origin, pRot, leviThrowSpell);
 
     //    lData.weaponSource = weap; // somehow causing very high damage
@@ -247,14 +274,14 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         projectileUpdate.RegisterForUpdate(0.0f, false);
 
         if (isHoming) {
-        //    if (justContinue) {
+        //    if (runtimeData.isPenetrating) {
         //        //
         //    } else {
                 std::vector<RE::ActorHandle> nearCombatTargets = ObjectUtil::Actor::GetNearCombatTargetHandles<std::vector<RE::ActorHandle>>(throwerActor, Config::HProjectileTargetRange, true);
                 SetState(std::make_unique<LeviathanHomingState>(*this, std::move(nearCombatTargets)));
         //    }
         }
-        if (justContinue) return;
+        if (runtimeData.isPenetrating) return;
 
         if (Config::IsAdvancedThrowingInstalled && (isThrowAttack || isPowerThrowAttack)) {
             ResetCharge(enchMag, defaultEnchMag, true);
@@ -276,7 +303,7 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         isAxeCalled = false;
         isAxeThrowed = true;
         SetThrowState(ThrowState::kThrown);
-            spdlog::info("Leviathan Axe throwed, raw damage is: {}", mag);
+            spdlog::info("Leviathan Axe throwed, raw damage is: {}", projectileDamage);
         if (runtimeData.stuckedBone)   runtimeData.stuckedBone    = nullptr;
         if (runtimeData.stuckedActor)  runtimeData.stuckedActor   = nullptr;
         runtimeData.lastHitActors.clear();
@@ -284,7 +311,96 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool justContinue, const
         if (throwerActor->HasSpell(SpellCatchLevi)) throwerActor->RemoveSpell(SpellCatchLevi);
     } else spdlog::info("Leviathan Axe is not equipped for throwing!");
 }
-void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, std::optional<float> a_delay)
+*/
+bool LeviathanAxe::PreThrow()
+{
+    bool result = false;
+
+    trailRemoveUpdate.Done();
+
+    auto throwerActor = runtimeData.thrower ? runtimeData.thrower->GetActor() : nullptr;
+    if (!throwerActor) {spdlog::error("LeviathanAxe::PreThrow - thrower actor is null"); return result;}
+
+    bool isLeviathanAxe = runtimeData.thrower->GetRightHandRelic() == this;
+    if (!isLeviathanAxe) return result;
+
+    return result;
+}
+void LeviathanAxe::PostThrow()
+{
+    auto rHandBone = runtimeData.thrower->GetRHandBone();
+    if (!rHandBone) {spdlog::error("LeviathanAxe::Throw - RHandBone is null"); return;}
+
+    auto throwerActor = runtimeData.thrower ? runtimeData.thrower->GetActor() : nullptr;
+    if (!throwerActor) {spdlog::error("LeviathanAxe::Throw - thrower actor is null"); return;}
+
+    if (!runtimeData.projectile) {spdlog::error("LeviathanAxe::Throw - projectile is null"); return;}
+    auto& projectileRTD = runtimeData.projectile->GetProjectileRuntimeData();
+
+    {   //  calculate damage
+        auto& projectileDamage = projectileRTD.weaponDamage;
+        float throwChargeDamageMult = std::sqrtf(throwingChargeDuration + 1.f);
+        if (throwChargeDamageMult > 2.f) throwChargeDamageMult = 2.f;
+        projectileDamage *= throwChargeDamageMult;
+
+        if (ThrowableWeaponDummyProjectile) {
+        //  //  ThrowableWeaponDummyProjectile->defaultWeaponSource = weap;
+            auto& pbData = ThrowableWeaponDummyProjectile->data;
+            pbData.speed = !runtimeData.isPenetrating ? Config::ThrowSpeed * std::clamp(throwChargeDamageMult / 2.f, 1.f, 1.25f) : pbData.speed * 0.7f;
+            pbData.force = projectileDamage;
+            pbData.gravity = 3.21f;
+        } else spdlog::warn("not found Levi throwing effect!");
+
+        if (!runtimeData.isPenetrating) {
+            soundData.PlayThrowingSounds(rHandBone);
+
+            gravity = 3.21f;
+            gravity /= (std::powf(throwingChargeDuration + 1.f, 3.f));
+            gravity = std::max(gravity, 0.5f);
+        }
+
+        RE::EnchantmentItem* enchantItem = nullptr;
+        if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(throwerActor) > 0.f)
+            enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(throwerActor);
+        else
+            enchantItem = nullptr;
+
+        _isLastThrowCharged = enchantItem != nullptr;
+
+        projectileUpdate.RegisterForUpdate(0.0f, false);
+
+        if (runtimeData.isPenetrating) return;
+
+        if (Config::IsAdvancedThrowingInstalled) {
+            ResetCharge(enchMag, defaultEnchMag, true);
+            runtimeData.thrower->SetSkipEquipAnim(true);
+            ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, true, true, runtimeData.thrower->GetSkipEquipAnim(), true);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
+            spdlog::debug("Leviathan unequipped after throwing");
+        } else {
+    //        WeaponIdentify::isLeviathanAxe = false;
+    //        WeaponIdentify::isRelic = false;
+        //    Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
+        //    throwerActor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
+            runtimeData.thrower->SetSkipEquipAnim(true);
+            runtimeData.thrower->SetUnequipWhenAnimEnds(true);
+        }
+
+        throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
+
+        isAxeCalled = false;
+        isAxeThrowed = true;
+        SetThrowState(ThrowState::kThrown);
+            spdlog::info("Leviathan Axe throwed, raw damage is: {}", projectileDamage);
+        if (runtimeData.stuckedBone)   runtimeData.stuckedBone    = nullptr;
+        if (runtimeData.stuckedActor)  runtimeData.stuckedActor   = nullptr;
+        runtimeData.lastHitActors.clear();
+        runtimeData.lastHitForms.clear();
+        if (throwerActor->HasSpell(SpellCatchLevi)) throwerActor->RemoveSpell(SpellCatchLevi);
+    }
+}
+
+void LeviathanAxe::Call(const bool a_justDestroy, std::optional<float> a_delay)
 {
     if (runtimeData.caller && runtimeData.caller->IsValid() && weap) {
         spdlog::debug("Levi is calling...");
@@ -318,7 +434,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, std
         auto stuckedLevi =  LastLeviProjectile ? LastLeviProjectile : nullptr;
         if (!stuckedLevi)   stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : (LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
         if (stuckedLevi) {
-            if (!a_justContinue) runtimeData.position = stuckedLevi->data.location;
+            if (!runtimeData.isPenetrating) runtimeData.position = stuckedLevi->data.location;
             auto& projectileRTD = stuckedLevi->GetProjectileRuntimeData();
             auto& pFlags = projectileRTD.flags;
             if (!(pFlags & pFlag::kDestroyed)) {
@@ -348,23 +464,23 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, std
             if (!Config::DontDamageWhileArrive) {
                 const auto leviProjEff = SpellLeviProjA->effects[0];
                 auto& leviProjEffSetting = leviProjEff->effectItem;
-                auto& mag = leviProjEffSetting.magnitude;
+                auto& projectileDamage = leviProjEffSetting.magnitude;
                 const auto leviDamage = damage;
-                mag = leviDamage * runtimeData.caller->GetDamageMult() * Config::ThrowingDamageMult;
-                mag *= 0.5f;
+                projectileDamage = leviDamage * runtimeData.caller->GetDamageMult() * Config::ThrowingDamageMult;
+                projectileDamage *= 0.5f;
                 if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff && leviProjBaseEff->data.projectileBase) {
                 //    leviProjBaseEff->projectileBase->defaultWeaponSource = WeaponIdentify::LeviathanAxe;
                 //    leviProjBaseEff->associatedForm = WeaponIdentify::LeviathanAxe;
                     auto& pbData = leviProjBaseEff->data.projectileBase->data;
-                    pbData.force = mag * 2.f;
+                    pbData.force = projectileDamage * 2.f;
                 } else spdlog::warn("not found Levi arriving effect!");
-                spdlog::debug("damage mult: {} throwing dm {} levi damage {} total damage {}", runtimeData.caller->GetDamageMult(), Config::ThrowingDamageMult, leviDamage, mag);
+                spdlog::debug("damage mult: {} throwing dm {} levi damage {} total damage {}", runtimeData.caller->GetDamageMult(), Config::ThrowingDamageMult, leviDamage, projectileDamage);
             }
 
             RE::NiPoint3 startPoint = runtimeData.position;
             auto rHandBone = runtimeData.caller->GetRHandBone();
             RE::NiPoint3 targetPoint = rHandBone ? rHandBone->world.translate : AnArchos->GetPosition();
-            if (!a_justContinue) {
+            if (!runtimeData.isPenetrating) {
                 soundData.PlayCallingHandSounds(rHandBone);
                 GetPosition(startPoint);
             }
@@ -385,13 +501,8 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, std
 
             projectileUpdate.RegisterForUpdate(0.0f, false);
 
-            auto previous = dynamic_cast<LeviathanArrivingState*>(currentState.get());
-            if (a_justContinue && previous) {
-                SetState(std::make_unique<LeviathanArrivingState>(*previous, startPoint));
-            } else {
-                SetState(std::make_unique<LeviathanArrivingState>(*this, startPoint, &rHandBone));
-                spdlog::debug("Levi call is started");
-            }
+            SetState(RelicWeaponState::Type::kArriving);
+
             SetThrowState(ThrowState::kArriving);
             spdlog::info("Levi is arriving...");
         } else {spdlog::warn("WEIRD SpellLeviProjA is nullptr!");}
@@ -474,14 +585,14 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
             if (enchBase->HasArchetype(RE::EffectSetting::Archetype::kDualValueModifier)
              || enchBase->HasArchetype(RE::EffectSetting::Archetype::kValueModifier)) {
                 ResetCharge(enchMag, defaultEnchMag, false, true);
-                auto& mag = enchEffect->effectItem.magnitude;
-                enchMag = &mag;
-                defaultEnchMag = mag;
-                mag *= a_magnitude;
+                auto& projectileDamage = enchEffect->effectItem.magnitude;
+                enchMag = &projectileDamage;
+                defaultEnchMag = projectileDamage;
+                projectileDamage *= a_magnitude;
                 chargeHitCount = a_chargeHitCount;
                 ObjectUtil::Enchantment::ChargeEquippedWeapon(AnArchos, 300.f);
                 _isCharged = true;
-                spdlog::debug("magnitude buffing from {} to: {}", mag / a_magnitude, mag);
+                spdlog::debug("magnitude buffing from {} to: {}", projectileDamage / a_magnitude, projectileDamage);
 
                 if (auto handEffect = assets->VFXeffects.handFrostBright; handEffect) AnArchos->ApplyArtObject(handEffect, a_chargeHitCount * 2, nullptr, false, false, weapBone);
                 else spdlog::warn("can't found hand effect for levi charge!");
@@ -506,14 +617,14 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
 
                     auto& enchCost = ench->data.costOverride;
                     auto& enchAmount = ench->data.chargeOverride;
-                    auto& mag = enchEffect->effectItem.magnitude;
+                    auto& projectileDamage = enchEffect->effectItem.magnitude;
                     enchAmount = 500.f;
-                    mag = a_magnitude * leviDam / 2;
-                    enchCost = mag;
+                    projectileDamage = a_magnitude * leviDam / 2;
+                    enchCost = projectileDamage;
                     enchMag = nullptr;
 
                     chargeHitCount = a_chargeHitCount;
-                    spdlog::info("levi charge frost damage buff is: {}", mag);
+                    spdlog::info("levi charge frost damage buff is: {}", projectileDamage);
 
                     if (auto handEffect = assets->VFXeffects.handFrostBright; handEffect) AnArchos->ApplyArtObject(handEffect, a_chargeHitCount * 2, nullptr, false, false, weapBone);
                     else spdlog::warn("can't found hand effect for levi charge!");
