@@ -10,11 +10,6 @@ public:
     ~Draupnir() override = default;
     explicit Draupnir(RE::TESBoundObject* a_object);
 
-    struct RuntimeData : public SmartRelicWeapon::RuntimeData {
-    };
-
-    RuntimeData runtimeData;
-
     bool Initialize() override;
     void Update() override;
     void SetState(RelicWeaponState::Type a_type) override;

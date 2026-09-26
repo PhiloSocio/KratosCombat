@@ -23,8 +23,8 @@ ArrivingState::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3
 
 void ArrivingState::UpdateRotation()
 {
-    if (weapon.runtimeData.replacedProjectileModel && weapon.runtimeData.replacedProjectileModel->parent) {
-        auto& replacedPMParent = weapon.runtimeData.replacedProjectileModel->parent;
+    if (weapon.replacedProjectileModel && weapon.replacedProjectileModel->parent) {
+        auto& replacedPMParent = weapon.replacedProjectileModel->parent;
         auto& localRotation = replacedPMParent->local.rotate;
         RE::NiMatrix3 targetLocalRotation;
     //    float targetAngleZ;
@@ -180,21 +180,21 @@ void ArrivingState::Enter()
     UpdateTargets();
     UpdateArrivingDirection(!_justContinue);
     InitializeRoute();
-    smoothedDesiredVelocity = weapon.runtimeData.velocity;
+    smoothedDesiredVelocity = weapon.velocity;
 
     if (!_justContinue) {
         startingTime = AsyncUtil::GameTime::GetEngineTime();
         const bool doBlend = 
-            weapon.runtimeData.projState == ProjectileState::kNone ||
-            weapon.runtimeData.projState == ProjectileState::kLaunched;
-        smoothedDesiredVelocity = doBlend ? weapon.runtimeData.velocity : linearArrivingDir * speed;
+            weapon.projState == ProjectileState::kNone ||
+            weapon.projState == ProjectileState::kLaunched;
+        smoothedDesiredVelocity = doBlend ? weapon.velocity : linearArrivingDir * speed;
     }
 }
 Status ArrivingState::Update(const float a_delta)
 {
     if (!weapon.GetCaller() || !weapon.GetCaller()->IsValid()) return Status::kCancelled;
 
-    model = weapon.runtimeData.projectileModel;
+    model = weapon.projectileModel;
     if (!model) return Status::kCancelled;
 
     callerHandBone = GetCallerHandBone();
@@ -204,7 +204,7 @@ Status ArrivingState::Update(const float a_delta)
     callerWeaponBone = GetCallerWeaponBone();
     if (!callerWeaponBone) return Status::kCancelled;
 
-    auto proj = weapon.runtimeData.projectile;
+    auto proj = weapon.projectile;
     if (!proj) return Status::kCancelled;
     auto& rtData = proj->GetProjectileRuntimeData();
     auto& vel = rtData.linearVelocity;
@@ -236,12 +236,12 @@ Status ArrivingState::Update(const float a_delta)
         status = Status::kCompleted;
     }
     if (false && startRotation == RE::NiMatrix3()) {
-        if (weapon.runtimeData.replacedProjectileModel && weapon.runtimeData.replacedProjectileModel->parent) {
-            model->world = weapon.runtimeData.transformPW;
-            model->local = weapon.runtimeData.transformPL;
-            auto& replacedPMParent = weapon.runtimeData.replacedProjectileModel->parent;
+        if (weapon.replacedProjectileModel && weapon.replacedProjectileModel->parent) {
+            model->world = weapon.transformPW;
+            model->local = weapon.transformPL;
+            auto& replacedPMParent = weapon.replacedProjectileModel->parent;
             auto parentWorldInverse = replacedPMParent->world.Invert();
-            auto previousWorld = weapon.runtimeData.transformW;
+            auto previousWorld = weapon.transformW;
             auto& localRotation = replacedPMParent->local.rotate;
             auto& localPosition = replacedPMParent->local.translate;
             if (replacedPMParent->parent) {
@@ -317,9 +317,9 @@ Status ArrivingState::Update(const float a_delta)
     desiredDir = smoothedDesiredVelocity;
     desiredDir.Unitize();
     const bool doBlend = 
-        weapon.runtimeData.projState == ProjectileState::kNone ||
-        weapon.runtimeData.projState == ProjectileState::kLaunched;
-    vel = MathUtil::Angle::BlendVectors(doBlend ? weapon.runtimeData.velocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
+        weapon.projState == ProjectileState::kNone ||
+        weapon.projState == ProjectileState::kLaunched;
+    vel = MathUtil::Angle::BlendVectors(doBlend ? weapon.velocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
     if (vel.z < 0.f) {
         constexpr float minHeight = -40.f;
         constexpr float dampingRange = 69.f;

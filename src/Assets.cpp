@@ -102,16 +102,17 @@ bool Assets::Initialize()
     ThrowableWeaponContainer = dataHandler->LookupForm<RE::TESObjectCONT>(0x1D13C, "Skyrim.esm");
 
     if (found) {
-        spellIDs.aim = EffectAimButton->GetFormID();
-        spellIDs.call = EffectAxeCallButton->GetFormID();
-        spellIDs.runic = EffRunicButton->GetFormID();
-        spellIDs.finisher = EffFinisherButton->GetFormID();
-        spellIDs.midDist = EffMidDistButton->GetFormID();
-        spellIDs.longDist = EffLongDistButton->GetFormID();
-        spellIDs.leviChargeCoolDown = EffectLeviChargeCD->GetFormID();
-        spellIDs.AxeThrownState = EffectAxeThrownState->GetFormID();
-        spellIDs.strenghtBuff = EffectStrenghtBuff->GetFormID();
-        spellIDs.spartanRage = EffectSpartanRage->GetFormID();
+        spdlog::info("Assets initialized.");
+        spellID.aim = EffectAimButton->GetFormID();
+        spellID.call = EffectAxeCallButton->GetFormID();
+        spellID.runic = EffRunicButton->GetFormID();
+        spellID.finisher = EffFinisherButton->GetFormID();
+        spellID.midDist = EffMidDistButton->GetFormID();
+        spellID.longDist = EffLongDistButton->GetFormID();
+        spellID.leviChargeCoolDown = EffectLeviChargeCD->GetFormID();
+        spellID.AxeThrownState = EffectAxeThrownState->GetFormID();
+        spellID.strenghtBuff = EffectStrenghtBuff->GetFormID();
+        spellID.spartanRage = EffectSpartanRage->GetFormID();
     } return found;
 }
 

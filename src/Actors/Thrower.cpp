@@ -17,8 +17,8 @@ bool Thrower::IsThrowing(const ThrowType a_type) noexcept
 
     switch (a_type) {
     case ThrowType::kAny:                   ret = _isNormalThrowing || _isPowerThrowing;    break;
-    case ThrowType::kNormalThrowing:        ret = _isNormalThrowing;                        break;
-    case ThrowType::kPowerThrowing:         ret = _isPowerThrowing;                         break;
+    case ThrowType::kNormalThrow:        ret = _isNormalThrowing;                        break;
+    case ThrowType::kPowerThrow:         ret = _isPowerThrowing;                         break;
     case ThrowType::kChargingThrow:         ret = _isCharging;                              break;
     case ThrowType::kPowerChargingThrow:    ret = _isCharging && _isPowerThrowing;          break;
     default:                                ret = false;                                    break;
@@ -58,8 +58,7 @@ float Thrower::GetChargeMultiplier() const noexcept
 
 void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
 {
-    auto relic = GetRightHandRelic();
-    if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(relic)) {
+    if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(GetRightHandRelic())) {
         if(const bool success =throwableRelic->Throw(a_rotationType); success) {
             if (a_throwType == ThrowType::kHomingThrow) {
                 if (auto smartRelicWeapon = dynamic_cast<SmartRelicWeapon*>(throwableRelic); smartRelicWeapon) {

@@ -19,15 +19,12 @@ public:
         kArrived
     };
 
-    struct RuntimeData : public ThrowableRelicWeapon::RuntimeData {
         Caller* caller = nullptr;
 
         std::vector<RE::ActorHandle>    lastHitActors;
         std::vector<RE::TESObjectREFR*> lastHitForms;
         RE::NiPointer<RE::NiNode> stuckedBone;
         RE::NiPointer<RE::Actor> stuckedActor;
-    };
-    RuntimeData runtimeData;
 
     bool Initialize() override;
     void Update() override;
@@ -36,8 +33,7 @@ public:
     void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnTrailDelete() override;
 
-    [[nodiscard]] RuntimeData& GetruntimeData() {return runtimeData;}
-    [[nodiscard]] Caller* GetCaller() {return runtimeData.caller && runtimeData.caller->IsValid() ? runtimeData.caller : nullptr;}
+    [[nodiscard]] Caller* GetCaller() {return caller && caller->IsValid() ? caller : nullptr;}
     [[nodiscard]] RelicWeaponState* GetState() const {return currentState.get();}
 
     void SetThrowState(const ThrowState a_throwState) {_throwState = a_throwState;};

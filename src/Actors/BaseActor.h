@@ -9,17 +9,18 @@ class BaseActor
 public:
     virtual ~BaseActor() = default;
 
-    virtual void Update(float a_delta) = 0;
-    virtual void DoAction(const ActionType a_action) = 0;
     void OnEquip(RelicWeapon* a_relic);
 
+    virtual void Update(float a_delta) = 0;
+    virtual void DoAction(const ActionType a_action) = 0;
+
     [[nodiscard]] RE::Actor* GetActor() const { return actor; };
-    [[nodiscard]] const RE::ActorHandle& GetHandle() const { return actorHandle; };
+    [[nodiscard]] const RE::ActorHandle& GetActorHandle() const { return actorHandle; };
 
     [[nodiscard]] bool IsValid() { actor = actorHandle ? actorHandle.get().get() : nullptr; return actor != nullptr; };
 
-    [[nodiscard]] bool HasTitle(const ActorType a_type) const { return titles.all(a_type); };
-    [[nodiscard]] REX::EnumSet<ActorType, std::uint32_t> GetActorTitles() const { return titles; };
+    [[nodiscard]] bool HasTitle(const ActorType a_type) const { return titles.all(a_type); }
+    [[nodiscard]] REX::EnumSet<ActorType, std::uint32_t> GetTitles() const { return titles; }
 
 //  not safe to use, the bones should be updated every frame, otherwise they could ve dangling pointers
 //    [[nodiscard]] RE::NiAVObject* GetRHandBone() const { return RHandBone; };

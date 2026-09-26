@@ -7,11 +7,43 @@
 Kratos::Kratos(RE::ActorHandle a_actorHandle) : 
     BaseActor(a_actorHandle), Thrower(a_actorHandle), Caller(a_actorHandle), Rager(a_actorHandle) , Charger(a_actorHandle) 
 {
-    if (IsValid()) {
-        alterationLevel = GetActor()->GetActorValue(RE::ActorValue::kAlteration);
+    if (IsValid() && GetActor()->IsHandleValid() && GetActor()->AsActorValueOwner()) {
+        alterationLevel = GetActor()->AsActorValueOwner()->GetActorValue(RE::ActorValue::kAlteration);
     }
 }
 
+void Kratos::DoAction(const ActionType a_action)
+{
+    if (IsValid())
+        switch (a_action)
+        {
+        case ActionType::kRage:
+            if (!IsInRage()) StartRage(true);
+            else EndRage();
+            break;
+        case ActionType::kWeaponCharge:
+            if (!IsInRage() && !GetRightHandRelic()->IsCharged()) {
+                GetActor()->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kWeaponCharge);
+                GetActor()->NotifyAnimationGraph("DoKratosAction");
+            }
+            break;
+        case ActionType::kSpecialIdle:
+            if (!IsInRage()) {
+                GetActor()->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kSpecialIdle);
+                GetActor()->NotifyAnimationGraph("DoKratosAction");
+            }
+            break;
+        case ActionType::kWeaponCall:
+            if (!IsInRage() && !GetRightHandRelic()) {
+                GetActor()->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kWeaponCharge);   //  intentionally
+                GetActor()->NotifyAnimationGraph("DoKratosAction");
+            }
+            break;
+
+        default:
+            break;
+        }
+}
 /*
 using namespace Util;
 #pragma region KRATOS

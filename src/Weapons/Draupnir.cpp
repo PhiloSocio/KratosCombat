@@ -33,23 +33,23 @@ bool Draupnir::Initialize()
 void Draupnir::Update()
 {
     if (projectileUpdate.IsTimeToUpdate()) {
-        if (runtimeData.projectileModel && runtimeData.projectile && runtimeData.projectile->Get3D() && runtimeData.weaponModelCopy && runtimeData.projectileModel == runtimeData.projectile->Get3D()) {
+        if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel == projectile->Get3D()) {
         //    const RE::BSFixedString stuckedModelNodeName = "DraupnirProjectile";
-        //    auto stuckedModel = runtimeData.projectileModel->GetObjectByName(stuckedModelNodeName);
+        //    auto stuckedModel = projectileModel->GetObjectByName(stuckedModelNodeName);
         //    stuckedModel->GetFlags() |= RE::NiAVObject::Flag::kHidden;
 
         //    const RE::BSFixedString stuckedModelLightFadeNodeName = "LightSpellProjectile";
-        //    auto stuckedLight = runtimeData.projectileModel->GetObjectByName(stuckedModelLightFadeNodeName);
+        //    auto stuckedLight = projectileModel->GetObjectByName(stuckedModelLightFadeNodeName);
         //    stuckedLight->GetFlags() |= RE::NiAVObject::Flag::kHidden;
 
-            auto node = runtimeData.projectileModel->AsNode();
+            auto node = projectileModel->AsNode();
 
-            auto cloneModel = runtimeData.weaponModelCopy.get()->Clone();
+            auto cloneModel = weaponModelCopy.get()->Clone();
             auto cloneNode = cloneModel ? cloneModel->AsNode() : nullptr;
-            runtimeData.replacedProjectileModel.reset(cloneNode);
+            replacedProjectileModel.reset(cloneNode);
 
             if (node) {
-                node->AttachChild(runtimeData.replacedProjectileModel.get(), false);
+                node->AttachChild(replacedProjectileModel.get(), false);
                 projectileUpdate.Done();
                 trailUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
                 spdlog::debug("draupnir model changed!");
@@ -58,7 +58,7 @@ void Draupnir::Update()
     }
     if (Config::DrawTrails) {
         if (trailUpdate.IsTimeToUpdate()) {
-            auto bone = runtimeData.replacedProjectileModel;
+            auto bone = replacedProjectileModel;
             if (bone) {
                 const float intensity = 2.f;
                 const auto meshOverride = Config::TrailModelPathDef;
@@ -105,19 +105,19 @@ bool Draupnir::PreThrow()
 
     trailRemoveUpdate.Done();
 
-    auto throwerActor = runtimeData.thrower ? runtimeData.thrower->GetActor() : nullptr;
+    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
     if (!throwerActor) {spdlog::error("Draupnir::PreThrow - thrower actor is null"); return result;}
 
-    bool isDraupnirSpear = runtimeData.thrower->GetRightHandRelic() == this;
+    bool isDraupnirSpear = thrower->GetRightHandRelic() == this;
     if (!isDraupnirSpear) return result;
 
     return result;
 }
 void Draupnir::PostThrow()
 {
-    if (runtimeData.projectile) {
-        MeleeHitProjectileIDs.emplace_back(runtimeData.projectile->formID);
-        spdlog::debug("melee thrown draupnir form id: {}", runtimeData.projectile->formID);
+    if (projectile) {
+        MeleeHitProjectileIDs.emplace_back(projectile->formID);
+        spdlog::debug("melee thrown draupnir form id: {}", projectile->formID);
     }
 }
 
@@ -230,7 +230,7 @@ void Draupnir::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::ProjectileHand
     RE::Projectile::LaunchData lData(GetThrowerActor(), a_bone->world.translate, RE::Projectile::ProjectileRot(), SpellDraupnirsCallProjL);
     lData.desiredTarget = a_target;
     RE::Projectile::Launch(a_pHandle, lData);
-    auto explosionDamage = runtimeData.projectile ? runtimeData.projectile->GetProjectileRuntimeData().weaponDamage : damage;
+    auto explosionDamage = projectile ? projectile->GetProjectileRuntimeData().weaponDamage : damage;
     explosionDamage *= explosionMagnitude;
     FenixUtils::stagger(std::clamp(explosionDamage / 10.f, 0.1f, 100.f), a_target, GetThrowerActor());
     if (auto targetAVO = a_target->AsActorValueOwner(); targetAVO)
@@ -239,10 +239,10 @@ void Draupnir::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::ProjectileHand
 
 void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
 {
-    if (a_proj && a_proj->Get3D() && runtimeData.projectileModel) {
+    if (a_proj && a_proj->Get3D() && projectileModel) {
         auto projModel = a_proj->Get3D();
         auto projNode = projModel ? projModel->AsFadeNode() : nullptr;
-        auto copyModelObj = runtimeData.projectileModel->Clone();
+        auto copyModelObj = projectileModel->Clone();
         auto copyModel = copyModelObj ? copyModelObj->AsNode() : static_cast<RE::NiAVObject*>(copyModelObj);
         if (projNode && copyModel) {
             const RE::BSFixedString stuckedModelNodeName = "DraupnirSpearBlade";
@@ -261,9 +261,9 @@ void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
                 spdlog::debug("added the light model to stucked draupnir model");
             }
 
-            if (runtimeData.replacedProjectileModel && runtimeData.replacedProjectileModel->parent) {
-                runtimeData.replacedProjectileModel->parent->DetachChild(runtimeData.replacedProjectileModel.get());
-                runtimeData.replacedProjectileModel.reset();
+            if (replacedProjectileModel && replacedProjectileModel->parent) {
+                replacedProjectileModel->parent->DetachChild(replacedProjectileModel.get());
+                replacedProjectileModel.reset();
             }
         } else spdlog::warn("projectile node is null");
     } else spdlog::warn("projectile or projectile model is null");
@@ -271,7 +271,7 @@ void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
 
 void Draupnir::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) 
 {
-    auto missileProjectile = runtimeData.projectile ? runtimeData.projectile->As<RE::MissileProjectile>() : nullptr;
+    auto missileProjectile = projectile ? projectile->As<RE::MissileProjectile>() : nullptr;
     if (missileProjectile && a_impactData) {
         const bool isTargetActor = a_target ? a_target->formType == RE::FormType::ActorCharacter : false;
         const auto victim = isTargetActor ? a_target->As<RE::Actor>() : nullptr;
@@ -279,7 +279,7 @@ void Draupnir::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjec
         auto& missileRTD = missileProjectile->GetMissileRuntimeData();
         auto shooter = rtData.shooter ? rtData.shooter.get()->As<RE::Actor>() : nullptr;
         const auto projBase = missileProjectile->GetProjectileBase();
-        bool isDraupnirSpear = runtimeData.thrower->GetRightHandRelic() == this;
+        bool isDraupnirSpear = thrower->GetRightHandRelic() == this;
 
         if (projBase == DraupnirsCallProjBase) {
             missileRTD.impactResult = RE::ImpactResult::kImpale;

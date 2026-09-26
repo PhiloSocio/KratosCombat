@@ -23,14 +23,12 @@ public:
     float                damage         = 0.f;
     float                length         = 0.f;
 
-    struct RuntimeData {
         BaseActor* owner = nullptr;
         BaseActor* wielder = nullptr;
         BaseActor* lastWielder = nullptr;
 
         RE::TESObjectREFR* currentReference = nullptr;
         bool isEquipped = false;
-    };
 
     virtual bool Initialize() = 0;
     virtual void Update() = 0;
@@ -46,12 +44,13 @@ public:
     virtual void OnMenuOpenCloseEvent(const bool a_opening) = 0;
 
     [[nodiscard]] virtual RelicType GetType() const = 0;
+    [[nodiscard]] bool HasAbility(const RelicAbility a_ability) const { return abilities.all(a_ability); }
+    [[nodiscard]] REX::EnumSet<RelicAbility, std::uint32_t> GetAbility() const { return abilities; }
     [[nodiscard]] RE::TESObjectWEAP* GetWeapon() const {return weap;}
-    [[nodiscard]] RuntimeData& GetRuntimeData() {return runtimeData;}
-    [[nodiscard]] BaseActor* GetOwner() const {return runtimeData.owner;}
-    [[nodiscard]] BaseActor* GetWielder() const {return runtimeData.wielder;}
-    [[nodiscard]] BaseActor* GetLastWielder() const {return runtimeData.lastWielder;}
-    [[nodiscard]] bool IsEquipped() const {return runtimeData.isEquipped;}
+    [[nodiscard]] BaseActor* GetOwner() const {return owner;}
+    [[nodiscard]] BaseActor* GetWielder() const {return wielder;}
+    [[nodiscard]] BaseActor* GetLastWielder() const {return lastWielder;}
+    [[nodiscard]] bool IsEquipped() const {return isEquipped;}
 
     RE::SpellItem* SpellChargeCD    = nullptr;
     RE::EnchantmentItem* EnchCharge = nullptr;
@@ -59,5 +58,6 @@ public:
     bool _isCharged = false;
     uint8_t chargeHitCount = 0;
 protected:
-    RuntimeData runtimeData;
+    REX::EnumSet<RelicAbility, std::uint32_t> abilities;
+
 };

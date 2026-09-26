@@ -10,6 +10,7 @@ using pbFlag = RE::BGSProjectileData::BGSProjectileFlags;
 ThrowableRelicWeapon::ThrowableRelicWeapon(RE::TESBoundObject* a_object)
     : RelicWeapon(a_object)
 {
+    abilities.set(RelicAbility::kThrowable);
 }
 
 RE::BGSProjectile* ThrowableRelicWeapon::CreateBaseProjectile(const char* a_editorID, const char* a_name)
@@ -128,19 +129,19 @@ bool ThrowableRelicWeapon::Initialize()
 
 RE::NiTransform ThrowableRelicWeapon::GetWorldTransform()
 {
-    if (runtimeData.replacedProjectileModel) {
-        runtimeData.transformW = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(runtimeData.replacedProjectileModel.get());
-        return runtimeData.transformW;
-    } else return runtimeData.transformPW;
+    if (replacedProjectileModel) {
+        transformW = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(replacedProjectileModel.get());
+        return transformW;
+    } else return transformPW;
     return {};
 }
 RE::NiTransform ThrowableRelicWeapon::GetLocalTransform()
 {
     RE::NiTransform ret;
-    if (runtimeData.replacedProjectileModel) {
-        runtimeData.transformL = runtimeData.replacedProjectileModel->local;
-        ret = runtimeData.transformL;
-    } else ret = runtimeData.transformPL;
+    if (replacedProjectileModel) {
+        transformL = replacedProjectileModel->local;
+        ret = transformL;
+    } else ret = transformPL;
     return ret;
 }
 
@@ -149,7 +150,7 @@ void ThrowableRelicWeapon::AddTrail()
     if (trailUpdate.IsTimeToUpdate()) {
         trailRemoveUpdate.Done();
         RemoveTrail();
-        auto bone = runtimeData.replacedProjectileModel;
+        auto bone = replacedProjectileModel;
         if (bone) {
             const bool isCharged = IsCharged(true);
             const float intensity = isCharged ? 3.f : 2.f;
@@ -191,10 +192,10 @@ void ThrowableRelicWeapon::AddTrail()
 void ThrowableRelicWeapon::FadeTrail()
 {
     if (trailRemoveUpdate.IsTimeToUpdate()) {
-        if (runtimeData.replacedProjectileModel) {
-            if (runtimeData.projectile && runtimeData.projState == ProjectileState::kHavok) {
-        //        auto& rtData = runtimeData.projectile->GetProjectileRuntimeData();
-                auto velocity = (runtimeData.replacedProjectileModel->world.translate - runtimeData.replacedProjectileModel->previousWorld.translate) / *g_deltaTime;
+        if (replacedProjectileModel) {
+            if (projectile && projState == ProjectileState::kHavok) {
+        //        auto& rtData = projectile->GetProjectileRuntimeData();
+                auto velocity = (replacedProjectileModel->world.translate - replacedProjectileModel->previousWorld.translate) / *g_deltaTime;
                 auto speed = velocity.Length();//rtData.linearVelocity.Length();
                 spdlog::debug("projectile trail fading... current speed: {}", speed);
                 if (speed != 0.f && speed < 669.f) {
@@ -203,7 +204,7 @@ void ThrowableRelicWeapon::FadeTrail()
                 }
             } else {
                 RemoveTrail();
-                runtimeData.replacedProjectileModel.reset();
+                replacedProjectileModel.reset();
                 trailRemoveUpdate.Done();
             }
         }
@@ -211,11 +212,11 @@ void ThrowableRelicWeapon::FadeTrail()
 }
 void ThrowableRelicWeapon::RemoveTrail()
 {
-    if (runtimeData.replacedProjectileModel) {
-        auto trailParentBone = runtimeData.replacedProjectileModel->GetObjectByName("trailParentNode");
-        runtimeData.replacedProjectileModel->DetachChild(trailParentBone);
-    //    if (runtimeData.replacedProjectileModel->parent)
-    //        runtimeData.replacedProjectileModel->parent->DetachChild(runtimeData.replacedProjectileModel.get());
+    if (replacedProjectileModel) {
+        auto trailParentBone = replacedProjectileModel->GetObjectByName("trailParentNode");
+        replacedProjectileModel->DetachChild(trailParentBone);
+    //    if (replacedProjectileModel->parent)
+    //        replacedProjectileModel->parent->DetachChild(replacedProjectileModel.get());
         OnTrailDelete();
         spdlog::debug("projectile trail deleted");
     }
@@ -256,16 +257,16 @@ bool ThrowableRelicWeapon::Throw(const RotationType a_rotationType, std::optiona
 
     RE::ProjectileHandle pHandle;
     if (a_pRot.has_value())
-        runtimeData.projectileRotation = a_pRot.value();
+        projectileRotation = a_pRot.value();
     else
-        runtimeData.projectileRotation = RE::Projectile::ProjectileRot(throwerActor->GetAimAngle(), throwerActor->GetAimHeading());
+        projectileRotation = RE::Projectile::ProjectileRot(throwerActor->GetAimAngle(), throwerActor->GetAimHeading());
 
-    auto throwDir = Algebra::PitchYawToVector(runtimeData.projectileRotation);
+    auto throwDir = Algebra::PitchYawToVector(projectileRotation);
     throwDir.Unitize();
     origin += throwDir * handVelocity.Length() * *g_deltaTime;
     if (a_origin.has_value()) origin = a_origin.value();
-//    RE::Projectile::LaunchData lData(ThrowableWeaponDummyProjectile, throwerActor, origin, runtimeData.projectileRotation);
-    RE::Projectile::LaunchData lData(throwerActor, origin, runtimeData.projectileRotation, ThrowableWeaponDummyAmmo, weap);
+//    RE::Projectile::LaunchData lData(ThrowableWeaponDummyProjectile, throwerActor, origin, projectileRotation);
+    RE::Projectile::LaunchData lData(throwerActor, origin, projectileRotation, ThrowableWeaponDummyAmmo, weap);
     lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(throwerActor, false);
     if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(throwerActor) > 0.f)
         lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(throwerActor);
@@ -275,27 +276,27 @@ bool ThrowableRelicWeapon::Throw(const RotationType a_rotationType, std::optiona
     RE::NiPoint3 throwerVelocity; throwerActor->GetLinearVelocity(throwerVelocity);
     RE::NiPoint3 throwVelocity = throwerVelocity + throwDir * impulse / weap->weight;
 
-//    ThrowableWeaponDummyProjectile->model = runtimeData.projectileModelPath;
+//    ThrowableWeaponDummyProjectile->model = projectileModelPath;
 //    ThrowableWeaponDummyProjectile->data.collisionRadius = 10.f;
-//    ThrowableWeaponDummyProjectile->data.light = runtimeData.light;
+//    ThrowableWeaponDummyProjectile->data.light = light;
     ThrowableWeaponDummyProjectile->data.speed = throwVelocity.Length();
     ThrowableWeaponDummyProjectile->data.force = impulse / 1000.f;   // [N.s]
 
     if (!PreThrow()) return false;
 
-    if (runtimeData.projectileHandle = RE::Projectile::Launch(&pHandle, lData); runtimeData.projectileHandle && runtimeData.projectileHandle->get().get()) {
-        runtimeData.projectile = runtimeData.projectileHandle->get().get();
-        auto& rtData = runtimeData.projectile->GetProjectileRuntimeData();
+    if (projectileHandle = RE::Projectile::Launch(&pHandle, lData); projectileHandle && projectileHandle->get().get()) {
+        projectile = projectileHandle->get().get();
+        auto& rtData = projectile->GetProjectileRuntimeData();
     //    spdlog::info("throw speed: {} force: {} weaponDamage: {} difficulty: {}", ThrowableWeaponDummyProjectile->data.speed, impulse / 1000.f, weaponDamage, difficulty);
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
-        rtData.weaponDamage *= thrower->IsThrowing(ThrowType::kPowerThrowing) ? 1.5f : 1.f;
+        rtData.weaponDamage *= thrower->IsThrowing(ThrowType::kPowerThrow) ? 1.5f : 1.f;
 
         auto copyWeaponModel = weaponBone->Clone();
         auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-        runtimeData.weaponModelCopy.reset(copyWeaponModelNode);
-        if (runtimeData.weaponModelCopy) {
-            runtimeData.weaponModelCopy->local = RE::NiTransform();
-            runtimeData.weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+        weaponModelCopy.reset(copyWeaponModelNode);
+        if (weaponModelCopy) {
+            weaponModelCopy->local = RE::NiTransform();
+            weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
         }
         auto copyWeaponModelSterilizedObj = weaponBone ? weaponBone->Clone() : nullptr;
         auto copyWeaponModelSterilized = copyWeaponModelSterilizedObj ? copyWeaponModelSterilizedObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelSterilizedObj);
@@ -305,24 +306,24 @@ bool ThrowableRelicWeapon::Throw(const RotationType a_rotationType, std::optiona
             if (copyWeaponModelSterilized->GetCollisionObject())
                 copyWeaponModelSterilized->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
             copyWeaponModelSterilized->collisionObject.reset();
-            runtimeData.weaponModelSterilizedCopy.reset(copyWeaponModelSterilized->AsNode());
-            if (runtimeData.weaponModelSterilizedCopy) {
-                runtimeData.weaponModelSterilizedCopy->local = RE::NiTransform();
-                runtimeData.weaponModelSterilizedCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            weaponModelSterilizedCopy.reset(copyWeaponModelSterilized->AsNode());
+            if (weaponModelSterilizedCopy) {
+                weaponModelSterilizedCopy->local = RE::NiTransform();
+                weaponModelSterilizedCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
             }
         }
 
-        if (runtimeData.isCountless) return true;
+        if (isCountless) return true;
     //    RE::ObjectRefHandle handle;
-    //    runtimeData.droppedWeaponKeep = RE::TESObjectREFR::CreateReference(handle, RE::FormType::Container, false);
-    //    runtimeData.droppedWeaponKeep.get().get()->SetObjectReference(WeaponThrowing::ThrowableWeaponContainer);
+    //    droppedWeaponKeep = RE::TESObjectREFR::CreateReference(handle, RE::FormType::Container, false);
+    //    droppedWeaponKeep.get().get()->SetObjectReference(WeaponThrowing::ThrowableWeaponContainer);
 //        WeaponThrowing::ThrowableWeaponContainer->SetModel(weap->GetModel());
         auto assets = Assets::GetSingleton();
         if (auto containerRef = throwerActor->PlaceObjectAtMe(assets->ThrowableWeaponContainer, false).get(); containerRef) {
-            runtimeData.droppedWeaponKeep = containerRef->CreateRefHandle();
-            runtimeData.droppedWeaponKeep.get()->SetTemporary();
-            if (!runtimeData.droppedWeaponKeep.get()->IsDisabled())
-                runtimeData.droppedWeaponKeep.get()->Disable();
+            droppedWeaponKeep = containerRef->CreateRefHandle();
+            droppedWeaponKeep.get()->SetTemporary();
+            if (!droppedWeaponKeep.get()->IsDisabled())
+                droppedWeaponKeep.get()->Disable();
 
             ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, false, true, true, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
@@ -342,7 +343,7 @@ bool ThrowableRelicWeapon::Throw(const RotationType a_rotationType, std::optiona
 bool ThrowableRelicWeapon::OnHit(RE::hkpAllCdPointCollector *a_AllCdPointCollector)
 {
     const auto projBase = ThrowableWeaponDummyProjectile;
-    if (projBase && runtimeData.projectile) {}
+    if (projBase && projectile) {}
     return true;
 }
 */
@@ -351,12 +352,12 @@ void ThrowableRelicWeapon::PostImpact(RE::Projectile::ImpactData *a_impactData, 
     RemoveTrail();
 //    InitiateMapMarker();
 
-    auto missileProjectile = runtimeData.projectile ? runtimeData.projectile->As<RE::ArrowProjectile>() : nullptr;
+    auto missileProjectile = projectile ? projectile->As<RE::ArrowProjectile>() : nullptr;
     if (!missileProjectile) return;
     if (a_target->GetFormType() == RE::FormType::ActorCharacter) {
         a_impactData->impactResult = RE::ImpactResult::kBounce;
         missileProjectile->GetMissileRuntimeData().impactResult = RE::ImpactResult::kBounce;
-    //    if (runtimeData.impactType == ImpactType::kSharp) {
+    //    if (impactType == ImpactType::kSharp) {
     //        spdlog::info("penetration depth: {}", a_collidable->allowedPenetrationDepth);
     //        if (auto victim = a_target->As<RE::Actor>(); victim) {
     //            const bool isEssential = victim->GetActorRuntimeData().boolFlags.all(RE::Actor::BOOL_FLAGS::kEssential);
@@ -376,7 +377,7 @@ void ThrowableRelicWeapon::PostImpact(RE::Projectile::ImpactData *a_impactData, 
     //        }
     //    }
     } else {
-        if (runtimeData.impactType == ImpactType::kBlunt) {
+        if (impactType == ImpactType::kBlunt) {
             a_impactData->impactResult = RE::ImpactResult::kBounce;
             missileProjectile->GetMissileRuntimeData().impactResult = RE::ImpactResult::kBounce;
         }
@@ -392,21 +393,21 @@ void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
 }
 void ThrowableRelicWeapon::Update() {
     if (projectileUpdate.IsTimeToUpdate()) {
-        if (runtimeData.projectileModel && runtimeData.projectile && runtimeData.projectile->Get3D() && runtimeData.weaponModelCopy && runtimeData.projectileModel == runtimeData.projectile->Get3D()) {
+        if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel == projectile->Get3D()) {
             const RE::BSFixedString rotatingBoneName = "Cylinder02";
-            auto animatedBone = runtimeData.projectileModel->GetObjectByName(rotatingBoneName);
+            auto animatedBone = projectileModel->GetObjectByName(rotatingBoneName);
             auto animatedNode = animatedBone ? animatedBone->AsNode() : nullptr;
 
-            auto cloneModel = runtimeData.weaponModelCopy.get()->Clone();
+            auto cloneModel = weaponModelCopy.get()->Clone();
             auto cloneNode = cloneModel ? cloneModel->AsNode() : nullptr;
-            runtimeData.replacedProjectileModel.reset(cloneNode);
+            replacedProjectileModel.reset(cloneNode);
 
             if (animatedNode) {
-                animatedNode->AttachChild(runtimeData.replacedProjectileModel.get(), false);
-            //    auto oldWorld = runtimeData.transformW;
+                animatedNode->AttachChild(replacedProjectileModel.get(), false);
+            //    auto oldWorld = transformW;
             //    oldWorld.translate *= 70.f;
-            //    oldWorld.scale = runtimeData.replacedProjectileModel.get()->world.scale;
-            //    runtimeData.replacedProjectileModel.get()->local = ObjectUtil::Node::GetLocalTransform(runtimeData.replacedProjectileModel.get(), oldWorld);
+            //    oldWorld.scale = replacedProjectileModel.get()->world.scale;
+            //    replacedProjectileModel.get()->local = ObjectUtil::Node::GetLocalTransform(replacedProjectileModel.get(), oldWorld);
                 projectileUpdate.Done();
                 trailUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
                 spdlog::debug("levi projectileModel changed!");
@@ -419,10 +420,10 @@ void ThrowableRelicWeapon::Update() {
         AddTrail();
         FadeTrail();
     }
-//    if (runtimeData.replacedProjectileModel) {
-//        auto projNiTransform = runtimeData.replacedProjectileModel->world;
-//        auto projBHKTransform = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(runtimeData.replacedProjectileModel.get());
-//        auto projHKPTransform = ObjectUtil::Node::GetHavokHKPRigidBodyWorldTransform(runtimeData.replacedProjectileModel.get());
+//    if (replacedProjectileModel) {
+//        auto projNiTransform = replacedProjectileModel->world;
+//        auto projBHKTransform = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(replacedProjectileModel.get());
+//        auto projHKPTransform = ObjectUtil::Node::GetHavokHKPRigidBodyWorldTransform(replacedProjectileModel.get());
 //        spdlog::debug(
 //            "NI: ({}, {}, {})  BHK: ({}, {}, {})",
 //            projNiTransform.translate.x,

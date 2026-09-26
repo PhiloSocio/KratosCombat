@@ -11,8 +11,9 @@ public:
 
     virtual ~Caller() = default;
 
-    void CallWeapon() {};
-    virtual RelicWeapon* GetCallableRelic();
+    RelicWeapon* GetCallableRelic();
+
+    void CallWeapon();
 protected:
     float alterationLevel = 0.f;
 };

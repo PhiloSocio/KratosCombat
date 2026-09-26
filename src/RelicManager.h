@@ -102,6 +102,7 @@ public:
         }
     }
 
+    BaseActor* GetPlayer() const {return player;}
     void UpdateRelic(RE::Projectile* a_this)
     {
         if (a_this) {
@@ -110,13 +111,11 @@ public:
             }
         }
     }
-
     void UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta) {
         if (GetOrInitializePlayer()) {
             player->Update(a_delta);
         }
     }
-
     void UpdateNPC(RE::Actor* a_this, float a_delta) {
         if (a_this && !a_this->IsPlayerRef()) {
             if (auto it = activeActors.find(a_this->GetHandle()); it != activeActors.end() && it->second) {
@@ -127,7 +126,7 @@ public:
 
 private:
     std::unique_ptr<BaseActor> playerPtr;
-    BaseActor* player = nullptr;    //  performans için, her seferinde get() yapmamak için
+    BaseActor* player = nullptr;
     std::unordered_map<RE::ActorHandle, std::unique_ptr<BaseActor>> activeActors;
 
     std::unordered_map<RelicIdentity, std::unique_ptr<RelicWeapon>> activeRelics;
@@ -137,7 +136,9 @@ private:
 
     BaseActor* GetOrInitializePlayer() {
         if (!player) {
-            playerPtr = std::make_unique<Kratos>(RE::PlayerCharacter::GetSingleton()->GetHandle());
+            auto playerCharacter = RE::PlayerCharacter::GetSingleton();
+            if (playerCharacter && playerCharacter->IsHandleValid())
+                playerPtr = std::make_unique<Kratos>(playerCharacter->GetHandle());
             if (playerPtr->IsValid()) {
                 player = playerPtr.get();
             } else {

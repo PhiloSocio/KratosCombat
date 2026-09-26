@@ -7,8 +7,8 @@
 SmartRelicWeapon::SmartRelicWeapon(RE::TESBoundObject* a_object)
     : ThrowableRelicWeapon(a_object)
 {
+    abilities.set(RelicAbility::kThrowable, RelicAbility::kCallable, RelicAbility::kSmart);
 }
-
 
 bool SmartRelicWeapon::Initialize() 
 {
@@ -17,29 +17,29 @@ bool SmartRelicWeapon::Initialize()
 
 void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
 {
-    if (runtimeData.replacedProjectileModel) {
-        runtimeData.transformW = GetWorldTransform();
-        a_point = runtimeData.transformW.translate * 70.f;
-    //    a_point = runtimeData.replacedProjectileModel->worldBound.center;
+    if (replacedProjectileModel) {
+        transformW = GetWorldTransform();
+        a_point = transformW.translate * 70.f;
+    //    a_point = replacedProjectileModel->worldBound.center;
         spdlog::debug("leviathan coming from weapon projectileModel location.");
     } else spdlog::debug("we can't get leviathan's weapon projectileModel!");
 
-    if (runtimeData.stuckedBone) {
-        a_point = runtimeData.replacedProjectileModel ? runtimeData.transformW.translate : runtimeData.stuckedBone->world.translate;
-        runtimeData.stuckedBone.reset();
+    if (stuckedBone) {
+        a_point = replacedProjectileModel ? transformW.translate : stuckedBone->world.translate;
+        stuckedBone.reset();
 
-        if (runtimeData.stuckedActor) {
+        if (stuckedActor) {
 #ifdef EXPERIMENTAL_EXTRAARROW
-            ObjectUtil::Projectile::DeleteAnExtraArrow(runtimeData.stuckedActor, runtimeData.projectileModel);
+            ObjectUtil::Projectile::DeleteAnExtraArrow(stuckedActor, projectileModel);
 #else
-            runtimeData.stuckedActor->RemoveExtraArrows3D();
+            stuckedActor->RemoveExtraArrows3D();
 #endif
             spdlog::debug("levi stucked actor's extra arrows removed");
-            runtimeData.stuckedActor.reset();
+            stuckedActor.reset();
         } else spdlog::debug("levi not stucked anybody");
     } else spdlog::debug("levi not stucked any bone");
 
-    auto throwerActor = runtimeData.thrower ? runtimeData.thrower->GetActor() : nullptr;
+    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
     if (!throwerActor) return;
 
     if (GetThrowState() == ThrowState::kThrowable) {
@@ -48,7 +48,7 @@ void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
             a_point = backSheatheTransform.translate;
             const auto& rightDir = backSheatheTransform.rotate * rightVec3;
             const auto& backDir = backSheatheTransform.rotate * backVec3;
-            runtimeData.velocity = (0.69f * rightDir + 0.31f * backDir) * 2400.f;
+            velocity = (0.69f * rightDir + 0.31f * backDir) * 2400.f;
             spdlog::debug("levi is coming from your back sheathe");
         }
     } else {
@@ -78,70 +78,70 @@ void SmartRelicWeapon::SetState(std::unique_ptr<RelicWeaponState> a_state)
 
 void SmartRelicWeapon::Call(const bool a_justDestroy, std::optional<float> a_delay)
 {
-    if (runtimeData.caller && runtimeData.caller->IsValid() && weap) {
+    if (caller && caller->IsValid() && weap) {
         spdlog::debug("Levi is calling...");
         projectileUpdate.Done();
 
         trailUpdate.Done();
         trailRemoveUpdate.Done();
 
-        if (runtimeData.projectileModel) {
-            runtimeData.transformPW = runtimeData.projectileModel->world;
-            runtimeData.transformPL = runtimeData.projectileModel->local;
+        if (projectileModel) {
+            transformPW = projectileModel->world;
+            transformPL = projectileModel->local;
         }
-        runtimeData.projectileModel = nullptr;
-    //    if (runtimeData.replacedProjectileModel) {
-    //        if (runtimeData.projState == ProjectileState::kHavok && runtimeData.replacedProjectileModel->collisionObject && runtimeData.replacedProjectileModel->collisionObject->AsBhkRigidBody()) {
+        projectileModel = nullptr;
+    //    if (replacedProjectileModel) {
+    //        if (projState == ProjectileState::kHavok && replacedProjectileModel->collisionObject && replacedProjectileModel->collisionObject->AsBhkRigidBody()) {
     //            RE::hkTransform rbTransform;
-    //            runtimeData.replacedProjectileModel->collisionObject->AsBhkRigidBody()->GetTransform(rbTransform);
+    //            replacedProjectileModel->collisionObject->AsBhkRigidBody()->GetTransform(rbTransform);
     //            RE::NiTransform niTransform;
     //            niTransform.translate = MathUtil::Algebra::HkVectorToNiPoint(rbTransform.translation);
     //            niTransform.rotate = MathUtil::Algebra::HKMatrixToNiMatrix(rbTransform.rotation);
-    //            runtimeData.transformW = niTransform;
-    //            runtimeData.transformL = niTransform;
+    //            transformW = niTransform;
+    //            transformL = niTransform;
     //        } else {
-    //            runtimeData.transformW = runtimeData.replacedProjectileModel->world;
-    //            runtimeData.transformL = runtimeData.replacedProjectileModel->local;
+    //            transformW = replacedProjectileModel->world;
+    //            transformL = replacedProjectileModel->local;
     //        }
     //    }
 
         soundData.FadeThrowingLoopSounds(369);
 
-        if (runtimeData.projectile) {
-            if (!runtimeData.isPenetrating) runtimeData.position = runtimeData.projectile->data.location;
-            auto& projectileRTD = runtimeData.projectile->GetProjectileRuntimeData();
+        if (projectile) {
+            if (!isPenetrating) position = projectile->data.location;
+            auto& projectileRTD = projectile->GetProjectileRuntimeData();
             auto& pFlags = projectileRTD.flags;
             if (!(pFlags & pFlag::kDestroyed)) {
                 pFlags |= pFlag::kDestroyed;
             } else  spdlog::debug("levi is already destroyed");
 
             if (a_justDestroy) {
-                if (runtimeData.stuckedActor) {
+                if (stuckedActor) {
 #ifdef EXPERIMENTAL_EXTRAARROW
-                    ObjectUtil::Projectile::DeleteAnExtraArrow(runtimeData.stuckedActor, runtimeData.projectileModel);
+                    ObjectUtil::Projectile::DeleteAnExtraArrow(stuckedActor, projectileModel);
 #else
-                    runtimeData.stuckedActor->RemoveExtraArrows3D();
+                    stuckedActor->RemoveExtraArrows3D();
 #endif
                     spdlog::debug("levi stucked actor's extra arrows removed");
-                    runtimeData.stuckedActor = nullptr;
+                    stuckedActor = nullptr;
                 } else spdlog::debug("levi not stucked anybody");
                     return;
             }
         } else {spdlog::debug("Stucked Levi is nullptr!");}
 
-        if (auto AnArchos = runtimeData.caller->GetActor(); !a_justDestroy && AnArchos && ArrivingWeaponDummyAmmo && ArrivingWeaponDummyProjectile) {
-            RE::NiPoint3 startPoint = runtimeData.position;
-            auto rHandBone = runtimeData.caller->GetRHandBone();
+        if (auto AnArchos = caller->GetActor(); !a_justDestroy && AnArchos && ArrivingWeaponDummyAmmo && ArrivingWeaponDummyProjectile) {
+            RE::NiPoint3 startPoint = position;
+            auto rHandBone = caller->GetRHandBone();
             RE::NiPoint3 targetPoint = rHandBone ? rHandBone->world.translate : AnArchos->GetPosition();
-            if (!runtimeData.isPenetrating) {
+            if (!isPenetrating) {
                 soundData.PlayCallingHandSounds(rHandBone);
                 GetPosition(startPoint);
             }
             RE::ProjectileHandle pHandle;
-            runtimeData.projectileRotation = MathUtil::Algebra::VectorToPitchYaw(runtimeData.direction);
-            Throw(RotationType::kNone, runtimeData.projectileRotation, startPoint);
+            projectileRotation = MathUtil::Algebra::VectorToPitchYaw(direction);
+            Throw(RotationType::kNone, projectileRotation, startPoint);
 /*
-            RE::Projectile::LaunchData lData(AnArchos, startPoint, runtimeData.projectileRotation, ArrivingWeaponDummyAmmo, weap);
+            RE::Projectile::LaunchData lData(AnArchos, startPoint, projectileRotation, ArrivingWeaponDummyAmmo, weap);
 
             lData.noDamageOutsideCombat = true; //  can be an option
             lData.weaponSource = weap;
@@ -151,8 +151,8 @@ void SmartRelicWeapon::Call(const bool a_justDestroy, std::optional<float> a_del
             if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(AnArchos) > 0.f)
                 lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
 
-            runtimeData.projectileHandle = RE::Projectile::Launch(&pHandle, lData);
-            runtimeData.projectile = pHandle.get().get();
+            projectileHandle = RE::Projectile::Launch(&pHandle, lData);
+            projectile = pHandle.get().get();
 
             projectileUpdate.RegisterForUpdate(0.0f, false);
 */
@@ -164,25 +164,25 @@ void SmartRelicWeapon::Call(const bool a_justDestroy, std::optional<float> a_del
 }
 void SmartRelicWeapon::Catch(const bool a_justDestroy)
 {
-    runtimeData.isPenetrating = false;
-    if (runtimeData.projectile) {
+    isPenetrating = false;
+    if (projectile) {
     //    if (APIs::precision || APIs::Request()) {
     //        APIs::precision->RemoveProjectileCollision(throwerActor->GetHandle(), collisionDefinition);
     //    }
 
-        auto& projectileRTD = runtimeData.projectile->GetProjectileRuntimeData();
+        auto& projectileRTD = projectile->GetProjectileRuntimeData();
         projectileRTD.flags |= pFlag::kDestroyed;
         if (a_justDestroy) return;
     }
 
-    auto callerActor = runtimeData.caller ? runtimeData.caller->GetActor() : nullptr;
-    if (callerActor && !runtimeData.caller->GetRightHandRelic()) {
+    auto callerActor = caller ? caller->GetActor() : nullptr;
+    if (callerActor && !caller->GetRightHandRelic()) {
         callerActor->SetGraphVariableBool("bLeviInCatchRange", true);
 
         SetThrowState(ThrowState::kArrived);
 
         auto assets = Assets::GetSingleton();
-        auto rHandBone = runtimeData.caller->GetRHandBone();
+        auto rHandBone = caller->GetRHandBone();
         if (auto handEffect = assets->VFXeffects.handFrost; handEffect) 
             callerActor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone);
 
@@ -192,32 +192,32 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
         soundData.PlayCatchingSounds(rHandBone);
 
         if (weap) {
-            runtimeData.caller->SetSkipEquipAnim(true);
-            runtimeData.caller->SetUnequipWhenAnimEnds(false);
+            caller->SetSkipEquipAnim(true);
+            caller->SetUnequipWhenAnimEnds(false);
             if (callerActor->IsPlayerRef())
                 Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
             callerActor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
-            runtimeData.caller->DoAction(ActionType::kWeaponCharge);
-            ObjectUtil::Actor::EquipItem(callerActor, weap, runtimeData.caller->GetSkipEquipAnim());//, 1U, true, false, false, true);
+            caller->DoAction(ActionType::kWeaponCharge);
+            ObjectUtil::Actor::EquipItem(callerActor, weap, caller->GetSkipEquipAnim());//, 1U, true, false, false, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, callerActor);
-            RE::ShakeCamera(0.3f, runtimeData.position, 0.5f);
-            if (runtimeData.caller->GetSkipEquipAnim()) runtimeData.caller->SetSkipEquipAnim(false);
+            RE::ShakeCamera(0.3f, position, 0.5f);
+            if (caller->GetSkipEquipAnim()) caller->SetSkipEquipAnim(false);
         } else spdlog::warn("you not have the leviathan axe");
 
-        if (runtimeData.stuckedBone)   runtimeData.stuckedBone    = nullptr;
-        if (runtimeData.stuckedActor)  runtimeData.stuckedActor   = nullptr;
-        runtimeData.lastHitActors.clear();
-        runtimeData.lastHitForms.clear();
+        if (stuckedBone)   stuckedBone    = nullptr;
+        if (stuckedActor)  stuckedActor   = nullptr;
+        lastHitActors.clear();
+        lastHitForms.clear();
 
         if (Config::UsePrecisionTrails) {
-            if (runtimeData.caller->GetAnimObjectRBone() && runtimeData.caller->GetAnimObjectRBone()->AsNode() && runtimeData.replacedProjectileModel && runtimeData.replacedProjectileModel->parent) {
-                runtimeData.caller->GetAnimObjectRBone()->AsNode()->AttachChild(runtimeData.replacedProjectileModel->parent);
-                runtimeData.replacedProjectileModel->parent->local.translate = RE::NiPoint3();
-                runtimeData.replacedProjectileModel->parent->local.rotate = runtimeData.replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(PI2, 0.f, PI2);
+            if (caller->GetAnimObjectRBone() && caller->GetAnimObjectRBone()->AsNode() && replacedProjectileModel && replacedProjectileModel->parent) {
+                caller->GetAnimObjectRBone()->AsNode()->AttachChild(replacedProjectileModel->parent);
+                replacedProjectileModel->parent->local.translate = RE::NiPoint3();
+                replacedProjectileModel->parent->local.rotate = replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(PI2, 0.f, PI2);
             }
         }
         trailUpdate.Done();
-        runtimeData.projectileModel = nullptr;
+        projectileModel = nullptr;
         trailRemoveUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
     }
 }
@@ -225,8 +225,8 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
 bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) 
 {
     const auto projBase = ThrowableWeaponDummyProjectile;
-    if (projBase && runtimeData.projectile) {
-        auto& rtData = runtimeData.projectile->GetProjectileRuntimeData();
+    if (projBase && projectile) {
+        auto& rtData = projectile->GetProjectileRuntimeData();
         RE::Actor* shooter = nullptr;
         if (auto shooterRef = rtData.shooter.get()) shooter = shooterRef->As<RE::Actor>();
 
@@ -240,10 +240,10 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
             bool isSameTarget = false;
             bool isTargetActor = target ? target->formType == RE::FormType::ActorCharacter : false;
             const auto victim = target ? target->As<RE::Actor>() : nullptr;
-            if (target && runtimeData.projectile != target->AsProjectile()) {
-                if (!isTargetActor && !runtimeData.lastHitForms.empty() && std::find(runtimeData.lastHitForms.begin(), runtimeData.lastHitForms.end(), target) != runtimeData.lastHitForms.end()) isSameTarget = true;
+            if (target && projectile != target->AsProjectile()) {
+                if (!isTargetActor && !lastHitForms.empty() && std::find(lastHitForms.begin(), lastHitForms.end(), target) != lastHitForms.end()) isSameTarget = true;
                 else if (victim && victim != shooter) {
-                    if (!runtimeData.lastHitActors.empty() && std::find(runtimeData.lastHitActors.begin(), runtimeData.lastHitActors.end(), victim->GetHandle()) != runtimeData.lastHitActors.end()) isSameTarget = true;
+                    if (!lastHitActors.empty() && std::find(lastHitActors.begin(), lastHitActors.end(), victim->GetHandle()) != lastHitActors.end()) isSameTarget = true;
                     if (isHoming) {
                         auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
                         if (homingState && victim == homingState->GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) {
@@ -257,7 +257,7 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
                         }
                     }
                     if (!victim->IsDead()) {
-                        if (!isArriving) runtimeData.stuckedActor.reset(victim);
+                        if (!isArriving) stuckedActor.reset(victim);
 
                         if (weap && ench && ench->effects[0])
                             ObjectUtil::Enchantment::ChargeInventoryWeapon(shooter, weap, -ench->effects[0]->effectItem.magnitude);
@@ -276,8 +276,8 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
             } else {
                 trailUpdate.Done();
                 trailRemoveUpdate.RegisterForUpdate(0.f, false);
-                if (runtimeData.projectileModel) {
-                    auto controllers = runtimeData.projectileModel->GetControllers();
+                if (projectileModel) {
+                    auto controllers = projectileModel->GetControllers();
                     if (controllers) {
                         auto manager = controllers->AsNiControllerManager();
                         if (manager) {
@@ -298,8 +298,8 @@ void SmartRelicWeapon::PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_ta
 {}
 void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) 
 {
-    if (runtimeData.projectile && a_impactData) {
-        auto missileProjectile = runtimeData.projectile->As<RE::MissileProjectile>();
+    if (projectile && a_impactData) {
+        auto missileProjectile = projectile->As<RE::MissileProjectile>();
         const bool isTargetActor = a_target ? a_target->formType == RE::FormType::ActorCharacter : false;
         const auto victim = isTargetActor ? a_target->As<RE::Actor>() : nullptr;
         auto& rtData = missileProjectile->GetProjectileRuntimeData();
@@ -309,14 +309,14 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
 
         trailUpdate.Done();
 
-        if (!runtimeData.isPenetrating) {
+        if (!isPenetrating) {
             bool skipIt = false;
             bool stopSounds = true;
             const bool isHoming = IsHoming();
             const bool isArriving = IsArriving();
 
-            if (isTargetActor)  {runtimeData.lastHitActors.insert(runtimeData.lastHitActors.begin(), victim->GetHandle()); if (runtimeData.lastHitActors.size() > 4) runtimeData.lastHitActors.pop_back();}
-            else if (a_target)  {runtimeData.lastHitForms.insert(runtimeData.lastHitForms.begin(), a_target); if (runtimeData.lastHitForms.size() > 4) runtimeData.lastHitForms.pop_back();}
+            if (isTargetActor)  {lastHitActors.insert(lastHitActors.begin(), victim->GetHandle()); if (lastHitActors.size() > 4) lastHitActors.pop_back();}
+            else if (a_target)  {lastHitForms.insert(lastHitForms.begin(), a_target); if (lastHitForms.size() > 4) lastHitForms.pop_back();}
             else skipIt = true; //  the target is not an actor or a form, probably the ground or an inpenetrable thing.
 
             if (isArriving) {
@@ -326,7 +326,7 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
                 for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
                 missileRTD.impactResult = RE::ImpactResult::kBounce;
                 a_impactData->impactResult = RE::ImpactResult::kBounce;
-                runtimeData.isPenetrating = true;
+                isPenetrating = true;
                 Call(false);
                 stopSounds = false;
             } else if (isHoming) {
@@ -335,32 +335,32 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
                 for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kDestroy;
                 a_impactData->impactResult = RE::ImpactResult::kDestroy;
                 missileRTD.impactResult = RE::ImpactResult::kDestroy;
-                runtimeData.projState = ProjectileState::kNone;
-                auto pRot = MathUtil::Algebra::VectorToPitchYaw(runtimeData.direction);
-                Throw(RotationType::kSpinLateral, pRot, runtimeData.position);
+                projState = ProjectileState::kNone;
+                auto pRot = MathUtil::Algebra::VectorToPitchYaw(direction);
+                Throw(RotationType::kSpinLateral, pRot, position);
                 stopSounds = false;
                 spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projBase->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
-            } else if (runtimeData.isPenetrating && skipIt) {
+            } else if (isPenetrating && skipIt) {
                 for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
                 a_impactData->impactResult = RE::ImpactResult::kBounce;
                 missileRTD.impactResult = RE::ImpactResult::kBounce;
-                runtimeData.projState = ProjectileState::kHavok;
-            } else if (runtimeData.isPenetrating) {
+                projState = ProjectileState::kHavok;
+            } else if (isPenetrating) {
                 for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kDestroy;
                 a_impactData->impactResult = RE::ImpactResult::kDestroy;
                 missileRTD.impactResult = RE::ImpactResult::kDestroy;
-                runtimeData.projState = ProjectileState::kNone;
-                auto pRot = MathUtil::Algebra::VectorToPitchYaw(runtimeData.direction);
-                Throw(RotationType::kSpinLateral, pRot, runtimeData.position);
+                projState = ProjectileState::kNone;
+                auto pRot = MathUtil::Algebra::VectorToPitchYaw(direction);
+                Throw(RotationType::kSpinLateral, pRot, position);
                 stopSounds = false;
                 spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projBase->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
-            } else if (runtimeData.impactResult == RE::ImpactResult::kStick) {  //  let it trying to stick if it can
+            } else if (impactResult == RE::ImpactResult::kStick) {  //  let it trying to stick if it can
                 //
             } else if (isTargetActor) { //  don't let it stick to actors but let it do whatever it wants.
                 for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
                 a_impactData->impactResult = RE::ImpactResult::kBounce;
                 missileRTD.impactResult = RE::ImpactResult::kBounce;
-                runtimeData.projState = ProjectileState::kHavok;
+                projState = ProjectileState::kHavok;
             }
 
             missileRTD.impactResult = a_impactData->impactResult;
@@ -371,15 +371,15 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
         //        if (isTargetActor && rtData.weaponDamage > (victim->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth) / 10.f)/**/) {
         //            ObjectUtil::Actor::PushActorAway(victim, projBase->data.force, rtData.linearVelocity);
         //        }
-                runtimeData.stuckedActor.reset(victim);
-                runtimeData.stuckedBone.reset(a_impactData->damageRootNode);
+                stuckedActor.reset(victim);
+                stuckedBone.reset(a_impactData->damageRootNode);
                 for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kStick;
-                runtimeData.projState = ProjectileState::kStucked;
-                spdlog::debug("{} is sticked to {}!", projBase->GetName(), runtimeData.stuckedBone ? runtimeData.stuckedBone->name : "NULL");
+                projState = ProjectileState::kStucked;
+                spdlog::debug("{} is sticked to {}!", projBase->GetName(), stuckedBone ? stuckedBone->name : "NULL");
             } else if (itWillBounce) {
                 for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
-                runtimeData.projState = ProjectileState::kHavok;
-                spdlog::debug("{} is bounced from {}!", projBase->GetName(), runtimeData.stuckedBone ? runtimeData.stuckedBone->name : "NULL");
+                projState = ProjectileState::kHavok;
+                spdlog::debug("{} is bounced from {}!", projBase->GetName(), stuckedBone ? stuckedBone->name : "NULL");
             }
             if (stopSounds)
                 GetSoundManager().FadeThrowingLoopSounds(369);
@@ -388,8 +388,8 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
 }
 void SmartRelicWeapon::OnTrailDelete()
 {
-    if (runtimeData.caller->GetAnimObjectRBone()) {
-        runtimeData.caller->GetAnimObjectRBone()->AsNode()->DetachChild(runtimeData.replacedProjectileModel->parent);
+    if (caller->GetAnimObjectRBone()) {
+        caller->GetAnimObjectRBone()->AsNode()->DetachChild(replacedProjectileModel->parent);
     }
 }
 

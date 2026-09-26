@@ -63,8 +63,8 @@ public:
             );
         }
     };
+    TrailData trailData;
 
-    struct RuntimeData : public RelicWeapon::RuntimeData {
         Thrower* thrower = nullptr;
 
         RE::ObjectRefHandle droppedWeaponKeep;
@@ -98,10 +98,7 @@ public:
         ProjectileState projState = ProjectileState::kNone;
         ImpactType impactType = ImpactType::kSharp;
         RE::ImpactResult impactResult = RE::ImpactResult::kBounce;
-    };
 
-    RuntimeData runtimeData;
-    TrailData trailData;
 
     float yAngle            = 0.35f;
     float throwedTime       = 0.f;
@@ -109,7 +106,6 @@ public:
     float gravity           = 3.21f;
     float throwingChargeDuration = 0.f;
     RotationType rotationType = RotationType::kNone;
-    ImpactType   impactType   = ImpactType::kBlunt;
 
     bool Initialize() override;
     void Update() override;
@@ -124,10 +120,9 @@ public:
     [[nodiscard]] SoundManager GetSoundManager() const {return soundData;}
     [[nodiscard]] bool IsCharged(const bool a_forLastThrow = false) const {return RelicWeapon::IsCharged() ? true : (a_forLastThrow ? _isLastThrowCharged : false);}
 
-    [[nodiscard]] RuntimeData& GetThrableRuntimeData() {return runtimeData;}
-    [[nodiscard]] Thrower* GetThrower() {return runtimeData.thrower;}
+    [[nodiscard]] Thrower* GetThrower() {return thrower;}
     [[nodiscard]] RE::Actor* GetThrowerActor() {return GetThrower() ? GetThrower()->GetActor() : nullptr;}
-    [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return runtimeData.droppedWeaponKeep.get().get(); }
+    [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return droppedWeaponKeep.get().get(); }
     [[nodiscard]] RE::NiTransform GetWorldTransform();
     [[nodiscard]] RE::NiTransform GetLocalTransform();
 

@@ -8,6 +8,13 @@ enum class ActorType : std::uint32_t {
     kRager = 1 << 3
 };
 
+enum class RelicAbility : std::uint8_t {
+    kNone = 0,
+    kThrowable = 1 << 0,
+    kCallable = 1 << 1,
+    kSmart = 1 << 3
+};
+
 enum class ActionType : std::uint8_t {
     kRage,
     kWeaponCharge,
@@ -55,9 +62,10 @@ enum class ImpactType : std::uint8_t {
 
 enum class ThrowType : std::uint8_t {
     kAny,
-    kNormalThrowing,
-    kPowerThrowing,
+    kNormalThrow,
+    kPowerThrow,
     kChargingThrow,
     kPowerChargingThrow,
-    kHomingThrow
+    kHomingThrow,
+    kMelee
 };

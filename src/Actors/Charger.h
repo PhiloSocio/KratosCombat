@@ -11,6 +11,8 @@ public:
     {titles.set(ActorType::kCharger);}
     virtual ~Charger() = default;
 
+    void StartWeaponCharging() {}
+
     bool IsCanCharge(const RelicType a_relic) const
     {
         const auto index = static_cast<std::size_t>(a_relic);

@@ -115,9 +115,8 @@ public:
         if (!targets.empty()) {
             std::erase_if(targets, [this, a_origin](const RE::ActorHandle actorHandle) {
                 bool result = false;
-                auto& weaponRTD = weapon.GetruntimeData();
                 auto actor = actorHandle.get().get();
-                if (!actor || actor->IsDead() || std::find(weaponRTD.lastHitActors.begin(), weaponRTD.lastHitActors.end(), actorHandle) != weaponRTD.lastHitActors.end()) {
+                if (!actor || actor->IsDead() || std::find(weapon.lastHitActors.begin(), weapon.lastHitActors.end(), actorHandle) != weapon.lastHitActors.end()) {
                     result = true;
                 } else {
                     auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;

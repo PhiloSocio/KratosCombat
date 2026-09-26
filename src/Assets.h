@@ -89,7 +89,7 @@ public:
     KittyTailSpells kittyTailSpells;
     VFXeffects VFXeffects;
     SoundEffects soundEffects;
-    SpellID spellIDs;
+    SpellID spellID;
 //--------------------------
     RE::SpellItem*      SpellAxeThrownState     = nullptr;
     RE::SpellItem*      SpellMjolnirThrownState = nullptr;

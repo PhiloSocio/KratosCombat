@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "Papyrus.h"
 #include "events.h"
+#include "Assets.h"
 #include "MainKratosCombat.h"
 
 inline bool UpdateConfig() 
@@ -27,7 +28,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
     switch (a_msg->type) {
     case SKSE::MessagingInterface::kDataLoaded:
         Papyrus::Register();
-        if (UpdateConfig())
+        if (UpdateConfig() && Assets::GetSingleton()->Initialize())
             InstallHooks();
         break;
     case SKSE::MessagingInterface::kPostLoad:
