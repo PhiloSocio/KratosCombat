@@ -23,8 +23,8 @@ void Rager::StartRage(const bool a_justAnim)
     if (actor) {
         if ((rage - rageDamageAmount * 10.f) < 0.f) return;
         actor->SetGraphVariableInt("iRageType", (int32_t)rageType);
-        _LastEquippedObjectR = GetEquippedObjectR();
-        _LastEquippedObjectL = GetEquippedObjectL();
+        _LastEquippedObjectR = actor->GetEquippedObject(false) ? actor->GetEquippedObject(false)->As<RE::TESBoundObject>() : nullptr;
+        _LastEquippedObjectL = actor->GetEquippedObject(true) ? actor->GetEquippedObject(true)->As<RE::TESBoundObject>()  : nullptr;
         lastTriggeredRage = rageType;
         auto assets = Assets::GetSingleton();
         switch (rageType)
@@ -37,9 +37,9 @@ void Rager::StartRage(const bool a_justAnim)
             }
             ObjectUtil::Actor::CastSpell(SpellSpartanRage, actor, actor, actor, 3.f);
             if (assets->VFXeffects.fury) actor->ApplyArtObject(assets->VFXeffects.fury, 1.f, nullptr, false, false, GetRHandBone());
-            if (GetEquippedObjectR())
+            if (_LastEquippedObjectR)
                 ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
-            if (GetEquippedObjectL())
+            if (_LastEquippedObjectL)
                 ObjectUtil::Actor::UnEquipItem(actor, true, false, false, false, true, true);
 
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
@@ -114,10 +114,8 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
                 _isWantFinishRage = false;
                 if (a_justAnim) return;
             }
-            if (GetEquippedObjectR()) {
-                ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
-                ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
-            }
+            ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
             break;
 
         default:

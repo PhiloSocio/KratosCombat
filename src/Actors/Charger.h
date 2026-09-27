@@ -2,6 +2,7 @@
 
 #include "BaseActor.h"
 #include "Weapons/RelicWeapon.h"
+#include "settings.h"
 
 class Charger : virtual public BaseActor
 {
@@ -11,7 +12,13 @@ public:
     {titles.set(ActorType::kCharger);}
     virtual ~Charger() = default;
 
-    void StartWeaponCharging() {}
+    void StartWeaponCharging() {
+        if (auto rHandRelic = GetRightHandRelic(); rHandRelic /*&& IsCanCharge(rHandRelic->type)*/) {
+            rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 1u, -1u);
+        } else {
+            spdlog::info("the weapon is not chargeable");
+        }
+    }
 
     bool IsCanCharge(const RelicType a_relic) const
     {

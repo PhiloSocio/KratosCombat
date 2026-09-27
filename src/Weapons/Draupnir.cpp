@@ -154,10 +154,10 @@ void Draupnir::RainOfDraupnir()
 
     nextLaunchTime = AsyncUtil::GameTime::GetEngineTime() + nextLaunchDelay;
 }
-void Draupnir::Call(const float a_damage, const float a_force)
+void Draupnir::Call(Caller* a_caller, const bool a_damage, std::optional<float> a_force)
 {
     if (SpellDraupnirsCallProjL && DraupnirExplosion) {
-        DraupnirExplosion->data.force = a_force * explosionMagnitude;
+    //    DraupnirExplosion->data.force = a_force * explosionMagnitude;
         StartExplosions(Config::DraupnirExplosionsInterval);
     }
 }

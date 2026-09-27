@@ -32,6 +32,15 @@ public:
         return RE::NiPoint3(0.f, 20.f, 0.f);
     }
 
+
+    enum class ThrowState : std::uint8_t {
+        kNone,
+        kThrowable,
+        kThrown,
+        kCanArrive,
+        kArriving,
+        kArrived
+    };
     enum class ProjectileState : std::uint8_t {
         kNone,
         kLaunched,
@@ -52,6 +61,7 @@ public:
     struct TrailData {
         TrailOverride trailOverride;
         TrailTransformOverride transformOverride = TrailTransformOverride();
+        RE::NiPointer<RE::NiNode>   trailParentNode;
 
         RE::NiColorA GetColorByIndex(const uint32_t a_index);
         TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.f) {
@@ -65,40 +75,39 @@ public:
     };
     TrailData trailData;
 
-        Thrower* thrower = nullptr;
+    Thrower* thrower = nullptr;
 
-        RE::ObjectRefHandle droppedWeaponKeep;
+    RE::ObjectRefHandle droppedWeaponKeep;
 
-        RE::ProjectileHandle*   projectileHandle = nullptr;
-        RE::Projectile*         projectile = nullptr;
-        RE::NiNode*             projectileModel = nullptr;
-        RE::NiNode*             weaponParentNode = nullptr;
-        RE::NiPointer<RE::NiNode>   weaponModelCopy;
-        RE::NiPointer<RE::NiNode>   weaponModelSterilizedCopy;
-        RE::NiPointer<RE::NiNode>   replacedProjectileModel;
+    RE::ProjectileHandle*   projectileHandle = nullptr;
+    RE::Projectile*         projectile = nullptr;
+    RE::NiNode*             projectileModel = nullptr;
+    RE::NiNode*             weaponParentNode = nullptr;
+    RE::NiPointer<RE::NiNode>   weaponModelCopy;
+    RE::NiPointer<RE::NiNode>   weaponModelSterilizedCopy;
+    RE::NiPointer<RE::NiNode>   replacedProjectileModel;
 
-        ProjectileRot projectileRotation;
-        RE::NiMatrix3 startLocalRotation;
-        RE::NiMatrix3 targetLocalRotation;
-        RE::NiPoint3 startLocalTranslation  = {0.f, 0.f, 0.f};
-        RE::NiPoint3 targetLocalTranslation = {0.f, 0.f, 0.f};
-        RE::NiPoint3 velocity       = {0.f, 0.f, 0.f};
-        RE::NiPoint3 direction      = {0.f, 0.f, 0.f};
-        RE::NiPoint3 angles         = {0.f, 0.f, 0.f};
-        RE::NiPoint3 position       = {0.f, 0.f, 0.f};
-        RE::NiTransform transformPW = RE::NiTransform();
-        RE::NiTransform transformPL = RE::NiTransform();
-        RE::NiTransform transformW  = RE::NiTransform();
-        RE::NiTransform transformL  = RE::NiTransform();
+    ProjectileRot projectileRotation;
+    RE::NiMatrix3 startLocalRotation;
+    RE::NiMatrix3 targetLocalRotation;
+    RE::NiPoint3 startLocalTranslation  = {0.f, 0.f, 0.f};
+    RE::NiPoint3 targetLocalTranslation = {0.f, 0.f, 0.f};
+    RE::NiPoint3 velocity       = {0.f, 0.f, 0.f};
+    RE::NiPoint3 direction      = {0.f, 0.f, 0.f};
+    RE::NiPoint3 angles         = {0.f, 0.f, 0.f};
+    RE::NiPoint3 position       = {0.f, 0.f, 0.f};
+    RE::NiTransform transformPW = RE::NiTransform();
+    RE::NiTransform transformPL = RE::NiTransform();
+    RE::NiTransform transformW  = RE::NiTransform();
+    RE::NiTransform transformL  = RE::NiTransform();
 
-        bool isThrown = false;
-        bool isCountless = false;
-        float isPenetrating = false;
+    bool isThrown = false;
+    bool isCountless = false;
+    float isPenetrating = false;
 
-        ProjectileState projState = ProjectileState::kNone;
-        ImpactType impactType = ImpactType::kSharp;
-        RE::ImpactResult impactResult = RE::ImpactResult::kBounce;
-
+    ProjectileState projState = ProjectileState::kNone;
+    ImpactType impactType = ImpactType::kSharp;
+    RE::ImpactResult impactResult = RE::ImpactResult::kBounce;
 
     float yAngle            = 0.35f;
     float throwedTime       = 0.f;
@@ -122,15 +131,24 @@ public:
 
     [[nodiscard]] Thrower* GetThrower() {return thrower;}
     [[nodiscard]] RE::Actor* GetThrowerActor() {return GetThrower() ? GetThrower()->GetActor() : nullptr;}
+    [[nodiscard]] ThrowState GetThrowState() const {return _throwState;}
     [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return droppedWeaponKeep.get().get(); }
     [[nodiscard]] RE::NiTransform GetWorldTransform();
     [[nodiscard]] RE::NiTransform GetLocalTransform();
 
+    void SetThrowState(const ThrowState a_throwState) {_throwState = a_throwState;};
+
     bool Throw(const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt);
+    bool InitiateTransform() noexcept;
+    void InitiateModel() noexcept;
+    bool InitiateTrail() noexcept;
+    void UpdateRotation(const float a_delta, const float a_livingTime) noexcept;
+    void UpdateTranslation(const float a_delta, const float a_livingTime) noexcept;
     void AddTrail();
     void FadeTrail();
     void RemoveTrail();
 
+    virtual void UpdateProjectile(RE::Projectile* a_projectile);
     virtual bool PreThrow() {return true;};
     virtual void PostThrow() {};
     virtual void OnTrailDelete() {};
@@ -163,7 +181,17 @@ protected:
     AsyncUtil::GameTime trailUpdate;
     AsyncUtil::GameTime trailRemoveUpdate;
 
+    ThrowState _throwState = ThrowState::kNone;
+
+    bool _transformInitiated = false;
+    bool _collisionInitiated = false;
+    bool _modelInitiated = false;
+    bool _trailInitiated = false;
+    bool _rotationBlended = false;
+    bool _translationBlended = false;
     bool _isLastThrowCharged = false;
+
+    PRECISION_API::TrailOverride _trailOverride;
     PRECISION_API::CollisionDefinition collisionDefinition;
 };
 

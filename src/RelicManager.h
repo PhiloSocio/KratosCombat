@@ -50,7 +50,10 @@ public:
 
     void OnEquip(RE::Actor* a_actor)
     {
-        if (!a_actor || a_actor->GetWeaponState() != RE::WEAPON_STATE::kDrawn) return;
+        if (!a_actor) return;
+
+        Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
+
         auto rObject = a_actor->GetEquippedObject(false);
         auto lObject = a_actor->GetEquippedObject(true);
         auto rWeapon = rObject ? rObject->As<RE::TESObjectWEAP>() : nullptr;
@@ -60,19 +63,35 @@ public:
             if (auto type = GetRelicType(rWeapon); type != RelicType::kNone) {
 
                 BaseActor* activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetOrCreateActor(a_actor->GetHandle());
-                if (!activeActor) return;
+                if (!activeActor) {
+                    spdlog::error("failed to get or initialize player");
+                    return;
+                }
 
                 auto relicID = GetOrCreateEquippedRelicIdentity(a_actor);
                 auto& activeRelic = activeRelics[relicID];
                 if (activeRelic) {
                     activeRelic->OnEquip(activeActor);
+                    spdlog::error("relic equipped, {}", typeid(type).name());
                 } else {
                     activeRelic = RelicFactory::Create(type, rWeapon);
                     if (activeRelic) {
                         activeRelic->relicIdentity = relicID;
                         activeRelic->OnEquip(activeActor);
+                        spdlog::debug("relic created, {}", typeid(type).name());
                     } else{
                         activeRelics.erase(relicID);
+                        spdlog::error("failed to initialize relic weapon");
+                    }
+                }
+
+                activeActor->SetRightHandRelic(activeRelic.get());
+
+                if (activeRelic) {
+                    Config::SpecialWeapon->value = (uint8_t)activeRelic->GetType();
+                    auto& knownRelics = activeActor->GetKnownRelics();
+                    if (std::find(knownRelics.rbegin(), knownRelics.rend(), activeRelic.get()) == knownRelics.rend()) {
+                        knownRelics.emplace_back(activeRelic.get());
                     }
                 }
             }
@@ -80,6 +99,7 @@ public:
         if (lWeapon) {
             // sadece blades of chaos için
         }
+        a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
     }
     bool OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
     {
@@ -95,11 +115,17 @@ public:
             it->second->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
         }
     }
-    void OnMenuOpenCloseEvent(const bool a_opening) {
+    void OnMenuOpenCloseEvent(const bool a_opening)
+    {
         for (const auto& [id, relic] : activeRelics) {
             if (relic)
                 relic->OnMenuOpenCloseEvent(a_opening);
         }
+    }
+
+    void OnRelicThrow(RE::Projectile* a_projectile, ThrowableRelicWeapon* a_relic)
+    {
+        throwableRelics.emplace(a_projectile, a_relic);
     }
 
     BaseActor* GetPlayer() const {return player;}
@@ -107,13 +133,18 @@ public:
     {
         if (a_this) {
             if (auto it = throwableRelics.find(a_this); it != throwableRelics.end() && it->second) {
-                it->second->Update();
+                it->second->UpdateProjectile(a_this);
             }
         }
     }
     void UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta) {
         if (GetOrInitializePlayer()) {
             player->Update(a_delta);
+        }
+
+        for (auto& relic : activeRelics) {
+            if (relic.second)
+                relic.second->Update();
         }
     }
     void UpdateNPC(RE::Actor* a_this, float a_delta) {
@@ -130,9 +161,25 @@ private:
     std::unordered_map<RE::ActorHandle, std::unique_ptr<BaseActor>> activeActors;
 
     std::unordered_map<RelicIdentity, std::unique_ptr<RelicWeapon>> activeRelics;
-    std::unordered_map<RE::Projectile*, RelicWeapon*> throwableRelics;
+    std::unordered_map<RE::Projectile*, ThrowableRelicWeapon*> throwableRelics;
 
-    RelicType GetRelicType(const RE::TESObjectWEAP* a_weap) const { /* keywordlardan anlaşılacak */ return RelicType::kNone; }
+    RelicType GetRelicType(const RE::TESObjectWEAP* a_weap) const {
+        RelicType type = RelicType::kNone;
+        if (a_weap->HasKeyword(Config::LeviathanAxeKWD)) {
+            type = RelicType::kLeviathanAxe;
+        } else if (a_weap->HasKeyword(Config::BladeOfChaosKWD)) {
+            type = RelicType::kBladesOfChaos;
+        } else if (a_weap->HasKeyword(Config::DraupnirSpearKWD)) {
+            type = RelicType::kDraupnir;
+        } else if (a_weap->HasKeyword(Config::MjolnirKWD)) {
+            type = RelicType::kMjolnir;
+        } else if (a_weap->HasKeyword(Config::BladeOfOlympusKWD)) {
+            type = RelicType::kBladeOfOlympus;
+        } else if (a_weap->HasKeyword(Config::TridentKWD)) {
+            type = RelicType::kTrident;
+        }
+        return type;
+    }
 
     BaseActor* GetOrInitializePlayer() {
         if (!player) {

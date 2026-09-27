@@ -40,9 +40,10 @@ bool LeviathanAxe::Initialize()
     return found;
 }
 void LeviathanAxe::Update() {
+    return;
     if (projectileUpdate.IsTimeToUpdate()) {
         if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel == projectile->Get3D()) {
-            const RE::BSFixedString rotatingBoneName = "Cylinder02";
+            const RE::BSFixedString rotatingBoneName = "BlastRadiusNode";
             auto animatedBone = projectileModel->GetObjectByName(rotatingBoneName);
             auto animatedNode = animatedBone ? animatedBone->AsNode() : nullptr;
 
@@ -59,7 +60,7 @@ void LeviathanAxe::Update() {
                 projectileUpdate.Done();
                 trailUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
                 spdlog::debug("levi projectileModel changed!");
-            } else spdlog::warn("animated node or levinode null");
+            } else spdlog::warn("animated node null");
         } else spdlog::warn("projectile or projectile->Get3D2() null");
     }
     if (soundData.arrivingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopArrivingLoopSounds();}
@@ -308,17 +309,15 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool isPenetrating, cons
 */
 bool LeviathanAxe::PreThrow()
 {
-    bool result = false;
-
     trailRemoveUpdate.Done();
 
-    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
-    if (!throwerActor) {spdlog::error("LeviathanAxe::PreThrow - thrower actor is null"); return result;}
-
     bool isLeviathanAxe = thrower->GetRightHandRelic() == this;
-    if (!isLeviathanAxe) return result;
+    if (!isLeviathanAxe) {
+        spdlog::debug("Leviathan Axe not equipped for throwing!");
+        return false;
+    }
 
-    return result;
+    return true;
 }
 void LeviathanAxe::PostThrow()
 {
@@ -394,8 +393,11 @@ void LeviathanAxe::PostThrow()
     }
 }
 
-void LeviathanAxe::Call(const bool a_justDestroy, std::optional<float> a_delay)
+void LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
 {
+    SmartRelicWeapon::Call(a_caller, a_justDestroy, a_delay);
+    return;
+    caller = a_caller;
     if (caller && caller->IsValid() && weap) {
         spdlog::debug("Levi is calling...");
         projectileUpdate.Done();

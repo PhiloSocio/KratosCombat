@@ -733,8 +733,7 @@ EventChecker MagicEffectApplyTracker::ProcessEvent(const RE::TESMagicEffectApply
         auto targetRef = a_event->target.get();
         if (casterRef && targetRef && casterRef == targetRef) {
             auto caster = casterRef->As<RE::Actor>();
-            auto casterMT = caster ? caster->AsMagicTarget() : nullptr;
-            
+
 #ifdef KRATOS_COMBAT_3
             auto assets = Assets::GetSingleton();
             if (!player) {
@@ -745,17 +744,15 @@ EventChecker MagicEffectApplyTracker::ProcessEvent(const RE::TESMagicEffectApply
             auto manager = Kratos::GetSingleton();
             auto levi = LeviathanAxe::GetSingleton();
             auto mjolnir = Mjolnir::GetSingleton();
-            if (!casterMT || !manager || !levi || !mjolnir) {spdlog::warn("caster magic target or manager or levi or mjolnir does not exists!"); return EventChecker::kContinue;}
+            if (!manager || !levi || !mjolnir) {spdlog::warn("cmanager or levi or mjolnir does not exists!"); return EventChecker::kContinue;}
 #endif
 
 #ifdef KRATOS_COMBAT_3
-            if (formID == assets->spellID.aim) {
-                spdlog::debug("aiming...");
-            } else if (formID == assets->spellID.call) {
-                if (!player->GetEquippedObjectR()) {
-                    player->CallWeapon();
+            if (formID == assets->spellID.call) {
+                if (!player->GetRightHandRelic()) {
+                    player->DoAction(ActionType::kWeaponCall);;
                 } else {
-                    player->StartWeaponCharging();
+                    player->DoAction(ActionType::kWeaponCharge);;
                 }
             } else if (formID == assets->spellID.runic) {
                 if (caster->HasSpell(assets->SpellFinisherButton)) {

@@ -4,7 +4,9 @@
 void Caller::CallWeapon()
 {
     if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(GetCallableRelic())) {
-        weaponToCall->Call();
+        weaponToCall->Call(this);
+    } else {
+        spdlog::info("no callable weapon found!");
     }
 }
 RelicWeapon* Caller::GetCallableRelic()
@@ -41,10 +43,17 @@ RelicWeapon* Caller::GetCallableRelic()
                         }
                     } else {
                         weaponToCall = relic;
-                        break;
                     }
+                } else {
+                    weaponToCall = relic;
+                    break;
                 }
             }
+        } else {
+            spdlog::info("you don't have any relic weapon to call.");
         }
-    } return weaponToCall;
+    } else {
+        spdlog::info("you already have a relic weapon equipped.");
+    }
+    return weaponToCall;
 }

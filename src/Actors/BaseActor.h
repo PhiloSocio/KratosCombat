@@ -14,6 +14,16 @@ public:
     virtual void Update(float a_delta) = 0;
     virtual void DoAction(const ActionType a_action) = 0;
 
+    void SetRightHandRelic(RelicWeapon* a_relic) { rightHandRelic = a_relic; };
+    void SetLeftHandRelic(RelicWeapon* a_relic) { leftHandRelic = a_relic; };
+
+    void SetLastRightHandRelic(RelicWeapon* a_relic) { lastRightHandRelic = a_relic; };
+    void SetLastLeftHandRelic(RelicWeapon* a_relic) { lastLeftHandRelic = a_relic; };
+
+    void SetDamageMult(const float a_damageMult) { damageMult = a_damageMult; };
+    void SetSkipEquipAnim(const bool a_skip) { skipEquipAnim = a_skip; };
+    void SetUnequipWhenAnimEnds(const bool a_unequip) { unequipWhenAnimEnds = a_unequip; };
+
     [[nodiscard]] RE::Actor* GetActor() const { return actor; };
     [[nodiscard]] const RE::ActorHandle& GetActorHandle() const { return actorHandle; };
 
@@ -40,10 +50,6 @@ public:
     [[nodiscard]] RE::NiAVObject*& GetShieldBone() { return GetUpdateShieldBone(); };
     [[nodiscard]] RE::NiAVObject*& GetAnimObjectRBone() { return GetUpdateAnimObjectRBone(); };
 
-
-    [[nodiscard]] RE::TESBoundObject* GetEquippedObjectR() const { return equippedObjectR; };
-    [[nodiscard]] RE::TESBoundObject* GetEquippedObjectL() const { return equippedObjectL; };
-
     [[nodiscard]] RelicWeapon* GetRightHandRelic() const { return rightHandRelic; };
     [[nodiscard]] RelicWeapon* GetLeftHandRelic() const { return leftHandRelic; };
 
@@ -56,10 +62,6 @@ public:
     [[nodiscard]] float GetDamageMult() const { return damageMult; };
     [[nodiscard]] bool GetSkipEquipAnim() const { return skipEquipAnim; };
     [[nodiscard]] bool GetUnequipWhenAnimEnds() const { return unequipWhenAnimEnds; };
-
-    void SetDamageMult(const float a_damageMult) { damageMult = a_damageMult; };
-    void SetSkipEquipAnim(const bool a_skip) { skipEquipAnim = a_skip; };
-    void SetUnequipWhenAnimEnds(const bool a_unequip) { unequipWhenAnimEnds = a_unequip; };
 protected:
     RE::ActorHandle actorHandle;
     RE::Actor* actor = nullptr;
@@ -69,9 +71,6 @@ protected:
     RE::NiAVObject* WeaponBone = nullptr;
     RE::NiAVObject* ShieldBone = nullptr;
     RE::NiAVObject* AnimObjectRBone = nullptr;
-
-    RE::TESBoundObject* equippedObjectR = nullptr;
-    RE::TESBoundObject* equippedObjectL = nullptr;
 
     RelicWeapon* rightHandRelic = nullptr;
     RelicWeapon* leftHandRelic = nullptr;

@@ -35,9 +35,4 @@ RE::NiAVObject*& BaseActor::GetUpdateAnimObjectRBone()
 
 void BaseActor::OnEquip(RelicWeapon* a_relic)
 {
-    equippedObjectR = actor->GetEquippedObject(false) ? actor->GetEquippedObject(false)->As<RE::TESBoundObject>() : nullptr;
-    equippedObjectL = actor->GetEquippedObject(true) ? actor->GetEquippedObject(true)->As<RE::TESBoundObject>() : nullptr;
-    rightHandRelic = a_relic;
-    lastRightHandRelic = a_relic;
-    knownRelics.emplace_back(a_relic);
 }

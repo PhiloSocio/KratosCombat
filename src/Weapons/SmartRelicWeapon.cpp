@@ -8,6 +8,7 @@ SmartRelicWeapon::SmartRelicWeapon(RE::TESBoundObject* a_object)
     : ThrowableRelicWeapon(a_object)
 {
     abilities.set(RelicAbility::kThrowable, RelicAbility::kCallable, RelicAbility::kSmart);
+    Initialize();
 }
 
 bool SmartRelicWeapon::Initialize() 
@@ -76,8 +77,9 @@ void SmartRelicWeapon::SetState(std::unique_ptr<RelicWeaponState> a_state)
     }
 }
 
-void SmartRelicWeapon::Call(const bool a_justDestroy, std::optional<float> a_delay)
+void SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
 {
+    caller = a_caller;
     if (caller && caller->IsValid() && weap) {
         spdlog::debug("Levi is calling...");
         projectileUpdate.Done();
@@ -198,6 +200,7 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
                 Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
             callerActor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
             caller->DoAction(ActionType::kWeaponCharge);
+            GetWeaponContainer()->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, callerActor);
             ObjectUtil::Actor::EquipItem(callerActor, weap, caller->GetSkipEquipAnim());//, 1U, true, false, false, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, callerActor);
             RE::ShakeCamera(0.3f, position, 0.5f);
@@ -327,7 +330,7 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
                 missileRTD.impactResult = RE::ImpactResult::kBounce;
                 a_impactData->impactResult = RE::ImpactResult::kBounce;
                 isPenetrating = true;
-                Call(false);
+                Call(caller, false);
                 stopSounds = false;
             } else if (isHoming) {
                 auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
@@ -388,10 +391,90 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
 }
 void SmartRelicWeapon::OnTrailDelete()
 {
-    if (caller->GetAnimObjectRBone()) {
+    if (caller && caller->GetAnimObjectRBone()) {
         caller->GetAnimObjectRBone()->AsNode()->DetachChild(replacedProjectileModel->parent);
     }
 }
 
 void SmartRelicWeapon::Update() 
-{}
+{return;
+    if (projectileUpdate.IsTimeToUpdate()) {
+        if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel == projectile->Get3D()) {
+            const RE::BSFixedString rotatingBoneName = "BlastRadiusNode";
+            auto animatedBone = projectileModel->GetObjectByName(rotatingBoneName);
+            auto animatedNode = animatedBone ? animatedBone->AsNode() : nullptr;
+
+            auto cloneModel = weaponModelCopy.get()->Clone();
+            auto cloneNode = cloneModel ? cloneModel->AsNode() : nullptr;
+            replacedProjectileModel.reset(cloneNode);
+
+            if (animatedNode) {
+                weaponParentNode->local = RE::NiTransform();
+                animatedNode->AttachChild(replacedProjectileModel.get(), false);
+            //    auto oldWorld = transformW;
+            //    oldWorld.translate *= 70.f;
+            //    oldWorld.scale = replacedProjectileModel.get()->world.scale;
+            //    replacedProjectileModel.get()->local = ObjectUtil::Node::GetLocalTransform(replacedProjectileModel.get(), oldWorld);
+                projectileUpdate.Done();
+                trailUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
+                spdlog::debug("levi projectileModel changed!");
+            } else spdlog::warn("animated node or levinode null");
+        } else spdlog::warn("projectile or projectile->Get3D2() null");
+    }
+    if (soundData.arrivingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopArrivingLoopSounds();}
+    if (soundData.throwingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopThrowingLoopSounds();}
+    if (Config::DrawTrails) {
+        AddTrail();
+        FadeTrail();
+    }
+//    if (replacedProjectileModel) {
+//        auto projNiTransform = replacedProjectileModel->world;
+//        auto projBHKTransform = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(replacedProjectileModel.get());
+//        auto projHKPTransform = ObjectUtil::Node::GetHavokHKPRigidBodyWorldTransform(replacedProjectileModel.get());
+//        spdlog::debug(
+//            "NI: ({}, {}, {})  BHK: ({}, {}, {})",
+//            projNiTransform.translate.x,
+//            projNiTransform.translate.y,
+//            projNiTransform.translate.z,
+//            projBHKTransform.translate.x * 70.f,
+//            projBHKTransform.translate.y * 70.f,
+//            projBHKTransform.translate.z * 70.f
+//        );
+    //    spdlog::debug(
+    //        "NI - BHK: ({}, {}, {})",
+    //        projNiTransform.translate.x - projBHKTransform.translate.x * 70.f,
+    //        projNiTransform.translate.y - projBHKTransform.translate.y * 70.f,
+    //        projNiTransform.translate.z - projBHKTransform.translate.z * 70.f
+    //    );
+//    }
+
+}
+void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile) 
+{
+    
+    auto projectileNode = a_projectile->Get3D2();
+    if (!projectileNode) {
+    //    spdlog::warn("projectile's 3d not loaded");
+        return;
+    }
+    if (projectileModel != projectileNode) {
+        projectileModel = projectileNode->AsNode();
+        if (GetThrowState() == ThrowState::kThrown) {
+            soundData.PlayThrowingLoopSounds(projectileNode);
+        }
+    }
+    InitiateModel();
+
+    auto& runtimeData = a_projectile->GetProjectileRuntimeData();
+    const auto& livingTime = runtimeData.livingTime;
+    auto& leviPos   = a_projectile->data.location;
+    auto& leviAngle = a_projectile->data.angle;
+    if (livingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
+
+    if (livingTime > *g_deltaTime * 2.f && !InitiateTrail()) {}
+    if (!InitiateTransform()) {}
+    UpdateRotation(*g_deltaTime, livingTime);
+    UpdateTranslation(*g_deltaTime, livingTime);
+
+    if (GetState()) GetState()->Update(*g_deltaTime);
+}

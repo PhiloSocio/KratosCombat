@@ -3,6 +3,7 @@
 RelicWeapon::RelicWeapon(RE::TESBoundObject* a_object)
     : weap(a_object->As<RE::TESObjectWEAP>())
 {
+    spdlog::warn("relic weapon constructed");
 }
 
 void RelicWeapon::OnEquip(BaseActor* a_actor) {
@@ -23,5 +24,12 @@ void RelicWeapon::SetWielder(BaseActor* a_actor) {
     } else {
         wielder = nullptr;
         isEquipped = false;
+    }
+}
+void RelicWeapon::SetOwner(BaseActor* a_actor) {
+    if (a_actor && a_actor->IsValid()) {
+        owner = a_actor;
+    } else {
+        owner = nullptr;
     }
 }

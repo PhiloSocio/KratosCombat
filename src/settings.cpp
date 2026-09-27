@@ -221,6 +221,9 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
 }
 inline void PrepareValues()
 {
+    Config::HitRotationZcos = std::cosf(Config::HitRotationZ);
+    if (Config::HitRotationZcos <= 0.001f && Config::HitRotationZcos >= -0.001f) Config::HitRotationZcos = 0.001f;
+
     Config::ThrowRotationSpeed *= 0.017453292f;
     Config::ThrowRotationSpeedM *= 0.017453292f;
 

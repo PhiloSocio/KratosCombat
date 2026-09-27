@@ -388,6 +388,22 @@ namespace MathUtil
 
     struct Algebra
     {
+        [[nodiscard]] inline static NiPoint3 MatrixToVector3(const RE::hkVector4& a_matrix) {
+            return RE::NiPoint3(
+                    a_matrix.quad.m128_f32[0],
+                    a_matrix.quad.m128_f32[1],
+                    a_matrix.quad.m128_f32[2]
+                );
+        }
+        [[nodiscard]] inline static NiPoint3 BlendVectors(const NiPoint3& a, const NiPoint3& b, float a_to_b_ratio, const bool a_normalize = false)
+        {
+            a_to_b_ratio = std::clamp(a_to_b_ratio, 0.0f, 1.0f);
+
+            RE::NiPoint3 v = (a * (1.0f - a_to_b_ratio) + b * a_to_b_ratio);
+            if (a_normalize) v.Unitize();
+
+            return v;
+        }
         [[nodiscard]] inline static RE::NiPoint3 RotateVectorRodrigues(const RE::NiPoint3& v, const RE::NiPoint3& rotatingAxis, const float theta)
         {
             float cosTheta = std::cos(theta);
