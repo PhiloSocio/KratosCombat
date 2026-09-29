@@ -13,7 +13,9 @@ SmartRelicWeapon::SmartRelicWeapon(RE::TESBoundObject* a_object)
 
 bool SmartRelicWeapon::Initialize() 
 {
-    return false;
+    ArrivingWeaponDummyProjectile = CreateBaseProjectile("DummyProjectile", "Dummy Projectile");
+    ArrivingWeaponDummyAmmo = CreateBaseAmmo(ArrivingWeaponDummyProjectile, "DummyAmmo", "Dummy Ammo");
+    return ArrivingWeaponDummyAmmo != nullptr;
 }
 
 void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
@@ -40,11 +42,11 @@ void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
         } else spdlog::debug("levi not stucked anybody");
     } else spdlog::debug("levi not stucked any bone");
 
-    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
-    if (!throwerActor) return;
+    auto callerActor = caller ? caller->GetActor() : nullptr;
+    if (!callerActor) return;
 
     if (GetThrowState() == ThrowState::kThrowable) {
-        if (auto backWeaponSheathe = throwerActor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
+        if (auto backWeaponSheathe = callerActor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
             const auto& backSheatheTransform = backWeaponSheathe->world;
             a_point = backSheatheTransform.translate;
             const auto& rightDir = backSheatheTransform.rotate * rightVec3;
@@ -53,7 +55,7 @@ void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
             spdlog::debug("levi is coming from your back sheathe");
         }
     } else {
-        auto pcPos = throwerActor->GetPosition();
+        auto pcPos = callerActor->GetPosition();
         float dist = pcPos.GetDistance(a_point);
         if (dist > 36000.f) {   // ~42000 is limit
             spdlog::info("levi is too far away from you! ({} m)", (int)dist / 100);
@@ -86,6 +88,10 @@ void SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
 
         trailUpdate.Done();
         trailRemoveUpdate.Done();
+
+        auto callerActor = caller ? caller->GetActor() : nullptr;
+        if (callerActor)
+            callerActor->SetGraphVariableBool("bLeviInCatchRange", false);
 
         if (projectileModel) {
             transformPW = projectileModel->world;
@@ -137,11 +143,12 @@ void SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
             RE::NiPoint3 targetPoint = rHandBone ? rHandBone->world.translate : AnArchos->GetPosition();
             if (!isPenetrating) {
                 soundData.PlayCallingHandSounds(rHandBone);
-                GetPosition(startPoint);
             }
+            GetPosition(startPoint);
             RE::ProjectileHandle pHandle;
             projectileRotation = MathUtil::Algebra::VectorToPitchYaw(direction);
-            Throw(RotationType::kNone, projectileRotation, startPoint);
+            SetThrowState(ThrowState::kNone);
+            Throw(dynamic_cast<Thrower*>(caller), RotationType::kSpinVertical, projectileRotation, startPoint);
 /*
             RE::Projectile::LaunchData lData(AnArchos, startPoint, projectileRotation, ArrivingWeaponDummyAmmo, weap);
 
@@ -159,8 +166,7 @@ void SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
             projectileUpdate.RegisterForUpdate(0.0f, false);
 */
             SetState(RelicWeaponState::Type::kArriving);
-            SetThrowState(ThrowState::kNone);
-            spdlog::info("Levi is arriving...");
+            spdlog::info("weapon arriving...");
         } else {spdlog::warn("WEIRD SpellLeviProjA is nullptr!");}
     } else {spdlog::warn("WEIRD you don't have the axe for calling!!");}
 }
@@ -193,12 +199,9 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
         soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
         soundData.PlayCatchingSounds(rHandBone);
 
-        if (weap) {
+        if (weap && GetWeaponContainer()) {
             caller->SetSkipEquipAnim(true);
             caller->SetUnequipWhenAnimEnds(false);
-            if (callerActor->IsPlayerRef())
-                Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
-            callerActor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
             caller->DoAction(ActionType::kWeaponCharge);
             GetWeaponContainer()->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, callerActor);
             ObjectUtil::Actor::EquipItem(callerActor, weap, caller->GetSkipEquipAnim());//, 1U, true, false, false, true);
@@ -340,7 +343,7 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
                 missileRTD.impactResult = RE::ImpactResult::kDestroy;
                 projState = ProjectileState::kNone;
                 auto pRot = MathUtil::Algebra::VectorToPitchYaw(direction);
-                Throw(RotationType::kSpinLateral, pRot, position);
+                Throw(thrower, RotationType::kSpinLateral, pRot, position);
                 stopSounds = false;
                 spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projBase->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
             } else if (isPenetrating && skipIt) {
@@ -354,7 +357,7 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
                 missileRTD.impactResult = RE::ImpactResult::kDestroy;
                 projState = ProjectileState::kNone;
                 auto pRot = MathUtil::Algebra::VectorToPitchYaw(direction);
-                Throw(RotationType::kSpinLateral, pRot, position);
+                Throw(thrower, RotationType::kSpinLateral, pRot, position);
                 stopSounds = false;
                 spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projBase->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
             } else if (impactResult == RE::ImpactResult::kStick) {  //  let it trying to stick if it can
@@ -451,30 +454,12 @@ void SmartRelicWeapon::Update()
 }
 void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile) 
 {
-    
-    auto projectileNode = a_projectile->Get3D2();
-    if (!projectileNode) {
-    //    spdlog::warn("projectile's 3d not loaded");
-        return;
-    }
-    if (projectileModel != projectileNode) {
-        projectileModel = projectileNode->AsNode();
-        if (GetThrowState() == ThrowState::kThrown) {
-            soundData.PlayThrowingLoopSounds(projectileNode);
+    ThrowableRelicWeapon::UpdateProjectile(a_projectile);
+    if (currentState) {
+        auto status = currentState->Update(*g_deltaTime);
+        if (status > RelicWeaponState::Status::kRunning) {
+            currentState->Exit();
+            currentState.reset();
         }
     }
-    InitiateModel();
-
-    auto& runtimeData = a_projectile->GetProjectileRuntimeData();
-    const auto& livingTime = runtimeData.livingTime;
-    auto& leviPos   = a_projectile->data.location;
-    auto& leviAngle = a_projectile->data.angle;
-    if (livingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
-
-    if (livingTime > *g_deltaTime * 2.f && !InitiateTrail()) {}
-    if (!InitiateTransform()) {}
-    UpdateRotation(*g_deltaTime, livingTime);
-    UpdateTranslation(*g_deltaTime, livingTime);
-
-    if (GetState()) GetState()->Update(*g_deltaTime);
 }

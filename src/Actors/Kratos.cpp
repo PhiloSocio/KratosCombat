@@ -12,6 +12,13 @@ Kratos::Kratos(RE::ActorHandle a_actorHandle) :
     }
 }
 
+void Kratos::Update(float a_delta)
+{
+//    Charger::Update(a_delta);
+    Thrower::Update(a_delta);
+//    Caller::Update(a_delta);
+    Rager::Update(a_delta);
+}
 void Kratos::DoAction(const ActionType a_action)
 {
     if (IsValid())
@@ -22,7 +29,7 @@ void Kratos::DoAction(const ActionType a_action)
             else EndRage();
             break;
         case ActionType::kWeaponCharge:
-            if (!IsInRage() && !GetRightHandRelic()->IsCharged()) {
+            if (!IsInRage() && GetRightHandRelic() && !GetRightHandRelic()->IsCharged()) {
                 GetActor()->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kWeaponCharge);
                 GetActor()->NotifyAnimationGraph("DoKratosAction");
             }

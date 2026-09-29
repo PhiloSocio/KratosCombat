@@ -150,7 +150,7 @@ void Draupnir::RainOfDraupnir()
 //    spdlog::debug("aim angle: {} heading angle: {}", pRot.x, pRot.z);
     RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
 
-    Throw(RotationType::kNone, pRot, origin);
+    Throw(dynamic_cast<Thrower*>(GetWielder()), RotationType::kNone, pRot, origin);
 
     nextLaunchTime = AsyncUtil::GameTime::GetEngineTime() + nextLaunchDelay;
 }

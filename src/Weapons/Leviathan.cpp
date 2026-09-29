@@ -98,12 +98,11 @@ void LeviathanAxe::SetState(RelicWeaponState::Type a_type)
     case RelicWeaponState::Type::kArriving:
         {
             auto previous = dynamic_cast<LeviathanArrivingState*>(currentState.get());
-            auto rHandBone = thrower->GetRHandBone();
             RE::NiPoint3 startPoint; GetPosition(startPoint);
             if (isPenetrating && previous) {
                 SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*previous, startPoint));
             } else {
-                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this, startPoint, &rHandBone));
+                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this, startPoint, &caller->GetRHandBone()));
                 spdlog::debug("Levi call is started");
             }
         }
@@ -309,6 +308,7 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool isPenetrating, cons
 */
 bool LeviathanAxe::PreThrow()
 {
+    return true;
     trailRemoveUpdate.Done();
 
     bool isLeviathanAxe = thrower->GetRightHandRelic() == this;
@@ -427,19 +427,15 @@ void LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optiona
 
         soundData.FadeThrowingLoopSounds(369);
 
-        auto stuckedLevi =  LastLeviProjectile ? LastLeviProjectile : nullptr;
-        if (!stuckedLevi)   stuckedLevi = (LeviathanAxeProjectileL ? LeviathanAxeProjectileL : (LeviathanAxeProjectileH ? LeviathanAxeProjectileH : nullptr));
-        if (stuckedLevi) {
-            if (!isPenetrating) position = stuckedLevi->data.location;
-            auto& projectileRTD = stuckedLevi->GetProjectileRuntimeData();
+        if (projectile) {
+            if (!isPenetrating) position = projectile->data.location;
+            auto& projectileRTD = projectile->GetProjectileRuntimeData();
             auto& pFlags = projectileRTD.flags;
             if (!(pFlags & pFlag::kDestroyed)) {
                 pFlags |= pFlag::kDestroyed;
             } else  spdlog::debug("levi is already destroyed");
 
             if (a_justDestroy) {
-                isAxeCalled = false;
-                isAxeThrowed = false;
                 if (stuckedActor) {
 #ifdef EXPERIMENTAL_EXTRAARROW
                     ObjectUtil::Projectile::DeleteAnExtraArrow(stuckedActor, projectileModel);
@@ -453,26 +449,7 @@ void LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optiona
             }
         } else {spdlog::debug("Stucked Levi is nullptr!");}
 
-        if (auto AnArchos = caller->GetActor(); !a_justDestroy && AnArchos && SpellLeviProjA) {
-            isAxeCalled = true;
-            isAxeThrowed = false;
-
-            if (!Config::DontDamageWhileArrive) {
-                const auto leviProjEff = SpellLeviProjA->effects[0];
-                auto& leviProjEffSetting = leviProjEff->effectItem;
-                auto& projectileDamage = leviProjEffSetting.magnitude;
-                const auto leviDamage = damage;
-                projectileDamage = leviDamage * caller->GetDamageMult() * Config::ThrowingDamageMult;
-                projectileDamage *= 0.5f;
-                if (const auto leviProjBaseEff = leviProjEff->baseEffect; leviProjBaseEff && leviProjBaseEff->data.projectileBase) {
-                //    leviProjBaseEff->projectileBase->defaultWeaponSource = WeaponIdentify::LeviathanAxe;
-                //    leviProjBaseEff->associatedForm = WeaponIdentify::LeviathanAxe;
-                    auto& pbData = leviProjBaseEff->data.projectileBase->data;
-                    pbData.force = projectileDamage * 2.f;
-                } else spdlog::warn("not found Levi arriving effect!");
-                spdlog::debug("damage mult: {} throwing dm {} levi damage {} total damage {}", caller->GetDamageMult(), Config::ThrowingDamageMult, leviDamage, projectileDamage);
-            }
-
+        if (auto AnArchos = caller->GetActor(); !a_justDestroy && AnArchos && ArrivingWeaponDummyAmmo && ArrivingWeaponDummyProjectile) {
             RE::NiPoint3 startPoint = position;
             auto rHandBone = caller->GetRHandBone();
             RE::NiPoint3 targetPoint = rHandBone ? rHandBone->world.translate : AnArchos->GetPosition();
@@ -506,12 +483,12 @@ void LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optiona
 }
 void LeviathanAxe::Catch(const bool a_justDestroy)
 {
-    if (LeviathanAxeProjectileA) {
+    if (projectile) {
     //    if (APIs::precision || APIs::Request()) {
     //        APIs::precision->RemoveProjectileCollision(throwerActor->GetHandle(), collisionDefinition);
     //    }
 
-        auto& runtimeData = LeviathanAxeProjectileA->GetProjectileRuntimeData();
+        auto& runtimeData = projectile->GetProjectileRuntimeData();
         runtimeData.flags |= pFlag::kDestroyed;
         if (a_justDestroy) return;
     }
@@ -519,9 +496,6 @@ void LeviathanAxe::Catch(const bool a_justDestroy)
     auto callerActor = caller ? caller->GetActor() : nullptr;
     if (callerActor && !caller->GetRightHandRelic()) {
         callerActor->SetGraphVariableBool("bLeviInCatchRange", true);
-        if (EffCatchLevi && SpellCatchLevi && !callerActor->AsMagicTarget()->HasMagicEffect(EffCatchLevi)) {
-            callerActor->AddSpell(SpellCatchLevi);
-        }
 
         SetThrowState(ThrowState::kArrived);
 
@@ -531,17 +505,15 @@ void LeviathanAxe::Catch(const bool a_justDestroy)
             callerActor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone);
 
         soundData.FadeArrivingNearSounds(469);
-    //    soundData.FadeArrivingLoopSounds(469);
+        soundData.FadeArrivingLoopSounds(469);
         soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
         soundData.PlayCatchingSounds(rHandBone);
 
-        if (weap) {
+        if (weap && GetWeaponContainer()) {
             caller->SetSkipEquipAnim(true);
             caller->SetUnequipWhenAnimEnds(false);
-            if (callerActor->IsPlayerRef())
-                Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
-            callerActor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
             caller->DoAction(ActionType::kWeaponCharge);
+            GetWeaponContainer()->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, callerActor);
             ObjectUtil::Actor::EquipItem(callerActor, weap, caller->GetSkipEquipAnim());//, 1U, true, false, false, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, callerActor);
             RE::ShakeCamera(0.3f, position, 0.5f);

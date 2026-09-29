@@ -7,10 +7,10 @@ class Rager : virtual public BaseActor
 public:
     explicit Rager(RE::ActorHandle a_actorHandle) :
         BaseActor(a_actorHandle)
-    {titles.set(ActorType::kRager);}
+    {titles.set(ActorType::kRager); }
     virtual ~Rager() = default;
 
-    void UpdateRager(float a_delta);
+    void Update(float a_delta) override;
 
     void StartRage(const bool a_justAnim = false);
     void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);
@@ -48,6 +48,7 @@ protected:
     RageType rageType = RageType::kFury;
     RageType lastTriggeredRage = RageType::kFury;
 
+    Rager* rager = this;
 private:
     RE::TESBoundObject* _LastEquippedObjectR = nullptr;
     RE::TESBoundObject* _LastEquippedObjectL = nullptr;

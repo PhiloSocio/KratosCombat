@@ -23,6 +23,9 @@ public:
     void SetDamageMult(const float a_damageMult) { damageMult = a_damageMult; };
     void SetSkipEquipAnim(const bool a_skip) { skipEquipAnim = a_skip; };
     void SetUnequipWhenAnimEnds(const bool a_unequip) { unequipWhenAnimEnds = a_unequip; };
+    void SetBarehanded(const bool a_isBarehanded) { isBarehanded = a_isBarehanded; };
+    void SetTitles(REX::EnumSet<ActorType, std::uint32_t> a_titles) { titles = a_titles; };
+    void SetTitles(std::uint32_t a_titles) { titles = static_cast<ActorType>(a_titles); };
 
     [[nodiscard]] RE::Actor* GetActor() const { return actor; };
     [[nodiscard]] const RE::ActorHandle& GetActorHandle() const { return actorHandle; };

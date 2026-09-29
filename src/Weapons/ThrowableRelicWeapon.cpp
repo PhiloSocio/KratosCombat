@@ -261,7 +261,7 @@ void ThrowableRelicWeapon::FadeTrail()
                 }
             } else {
                 RemoveTrail();
-                replacedProjectileModel.reset();
+            //    replacedProjectileModel.reset();
                 trailRemoveUpdate.Done();
             }
         }
@@ -279,11 +279,16 @@ void ThrowableRelicWeapon::RemoveTrail()
     }
 }
 
-bool ThrowableRelicWeapon::Throw(const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
+bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
 {
     bool result = false;
+    _modelInitiated = false;
+    _rotationBlended = false;
+    _transformInitiated = false;
+    _collisionInitiated = false;
 
-    thrower = dynamic_cast<Thrower*>(GetWielder());
+//    thrower = dynamic_cast<Thrower*>(GetWielder());
+    thrower = a_thrower;
     if (!thrower || !thrower->IsValid()) {
         spdlog::debug("thrower is invalid");
         return result;
@@ -359,30 +364,34 @@ bool ThrowableRelicWeapon::Throw(const RotationType a_rotationType, std::optiona
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
         rtData.weaponDamage *= thrower->IsThrowing(ThrowType::kPowerThrow) ? 1.5f : 1.f;
 
-        auto copyWeaponModel = weaponBone->Clone();
-        auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
-        weaponModelCopy.reset(copyWeaponModelNode);
-        if (weaponModelCopy) {
-            weaponModelCopy->local = RE::NiTransform();
-            weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
-        }
-        auto copyWeaponModelSterilizedObj = weaponBone ? weaponBone->Clone() : nullptr;
-        auto copyWeaponModelSterilized = copyWeaponModelSterilizedObj ? copyWeaponModelSterilizedObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelSterilizedObj);
-        if (copyWeaponModelSterilized) {
-            copyWeaponModelSterilized->RemoveExtraData("BSX");
-            copyWeaponModelSterilized->RemoveExtraData("BSXFlags");
-            if (copyWeaponModelSterilized->GetCollisionObject())
-                copyWeaponModelSterilized->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
-            copyWeaponModelSterilized->collisionObject.reset();
-            weaponModelSterilizedCopy.reset(copyWeaponModelSterilized->AsNode());
-            if (weaponModelSterilizedCopy) {
-                weaponModelSterilizedCopy->local = RE::NiTransform();
-                weaponModelSterilizedCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+        if (!weaponModelSterilizedCopy) {
+            auto copyWeaponModel = weaponBone->Clone();
+            auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
+            weaponModelCopy.reset(copyWeaponModelNode);
+            if (weaponModelCopy) {
+                weaponModelCopy->local = RE::NiTransform();
+                weaponModelCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+            }
+            auto copyWeaponModelSterilizedObj = weaponBone ? weaponBone->Clone() : nullptr;
+            auto copyWeaponModelSterilized = copyWeaponModelSterilizedObj ? copyWeaponModelSterilizedObj->AsNode() : static_cast<RE::NiAVObject*>(copyWeaponModelSterilizedObj);
+            if (copyWeaponModelSterilized) {
+                copyWeaponModelSterilized->RemoveExtraData("BSX");
+                copyWeaponModelSterilized->RemoveExtraData("BSXFlags");
+                if (copyWeaponModelSterilized->GetCollisionObject())
+                    copyWeaponModelSterilized->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
+                copyWeaponModelSterilized->collisionObject.reset();
+                weaponModelSterilizedCopy.reset(copyWeaponModelSterilized->AsNode());
+                if (weaponModelSterilizedCopy) {
+                    weaponModelSterilizedCopy->local = RE::NiTransform();
+                    weaponModelSterilizedCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
+                }
             }
         }
-        SetThrowState(ThrowState::kThrown);
 
         RelicManager::GetSingleton()->OnRelicThrow(projectile, this);
+        if (GetThrowState() != ThrowState::kThrowable) return true;
+
+        SetThrowState(ThrowState::kThrown);
         if (isCountless) return true;
     //    RE::ObjectRefHandle handle;
     //    droppedWeaponKeep = RE::TESObjectREFR::CreateReference(handle, RE::FormType::Container, false);
@@ -411,6 +420,18 @@ bool ThrowableRelicWeapon::Throw(const RotationType a_rotationType, std::optiona
     if (result) PostThrow();
 
     return result;
+}
+void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
+{
+    if (a_actor && a_actor->IsValid()) {
+        wielder = a_actor;
+        lastWielder = a_actor;
+        isEquipped = true;
+        SetThrowState(ThrowState::kThrowable);
+    } else {
+        wielder = nullptr;
+        isEquipped = false;
+    }
 }
 /*
 bool ThrowableRelicWeapon::OnHit(RE::hkpAllCdPointCollector *a_AllCdPointCollector)
@@ -580,8 +601,14 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile)
 
     auto& runtimeData = a_projectile->GetProjectileRuntimeData();
     const auto& livingTime = runtimeData.livingTime;
-    auto& leviPos   = a_projectile->data.location;
-    auto& leviAngle = a_projectile->data.angle;
+    auto& pos   = a_projectile->data.location;
+    auto& angle = a_projectile->data.angle;
+    auto& vel = runtimeData.linearVelocity;
+    auto dir = vel; dir.Unitize();
+    position = pos;
+    angles = angle;
+    velocity = vel;
+    direction = dir;
     if (livingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
 
     if (livingTime > *g_deltaTime * 2.f && !InitiateTrail()) {}

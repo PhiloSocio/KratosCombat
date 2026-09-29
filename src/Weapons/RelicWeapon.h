@@ -14,7 +14,6 @@ public:
     explicit RelicWeapon(RE::TESBoundObject* a_object);
 
     RelicIdentity        relicIdentity  = 0u;
-    RelicType            type           = RelicType::kNone;
     RE::TESObjectWEAP*   weap           = nullptr;
     RE::EnchantmentItem* ench           = nullptr;
     RE::AlchemyItem*     poison         = nullptr;
@@ -38,7 +37,7 @@ public:
     void SetWielder(BaseActor* a_actor);
     void SetOwner(BaseActor* a_actor);
 
-    void OnEquip(BaseActor* a_actor);
+    virtual void OnEquip(BaseActor* a_actor);
     virtual bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) = 0;
     virtual void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) = 0;
     virtual void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) = 0;
@@ -57,7 +56,7 @@ public:
     RE::EnchantmentItem* EnchCharge = nullptr;
 
     bool _isCharged = false;
-    uint8_t chargeHitCount = 0;
+    uint8_t chargeHitCount = 1;
 protected:
     REX::EnumSet<RelicAbility, std::uint32_t> abilities;
 

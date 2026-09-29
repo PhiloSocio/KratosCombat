@@ -129,7 +129,7 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
     }
 }
 
-void Rager::UpdateRager(const float a_delta)
+void Rager::Update(const float a_delta)
 {
     if (IsInRage()) RestoreRage(-(rageDamageAmount * a_delta), true);
 }

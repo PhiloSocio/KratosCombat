@@ -10,8 +10,7 @@ ArrivingState::ArrivingState(SmartRelicWeapon& a_weapon, const RE::NiPoint3& a_s
 }
 ArrivingState::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3& a_startPosition)
     : ThrowableWeaponState(a_previous.weapon),
-        callerHandBoneSource(
-            a_previous.callerHandBoneSource),
+        callerHandBoneSource(a_previous.callerHandBoneSource),
         startPosition(a_startPosition),
         startingTime(a_previous.startingTime),
         callerBreastBone(a_previous.callerBreastBone),

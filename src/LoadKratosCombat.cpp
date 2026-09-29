@@ -2,7 +2,13 @@
 #include "Papyrus.h"
 #include "events.h"
 #include "Assets.h"
-#include "MainKratosCombat.h"
+#include "hook.h"
+
+#ifdef KRATOS_COMBAT_3
+    #include "RelicManager.h"
+#else
+    #include "MainKratosCombat.h"
+#endif
 
 inline bool UpdateConfig() 
 {
@@ -36,6 +42,10 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
             Config::IsPrecisionInstalled = true;
         break;
     case SKSE::MessagingInterface::kPreLoadGame:
+
+#ifdef KRATOS_COMBAT_3
+        RelicManager::GetSingleton()->OnPreLoadGame();
+#else
         if (auto Levi = LeviathanAxe::GetSingleton(); auto mjolnir = Mjolnir::GetSingleton()) {
             Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, false, true);
             mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag, false, true);
@@ -43,13 +53,28 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
             Levi->trailUpdate.Done();
             mjolnir->trailUpdate.Done();
         }
+#endif
         break;
     case SKSE::MessagingInterface::kPostLoadGame:
     case SKSE::MessagingInterface::kNewGame:
         if (!Config::CheckForms()) spdlog::warn("can't get important magic effects! Check the esp files!");
-        else if (RegisterEvents()) {Papyrus::eventsRegistered = true; WeaponIdentify::Initialize(); WeaponIdentify::WeaponCheck();}
+        else if (RegisterEvents()) {
+            Papyrus::eventsRegistered = true;
+
+#ifdef KRATOS_COMBAT_3
+            RelicManager::GetSingleton()->OnPostLoadGame();
+#else
+            WeaponIdentify::Initialize();
+            WeaponIdentify::WeaponCheck();
+#endif
+
+        }
         break;
     case SKSE::MessagingInterface::kSaveGame:
+
+#ifdef KRATOS_COMBAT_3
+        RelicManager::GetSingleton()->OnSaveGame();
+#else
         if (auto Levi = LeviathanAxe::GetSingleton(); auto mjolnir = Mjolnir::GetSingleton()) {
             Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, false, true);
             mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag, false, true);
@@ -60,6 +85,8 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
             playerCharacter->SetGraphVariableInt("LoadBoundObjectDelay", _load3Ddelay);     //  Reset to default values
             playerCharacter->SetGraphVariableBool("Skip3DLoading", _skipLoad3D);            //  Reset to default values
         }
+#endif
+
         break;
     }
 }

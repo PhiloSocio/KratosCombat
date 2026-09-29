@@ -103,7 +103,7 @@ public:
 
     bool isThrown = false;
     bool isCountless = false;
-    float isPenetrating = false;
+    bool isPenetrating = false;
 
     ProjectileState projState = ProjectileState::kNone;
     ImpactType impactType = ImpactType::kSharp;
@@ -118,6 +118,7 @@ public:
 
     bool Initialize() override;
     void Update() override;
+    void OnEquip(BaseActor* a_actor) override;
 //    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
     void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override {};
     void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
@@ -138,7 +139,7 @@ public:
 
     void SetThrowState(const ThrowState a_throwState) {_throwState = a_throwState;};
 
-    bool Throw(const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt);
+    bool Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt);
     bool InitiateTransform() noexcept;
     void InitiateModel() noexcept;
     bool InitiateTrail() noexcept;
