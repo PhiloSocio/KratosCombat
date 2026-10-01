@@ -282,10 +282,6 @@ void ThrowableRelicWeapon::RemoveTrail()
 bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
 {
     bool result = false;
-    _modelInitiated = false;
-    _rotationBlended = false;
-    _transformInitiated = false;
-    _collisionInitiated = false;
 
 //    thrower = dynamic_cast<Thrower*>(GetWielder());
     thrower = a_thrower;
@@ -358,11 +354,17 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     if (!PreThrow()) return false;
 
     if (projectileHandle = RE::Projectile::Launch(&pHandle, lData); projectileHandle && projectileHandle->get().get()) {
+
         projectile = projectileHandle->get().get();
         auto& rtData = projectile->GetProjectileRuntimeData();
     //    spdlog::info("throw speed: {} force: {} weaponDamage: {} difficulty: {}", ThrowableWeaponDummyProjectile->data.speed, impulse / 1000.f, weaponDamage, difficulty);
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
         rtData.weaponDamage *= thrower->IsThrowing(ThrowType::kPowerThrow) ? 1.5f : 1.f;
+
+        _modelInitiated = false;
+        _rotationBlended = false;
+        _transformInitiated = false;
+        _collisionInitiated = false;
 
         if (!weaponModelSterilizedCopy) {
             auto copyWeaponModel = weaponBone->Clone();

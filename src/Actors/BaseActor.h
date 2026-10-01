@@ -7,7 +7,9 @@ class RelicWeapon;
 class BaseActor
 {
 public:
-    virtual ~BaseActor() = default;
+    virtual ~BaseActor();
+
+    using RelicIdentity = std::uint64_t;
 
     void OnEquip(RelicWeapon* a_relic);
 
@@ -59,7 +61,7 @@ public:
     [[nodiscard]] RelicWeapon* GetLastRightHandRelic() const { return lastRightHandRelic; };
     [[nodiscard]] RelicWeapon* GetLastLeftHandRelic() const { return lastLeftHandRelic; };
 
-    [[nodiscard]] std::vector<RelicWeapon*>& GetKnownRelics() { return knownRelics; };
+    [[nodiscard]] std::vector<RelicIdentity>& GetKnownRelics() { return knownRelics; };
 
     [[nodiscard]] bool IsBarehanded() const { return isBarehanded; };
     [[nodiscard]] float GetDamageMult() const { return damageMult; };
@@ -81,7 +83,7 @@ protected:
     RelicWeapon* lastRightHandRelic = nullptr;
     RelicWeapon* lastLeftHandRelic = nullptr;
 
-    std::vector<RelicWeapon*> knownRelics;
+    std::vector<RelicIdentity> knownRelics;
 
     REX::EnumSet<ActorType, std::uint32_t> titles;
 
@@ -89,9 +91,7 @@ protected:
     bool unequipWhenAnimEnds = false;
     bool isBarehanded = false;
 
-    explicit BaseActor(RE::ActorHandle a_actorHandle) :
-        actorHandle(a_actorHandle)
-    {}
+    explicit BaseActor(RE::ActorHandle a_actorHandle);
 
 public:
     float level = 0.f;

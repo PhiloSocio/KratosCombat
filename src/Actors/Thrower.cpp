@@ -68,8 +68,10 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
         } else {
             spdlog::error("throw failed");
         }
-    } else {
+    } else if (GetRightHandRelic()) {
         spdlog::warn("relic is not throwable!");
+    } else {
+        spdlog::warn("your weapon is not a relic");
     }
 }
 

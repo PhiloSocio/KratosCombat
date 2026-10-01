@@ -10,7 +10,7 @@ class BaseActor;
 class RelicWeapon
 {
 public:
-    virtual ~RelicWeapon() = default;
+    virtual ~RelicWeapon();
     explicit RelicWeapon(RE::TESBoundObject* a_object);
 
     RelicIdentity        relicIdentity  = 0u;

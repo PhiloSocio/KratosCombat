@@ -115,59 +115,69 @@ void SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
 
         soundData.FadeThrowingLoopSounds(369);
 
-        if (projectile) {
-            if (!isPenetrating) position = projectile->data.location;
-            auto& projectileRTD = projectile->GetProjectileRuntimeData();
-            auto& pFlags = projectileRTD.flags;
-            if (!(pFlags & pFlag::kDestroyed)) {
-                pFlags |= pFlag::kDestroyed;
-            } else  spdlog::debug("levi is already destroyed");
-
-            if (a_justDestroy) {
-                if (stuckedActor) {
+        if (a_justDestroy) {
+            if (stuckedActor) {
 #ifdef EXPERIMENTAL_EXTRAARROW
-                    ObjectUtil::Projectile::DeleteAnExtraArrow(stuckedActor, projectileModel);
+                ObjectUtil::Projectile::DeleteAnExtraArrow(stuckedActor, projectileModel);
 #else
-                    stuckedActor->RemoveExtraArrows3D();
+                stuckedActor->RemoveExtraArrows3D();
 #endif
-                    spdlog::debug("levi stucked actor's extra arrows removed");
-                    stuckedActor = nullptr;
-                } else spdlog::debug("levi not stucked anybody");
-                    return;
+                spdlog::debug("levi stucked actor's extra arrows removed");
+                stuckedActor = nullptr;
+            } else {
+                spdlog::debug("levi not stucked anybody");
             }
-        } else {spdlog::debug("Stucked Levi is nullptr!");}
+            return;
+        }
 
-        if (auto AnArchos = caller->GetActor(); !a_justDestroy && AnArchos && ArrivingWeaponDummyAmmo && ArrivingWeaponDummyProjectile) {
-            RE::NiPoint3 startPoint = position;
-            auto rHandBone = caller->GetRHandBone();
-            RE::NiPoint3 targetPoint = rHandBone ? rHandBone->world.translate : AnArchos->GetPosition();
-            if (!isPenetrating) {
-                soundData.PlayCallingHandSounds(rHandBone);
+        auto rHandBone = caller->GetRHandBone();
+        if (!isPenetrating) {
+            soundData.PlayCallingHandSounds(rHandBone);
+        }
+
+        if (!projectile || projectile->GetProjectileRuntimeData().flags.all(RE::Projectile::Flags::kProcessedImpacts)) {
+            if (projectile) {
+                if (!isPenetrating) position = projectile->data.location;
+                auto& projectileRTD = projectile->GetProjectileRuntimeData();
+                auto& pFlags = projectileRTD.flags;
+                if (!(pFlags & pFlag::kDestroyed)) {
+                    pFlags |= pFlag::kDestroyed;
+                } else  spdlog::debug("levi is already destroyed");
             }
-            GetPosition(startPoint);
-            RE::ProjectileHandle pHandle;
-            projectileRotation = MathUtil::Algebra::VectorToPitchYaw(direction);
+
+            if (auto callerActor = caller->GetActor(); callerActor && ArrivingWeaponDummyAmmo && ArrivingWeaponDummyProjectile) {
+                RE::NiPoint3 startPoint = position;
+                GetPosition(startPoint);
+                projectileRotation = MathUtil::Algebra::VectorToPitchYaw(direction);
+                SetThrowState(ThrowState::kNone);
+                Throw(dynamic_cast<Thrower*>(caller), RotationType::kSpinVertical, projectileRotation, startPoint);
+    /*
+                RE::Projectile::LaunchData lData(AnArchos, startPoint, projectileRotation, ArrivingWeaponDummyAmmo, weap);
+
+                lData.noDamageOutsideCombat = true; //  can be an option
+                lData.weaponSource = weap;
+    #ifdef EXPERIMENTAL_THROWPOISON
+                lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
+    #endif
+                if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(AnArchos) > 0.f)
+                    lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
+
+                projectileHandle = RE::Projectile::Launch(&pHandle, lData);
+                projectile = pHandle.get().get();
+
+                projectileUpdate.RegisterForUpdate(0.0f, false);
+    */
+                SetState(RelicWeaponState::Type::kArriving);
+                spdlog::info("weapon arriving...");
+            } else {
+                spdlog::warn("WEIRD SpellLeviProjA is nullptr!");
+            }
+
+        } else if (projectile) {
+            spdlog::debug("the projectile is already active, changing its state to arriving state...");
             SetThrowState(ThrowState::kNone);
-            Throw(dynamic_cast<Thrower*>(caller), RotationType::kSpinVertical, projectileRotation, startPoint);
-/*
-            RE::Projectile::LaunchData lData(AnArchos, startPoint, projectileRotation, ArrivingWeaponDummyAmmo, weap);
-
-            lData.noDamageOutsideCombat = true; //  can be an option
-            lData.weaponSource = weap;
-#ifdef EXPERIMENTAL_THROWPOISON
-            lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
-#endif
-            if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(AnArchos) > 0.f)
-                lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
-
-            projectileHandle = RE::Projectile::Launch(&pHandle, lData);
-            projectile = pHandle.get().get();
-
-            projectileUpdate.RegisterForUpdate(0.0f, false);
-*/
             SetState(RelicWeaponState::Type::kArriving);
-            spdlog::info("weapon arriving...");
-        } else {spdlog::warn("WEIRD SpellLeviProjA is nullptr!");}
+        }
     } else {spdlog::warn("WEIRD you don't have the axe for calling!!");}
 }
 void SmartRelicWeapon::Catch(const bool a_justDestroy)

@@ -1,14 +1,25 @@
 #include "Papyrus.h"
 #include "Settings.h"
-#include "MainKratosCombat.h"
 #include "events.h"
+
+#ifdef KRATOS_COMBAT_3
+    #include "RelicManager.h"
+#else
+    #include "MainKratosCombat.h"
+#endif
 
 namespace Papyrus
 {
     void KratosCombatMCM::OnConfigClose(RE::TESQuest*)
     {
         if (!eventsRegistered) eventsRegistered = RegisterEvents();
+        
+#ifdef KRATOS_COMBAT_3
+        RelicManager::GetSingleton()->OnConfigClose();
+#else
         WeaponIdentify::WeaponCheck(true);
+#endif
+
         Config::CheckConfig(true);
     }
 /*

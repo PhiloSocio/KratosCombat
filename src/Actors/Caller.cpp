@@ -1,9 +1,10 @@
 #include "Caller.h"
 #include "Weapons/SmartRelicWeapon.h"
+#include "RelicManager.h"
 
 void Caller::CallWeapon()
 {
-    if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(GetCallableRelic())) {
+    if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(_weaponToCall)) {
         weaponToCall->Call(this);
     } else {
         spdlog::info("no callable weapon found!");
@@ -11,7 +12,7 @@ void Caller::CallWeapon()
 }
 RelicWeapon* Caller::GetCallableRelic()
 {
-    RelicWeapon* weaponToCall = nullptr;
+    _weaponToCall = nullptr;
     if (!GetRightHandRelic()) {
         if (auto lastRelic = GetLastRightHandRelic();
             lastRelic && !lastRelic->IsEquipped() && 
@@ -19,18 +20,19 @@ RelicWeapon* Caller::GetCallableRelic()
             lastRelic->GetOwner() == this && 
             lastRelic->HasAbility(RelicAbility::kCallable))
         {
-            weaponToCall = lastRelic;
-        } else if (auto knownRelics = GetKnownRelics(); !knownRelics.empty()) {
-            for (const auto& relic : knownRelics) {
-                if (!relic->HasAbility(RelicAbility::kCallable)) continue;
+            _weaponToCall = lastRelic;
+        } else if (auto& knownRelics = GetKnownRelics(); !knownRelics.empty()) {
+            for (const auto& relicID : knownRelics) {
+                auto relic = RelicManager::GetSingleton()->GetActiveRelic(relicID);
+                if (!relic || !relic->HasAbility(RelicAbility::kCallable)) continue;
                 if (auto owner = relic->GetOwner()) {
                     if (owner == this) {
                         if (!relic->IsEquipped()) {
-                            weaponToCall = relic;
+                            _weaponToCall = relic;
                             break;
                         } else if (auto wielder = relic->GetWielder()) {
                             if (this->alterationLevel > wielder->meleeSkill * 2.f) {
-                                weaponToCall = relic;
+                                _weaponToCall = relic;
                                 break;
                             }
                         } else {
@@ -38,14 +40,14 @@ RelicWeapon* Caller::GetCallableRelic()
                         }
                     } else if (auto wielder = relic->GetWielder()) {
                         if (this->alterationLevel > wielder->meleeSkill * 3.f) {
-                            weaponToCall = relic;
+                            _weaponToCall = relic;
                             break;
                         }
                     } else {
-                        weaponToCall = relic;
+                        _weaponToCall = relic;
                     }
                 } else {
-                    weaponToCall = relic;
+                    _weaponToCall = relic;
                     break;
                 }
             }
@@ -55,5 +57,5 @@ RelicWeapon* Caller::GetCallableRelic()
     } else {
         spdlog::info("you already have a relic weapon equipped.");
     }
-    return weaponToCall;
+    return _weaponToCall;
 }

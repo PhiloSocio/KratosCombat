@@ -9,7 +9,7 @@
 class LeviathanAxe : public SmartRelicWeapon
 {
 public:
-    ~LeviathanAxe() override = default;
+    ~LeviathanAxe() override;
     explicit LeviathanAxe(RE::TESBoundObject* a_object);
 
     bool Initialize() override;

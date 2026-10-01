@@ -3,6 +3,11 @@
 
 using namespace Util;
 
+LeviathanAxe::~LeviathanAxe()
+{
+    ResetCharge(enchMag, defaultEnchMag, false, true);
+    spdlog::debug("leviathan destructed");
+}
 LeviathanAxe::LeviathanAxe(RE::TESBoundObject* a_object)
     : SmartRelicWeapon(a_object)
 {
@@ -39,7 +44,12 @@ bool LeviathanAxe::Initialize()
 
     return found;
 }
-void LeviathanAxe::Update() {
+void LeviathanAxe::Update()
+{
+    if (trailRemoveUpdate.IsTimeToUpdate()) {
+        RemoveTrail();
+        trailRemoveUpdate.Done();
+    }
     return;
     if (projectileUpdate.IsTimeToUpdate()) {
         if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel == projectile->Get3D()) {

@@ -158,6 +158,7 @@ public:
     [[nodiscard]] Type GetType() const override { return Type::kArriving; };
     [[nodiscard]] std::vector<RE::ActorHandle>& GetTargets() { return targets; };
 
+    void InitiateTransform();
     void UpdateRotation();
     void UpdateAI(RE::NiPoint3& a_outVel);
     void UpdateArrivingDirection(bool a_initial = false);
@@ -165,4 +166,5 @@ public:
 
 private:
     bool _justContinue = false;
+    bool _transformInitiated = false;
 };

@@ -41,7 +41,7 @@ void Kratos::DoAction(const ActionType a_action)
             }
             break;
         case ActionType::kWeaponCall:
-            if (!IsInRage() && !GetRightHandRelic()) {
+            if (!IsInRage() && !GetRightHandRelic() && GetCallableRelic()) {
                 GetActor()->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kWeaponCharge);   //  intentionally
                 GetActor()->NotifyAnimationGraph("DoKratosAction");
             }

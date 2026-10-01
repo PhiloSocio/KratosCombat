@@ -1,5 +1,18 @@
 #include "BaseActor.h"
 #include "util.h"
+#include "Weapons/RelicWeapon.h"
+
+BaseActor::~BaseActor()
+{
+    if (IsValid() && GetActor())
+        GetActor()->SetGraphVariableInt("iRelicWeapon", (uint8_t)RelicType::kNone);
+}
+BaseActor::BaseActor(RE::ActorHandle a_actorHandle) :
+    actorHandle(a_actorHandle)
+{
+    if (!IsValid())
+        spdlog::debug("constructed base actor is not valid");
+}
 
 RE::NiAVObject*& BaseActor::GetUpdateRHandBone()
 {
@@ -35,4 +48,18 @@ RE::NiAVObject*& BaseActor::GetUpdateAnimObjectRBone()
 
 void BaseActor::OnEquip(RelicWeapon* a_relic)
 {
+    if (IsValid() && GetActor()) {
+        auto type = a_relic ? (uint8_t)a_relic->GetType() : (uint8_t)RelicType::kNone;
+        GetActor()->SetGraphVariableInt("iRelicWeapon", type);
+        SetRightHandRelic(a_relic);
+        SetLastRightHandRelic(a_relic);
+        if (a_relic) {
+            if (knownRelics.empty()) {
+                knownRelics.push_back(a_relic->relicIdentity);
+            } else {
+                auto it = std::find(knownRelics.rbegin(), knownRelics.rend(), a_relic->relicIdentity);
+                if (it == knownRelics.rend()) knownRelics.push_back(a_relic->relicIdentity);
+            }
+        }
+    }
 }

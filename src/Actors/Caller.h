@@ -16,4 +16,7 @@ public:
     void CallWeapon();
 protected:
     float alterationLevel = 0.f;
+
+private:
+    RelicWeapon* _weaponToCall = nullptr;
 };

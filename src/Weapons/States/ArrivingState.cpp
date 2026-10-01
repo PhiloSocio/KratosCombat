@@ -20,6 +20,30 @@ ArrivingState::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3
 {
 }
 
+void ArrivingState::InitiateTransform()
+{
+    if (!_transformInitiated) {
+        if (weapon.replacedProjectileModel && weapon.replacedProjectileModel->parent) {
+            model->world = weapon.transformPW;
+            model->local = weapon.transformPL;
+            auto& replacedPMParent = weapon.replacedProjectileModel->parent;
+            auto parentWorldInverse = replacedPMParent->world.Invert();
+            auto previousWorld = weapon.transformW;
+            auto& localRotation = replacedPMParent->local.rotate;
+            auto& localPosition = replacedPMParent->local.translate;
+            if (replacedPMParent->parent) {
+                localRotation = parentWorldInverse.rotate * previousWorld.rotate;
+            //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
+            } else {
+                localRotation = previousWorld.rotate;
+            //    localPosition = previousWorld.translate;
+            }
+            startRotation = localRotation;
+            _transformInitiated = true;
+            spdlog::debug("start rotation initiated");
+        }
+    }
+}
 void ArrivingState::UpdateRotation()
 {
     if (weapon.replacedProjectileModel && weapon.replacedProjectileModel->parent) {
@@ -234,26 +258,7 @@ Status ArrivingState::Update(const float a_delta)
         spdlog::debug("Levi proj catched");
         status = Status::kCompleted;
     }
-    if (false && startRotation == RE::NiMatrix3()) {
-        if (weapon.replacedProjectileModel && weapon.replacedProjectileModel->parent) {
-            model->world = weapon.transformPW;
-            model->local = weapon.transformPL;
-            auto& replacedPMParent = weapon.replacedProjectileModel->parent;
-            auto parentWorldInverse = replacedPMParent->world.Invert();
-            auto previousWorld = weapon.transformW;
-            auto& localRotation = replacedPMParent->local.rotate;
-            auto& localPosition = replacedPMParent->local.translate;
-            if (replacedPMParent->parent) {
-                localRotation = parentWorldInverse.rotate * previousWorld.rotate;
-            //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
-            } else {
-                localRotation = previousWorld.rotate;
-            //    localPosition = previousWorld.translate;
-            }
-            startRotation = localRotation;
-            spdlog::debug("start rotation initiated");
-        }
-    }
+    InitiateTransform();
 
     livingTime = GetLivingTime();
     UpdateArrivingRoute();

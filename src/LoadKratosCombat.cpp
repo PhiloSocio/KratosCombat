@@ -6,6 +6,26 @@
 
 #ifdef KRATOS_COMBAT_3
     #include "RelicManager.h"
+
+    static constexpr std::uint32_t kSerializationUniqueID = 'KRTS';
+
+    void OnSerializationSave(SKSE::SerializationInterface* a_intfc)
+    {
+        spdlog::info("Serialization: save");
+        RelicManager::GetSingleton()->OnSaveGame(a_intfc);
+    }
+
+    void OnSerializationLoad(SKSE::SerializationInterface* a_intfc)
+    {
+        spdlog::info("Serialization: load");
+        RelicManager::GetSingleton()->OnPostLoadGame(a_intfc);
+    }
+
+    void OnSerializationRevert(SKSE::SerializationInterface* a_intfc)
+    {
+        spdlog::info("Serialization: revert");
+        RelicManager::GetSingleton()->OnRevert();
+    }
 #else
     #include "MainKratosCombat.h"
 #endif
@@ -56,18 +76,30 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 #endif
         break;
     case SKSE::MessagingInterface::kPostLoadGame:
+        if (!Config::CheckForms()) spdlog::warn("can't get important magic effects! Check the esp files!");
+        else if (RegisterEvents()) {
+            Papyrus::eventsRegistered = true;
+
+#ifdef KRATOS_COMBAT_3
+        //    RelicManager::GetSingleton()->OnPostLoadGame();
+#else
+            WeaponIdentify::Initialize();
+            WeaponIdentify::WeaponCheck();
+#endif
+        }
+        break;
     case SKSE::MessagingInterface::kNewGame:
         if (!Config::CheckForms()) spdlog::warn("can't get important magic effects! Check the esp files!");
         else if (RegisterEvents()) {
             Papyrus::eventsRegistered = true;
 
 #ifdef KRATOS_COMBAT_3
-            RelicManager::GetSingleton()->OnPostLoadGame();
+        RelicManager::GetSingleton()->OnRevert();
+        //    RelicManager::GetSingleton()->OnPostLoadGame();
 #else
             WeaponIdentify::Initialize();
             WeaponIdentify::WeaponCheck();
 #endif
-
         }
         break;
     case SKSE::MessagingInterface::kSaveGame:
@@ -117,6 +149,12 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface *skse)
     if (!messaging->RegisterListener("SKSE", MessageHandler)) {
         return false;
     }
+
+    auto* serialization = SKSE::GetSerializationInterface();
+    serialization->SetUniqueID(kSerializationUniqueID);
+    serialization->SetSaveCallback(OnSerializationSave);
+    serialization->SetLoadCallback(OnSerializationLoad);
+    serialization->SetRevertCallback(OnSerializationRevert);
 
     spdlog::info("{} by {} has finished loading. Support for more mods! {}", plugin->GetName(), plugin->GetAuthor(), plugin->GetSupportEmail());
 

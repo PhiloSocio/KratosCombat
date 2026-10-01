@@ -1,5 +1,9 @@
 #include "RelicWeapon.h"
 
+RelicWeapon::~RelicWeapon()
+{
+    spdlog::warn("relic weapon destructed");
+}
 RelicWeapon::RelicWeapon(RE::TESBoundObject* a_object)
     : weap(a_object->As<RE::TESObjectWEAP>())
 {

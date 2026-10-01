@@ -3,8 +3,6 @@
 
 #ifdef KRATOS_COMBAT_3
     #include "RelicManager.h"
-
-    static Kratos* player = nullptr;
 #else
     #include "MainKratosCombat.h"
     using RageType = Kratos::Rage;
@@ -51,7 +49,12 @@ bool AnimationEventTracker::Register()
 #ifdef KRATOS_COMBAT_3
 EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_event, BSTEventSource<BSAnimationGraphEvent>* a_eventSource)
 {
-    if (a_event && player) {
+    if (a_event) {
+
+        auto manager = RelicManager::GetSingleton();
+        auto player = manager ? manager->GetPlayer() : nullptr;
+        if (!player) {spdlog::warn("kratos player does not exists!"); return EventChecker::kContinue;}
+
         std::string eventTag = a_event->tag.data();
         switch (hash(eventTag.data(), eventTag.size())) {
         // Start phase
@@ -736,10 +739,9 @@ EventChecker MagicEffectApplyTracker::ProcessEvent(const RE::TESMagicEffectApply
 
 #ifdef KRATOS_COMBAT_3
             auto assets = Assets::GetSingleton();
-            if (!player) {
-                auto manager = RelicManager::GetSingleton();
-                player = manager->GetPlayer() ? dynamic_cast<Kratos*>(manager->GetPlayer()) : nullptr;
-            }
+            auto manager = RelicManager::GetSingleton();
+            auto player = manager ? manager->GetPlayer() : nullptr;
+            if (!player) {spdlog::warn("kratos player does not exists!"); return EventChecker::kContinue;}
 #else
             auto manager = Kratos::GetSingleton();
             auto levi = LeviathanAxe::GetSingleton();
@@ -912,8 +914,8 @@ EventChecker InputEventTracker::ProcessEvent(RE::InputEvent* const *a_event, RE:
 
         auto keyCode = event->AsIDEvent()->GetIDCode();
 
-        auto player = RE::PlayerCharacter::GetSingleton();
-        if (!player) return EventChecker::kContinue;
+        auto playerCharacter = RE::PlayerCharacter::GetSingleton();
+        if (!playerCharacter) return EventChecker::kContinue;
 
 #ifdef KRATOS_COMBAT_3
         auto manager = Assets::GetSingleton();
@@ -926,31 +928,31 @@ EventChecker InputEventTracker::ProcessEvent(RE::InputEvent* const *a_event, RE:
             auto device = event->device.get();
             keyCode = GetOffsettedKeyCode(keyCode, device);
             if (keyCode == Config::AxeCallKey) {
-                if (button->IsDown()) {player->AddSpell(manager->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", true);}
-                else if (button->IsUp()) {player->RemoveSpell(manager->SpellAxeCallButton); player->SetGraphVariableBool("bPressingCallButton", false);}
+                if (button->IsDown()) {playerCharacter->AddSpell(manager->SpellAxeCallButton); playerCharacter->SetGraphVariableBool("bPressingCallButton", true);}
+                else if (button->IsUp()) {playerCharacter->RemoveSpell(manager->SpellAxeCallButton); playerCharacter->SetGraphVariableBool("bPressingCallButton", false);}
             }
 #ifdef KRATOS_COMBAT_3
 #else
             else if (keyCode == Config::AimKey) {
-                if (button->IsDown()) {manager->Aim(true); player->AddSpell(manager->SpellAimButton);/* player->SetGraphVariableBool("bIsAiming", true);*/}
-                else if (button->IsUp()) {manager->Aim(false); player->RemoveSpell(manager->SpellAimButton);/* player->SetGraphVariableBool("bIsAiming", false);*/}
+                if (button->IsDown()) {manager->Aim(true); playerCharacter->AddSpell(manager->SpellAimButton);/* playerCharacter->SetGraphVariableBool("bIsAiming", true);*/}
+                else if (button->IsUp()) {manager->Aim(false); playerCharacter->RemoveSpell(manager->SpellAimButton);/* playerCharacter->SetGraphVariableBool("bIsAiming", false);*/}
             }
 #endif
             else if (keyCode == Config::RunicKey) {
-                if (button->IsDown()) {player->AddSpell(manager->SpellRunicButton);}
-                else if (button->IsUp()) {player->RemoveSpell(manager->SpellRunicButton);}
+                if (button->IsDown()) {playerCharacter->AddSpell(manager->SpellRunicButton);}
+                else if (button->IsUp()) {playerCharacter->RemoveSpell(manager->SpellRunicButton);}
             }
             else if (keyCode == Config::FinisherKey) {
-                if (button->IsDown()) {player->AddSpell(manager->SpellFinisherButton);}
-                else if (button->IsUp()) {player->RemoveSpell(manager->SpellFinisherButton);}
+                if (button->IsDown()) {playerCharacter->AddSpell(manager->SpellFinisherButton);}
+                else if (button->IsUp()) {playerCharacter->RemoveSpell(manager->SpellFinisherButton);}
             }
             else if (keyCode == Config::MediumDistanceKey) {
-                if (button->IsDown()) {player->AddSpell(manager->SpellMidDistButton);}
-                else if (button->IsUp()) {player->RemoveSpell(manager->SpellMidDistButton);}
+                if (button->IsDown()) {playerCharacter->AddSpell(manager->SpellMidDistButton);}
+                else if (button->IsUp()) {playerCharacter->RemoveSpell(manager->SpellMidDistButton);}
             }
             else if (keyCode == Config::LongDistanceKey) {
-                if (button->IsDown()) {player->AddSpell(manager->SpellLongDistButton);}
-                else if (button->IsUp()) {player->RemoveSpell(manager->SpellLongDistButton);}
+                if (button->IsDown()) {playerCharacter->AddSpell(manager->SpellLongDistButton);}
+                else if (button->IsUp()) {playerCharacter->RemoveSpell(manager->SpellLongDistButton);}
             }
         }
     } return EventChecker::kContinue;

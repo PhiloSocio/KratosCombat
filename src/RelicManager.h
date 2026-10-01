@@ -14,6 +14,7 @@ public:
 
     using RelicIdentity = std::uint64_t;
     using BaseActorPtr = std::unique_ptr<BaseActor>;
+    using KratosPtr = std::unique_ptr<Kratos>;
     using RelicWeaponPtr = std::unique_ptr<RelicWeapon>;
 
     static constexpr std::uint32_t kRecordRelics = 'RELC';
@@ -33,23 +34,19 @@ public:
     struct SavedRelic
     {
         SavedRelicKey key;
-        RelicType type = RelicType::kNone;
+        std::uint8_t type = (std::uint8_t)RelicType::kNone;
     };
     struct SavedActor
     {
-        RE::FormID formID  = 0;
+        RE::FormID formID  = 0x0;
 
-        std::uint32_t titles = 0;
+        std::uint32_t titles = 0u;
 
         float level = 0.f;
         float meleeSkill = 0.f;
         float damageMult = 1.f;
 
-        bool skipEquipAnim = false;
-        bool unequipWhenAnimEnds = false;
-        bool isBarehanded = false;
-
-        std::vector<SavedRelicKey> knownRelics;
+        std::vector<SavedRelicKey> knownRelicKeys;
 
         SavedRelicKey rightHandRelic;
         SavedRelicKey leftHandRelic;
@@ -70,14 +67,16 @@ public:
         return static_cast<RE::FormID>(a_relic.relicIdentity >> 16);
     }
 
-    std::optional<RelicIdentity> GetOrCreateEquippedRelicIdentity(RE::Actor* a_actor)
+    std::optional<RelicIdentity> GetOrCreateEquippedRelicIdentity(RE::Actor* a_actor, const bool a_isLeft = false)
     {
-        std::optional<RelicIdentity> result;
-        RE::FormID formID = 0u;
-        uint16_t uniqueID = 0u;
-        auto ieData = a_actor->GetEquippedEntryData(false);
+        if (!a_actor) return std::nullopt;
 
-         if (ieData && ieData->object) {
+        std::optional<RelicIdentity> result;
+        RE::FormID formID = 0x0;
+        uint16_t uniqueID = 0x0;
+        auto ieData = a_actor->GetEquippedEntryData(a_isLeft);
+
+        if (ieData && ieData->object) {
             formID = ieData->object->formID;
         }
 
@@ -86,20 +85,22 @@ public:
         auto xUniqueID = xData ? xData->GetByType<RE::ExtraUniqueID>() : nullptr;
         if (xUniqueID) {
             uniqueID = xUniqueID->uniqueID;
-            formID = formID ? formID : xUniqueID->baseID;
+            formID = formID != 0x0 ? formID : xUniqueID->baseID;
         } else if (xData) {
             auto xUniqueIDnew = RE::BSExtraData::Create<RE::ExtraUniqueID>();
             auto inventoryChanges = a_actor->GetInventoryChanges();
-            uint16_t nextUniqueID = inventoryChanges ? inventoryChanges->GetNextUniqueID() : 0u;
+            uint16_t nextUniqueID = inventoryChanges ? inventoryChanges->GetNextUniqueID() : 0x0;
             if (xUniqueIDnew && nextUniqueID) {
                 xUniqueIDnew->baseID = formID;
                 xUniqueIDnew->uniqueID = nextUniqueID;
                 xData->Add(xUniqueIDnew);
-                uniqueID = xUniqueIDnew->uniqueID;
+                uniqueID = nextUniqueID;
+            } else {
+                delete xUniqueIDnew;
             }
         }
 
-        if (formID == 0u || uniqueID == 0u) result = std::nullopt;
+        if (formID == 0x0 || uniqueID == 0x0) result = std::nullopt;
         else result = std::make_optional<RelicIdentity>(MakeRelicIdentity(formID, uniqueID));
 
         return result;
@@ -107,6 +108,12 @@ public:
     SavedRelicKey MakeSavedRelicKey(const RelicWeapon& a_relic)
     {
         return {GetRelicBaseFormID(a_relic), GetRelicUniqueID(a_relic)};
+    }
+
+    [[nodiscard]] RelicWeapon* GetActiveRelic(RelicIdentity a_identity)
+    {
+        auto it = activeRelics.find(a_identity);
+        return it != activeRelics.end() ? it->second.get() : nullptr;
     }
 
     void OnPreLoadGame()
@@ -133,11 +140,6 @@ public:
     }
     void OnPostLoadGame(SKSE::SerializationInterface* a_intfc = nullptr)
     {
-        for (auto& relic : activeRelics) {
-            if (relic.second)
-                relic.second->ResetCharge(relic.second->enchMag, relic.second->defaultEnchMag, false, true);
-        }
-
         if (!a_intfc) {
             return;
         }
@@ -212,10 +214,7 @@ public:
                         !a_intfc->ReadRecordData(saved.titles) ||
                         !a_intfc->ReadRecordData(saved.level) ||
                         !a_intfc->ReadRecordData(saved.meleeSkill) ||
-                        !a_intfc->ReadRecordData(saved.damageMult) ||
-                        !a_intfc->ReadRecordData(saved.skipEquipAnim) ||
-                        !a_intfc->ReadRecordData(saved.unequipWhenAnimEnds) ||
-                        !a_intfc->ReadRecordData(saved.isBarehanded))
+                        !a_intfc->ReadRecordData(saved.damageMult))
                     {
                         ClearSavedState();
                         return;
@@ -233,7 +232,7 @@ public:
                         return;
                     }
 
-                    saved.knownRelics.reserve(knownCount);
+                    saved.knownRelicKeys.reserve(knownCount);
 
                     for (std::uint32_t j = 0; j < knownCount; j++) {
                         SavedRelicKey key;
@@ -243,7 +242,7 @@ public:
                             return;
                         }
 
-                        saved.knownRelics.push_back(key);
+                        saved.knownRelicKeys.push_back(key);
                     }
 
 
@@ -302,12 +301,14 @@ public:
         if (!a_intfc) {
             return;
         }
+        spdlog::debug("saving...");
 
         //
         // RELICS
         //
 
         if (!a_intfc->OpenRecord(kRecordRelics, kSerializationVersion)) {
+            spdlog::error("couldn't open record for relics.");
             return;
         }
 
@@ -333,7 +334,7 @@ public:
 
             if (!a_intfc->WriteRecordData(key.baseFormID) ||
                 !a_intfc->WriteRecordData(key.uniqueID) ||
-                !a_intfc->WriteRecordData(relic->GetType()))
+                !a_intfc->WriteRecordData((std::uint8_t)relic->GetType()))
             {
                 return;
             }
@@ -346,12 +347,17 @@ public:
 
         if (!a_intfc->OpenRecord(kRecordActors, kSerializationVersion))
         {
+            spdlog::error("couldn't open record for actors.");
             return;
         }
 
         std::uint32_t actorCount = 0;
 
         for (const auto& [handle, actor] : activeActors) {
+            if (!actor || !actor->IsValid()) {
+                continue;
+            }
+
             if (actor && actor->GetActor()) {
                 actorCount++;
             }
@@ -390,42 +396,34 @@ public:
                 return;
             }
 
-            const bool skipEquipAnim = actor->GetSkipEquipAnim();
-
-            const bool unequipWhenAnimEnds = actor->GetUnequipWhenAnimEnds();
-
-            const bool isBarehanded = actor->IsBarehanded();
-
-            if (!a_intfc->WriteRecordData(skipEquipAnim) ||
-                !a_intfc->WriteRecordData(unequipWhenAnimEnds) ||
-                !a_intfc->WriteRecordData(isBarehanded))
-            {
-                return;
-            }
-
 
             //
             // Known relics
             //
 
-            std::vector<SavedRelicKey> knownRelics;
+            const auto& knownRelics = actor->GetKnownRelics();
 
-            for (auto* relic : actor->GetKnownRelics()) {
+            std::vector<SavedRelicKey> knownRelicKeys;
+            knownRelicKeys.reserve(knownRelics.size());
 
-                if (!relic) {
-                    continue;
-                }
+            for (const RelicIdentity identity : knownRelics) {
+                if (identity == 0) continue;
 
-                knownRelics.push_back(MakeSavedRelicKey(*relic));
+                SavedRelicKey key;
+                key.baseFormID = static_cast<RE::FormID>(identity >> 16);
+                key.uniqueID   = static_cast<std::uint16_t>(identity & 0xFFFFu);
+
+                if (key.baseFormID == 0 || key.uniqueID == 0) continue;
+
+                knownRelicKeys.push_back(key);
             }
 
-            const std::uint32_t knownCount = static_cast<std::uint32_t>(knownRelics.size());
-
+            const std::uint32_t knownCount = static_cast<std::uint32_t>(knownRelicKeys.size());
             if (!a_intfc->WriteRecordData(knownCount)) {
                 return;
             }
 
-            for (const auto& key : knownRelics) {
+            for (const auto& key : knownRelicKeys) {
 
                 if (!a_intfc->WriteRecordData(key.baseFormID) ||
                     !a_intfc->WriteRecordData(key.uniqueID))
@@ -466,53 +464,111 @@ public:
                 return;
             }
         }
+        spdlog::debug("save success!");
     }
+    void OnRevert()
+    {
+        ClearRuntimeState();
+        ClearSavedState();
+        spdlog::debug("states reverted");
+    }
+
+    void OnConfigClose()
+    {
+        if (auto player = RE::PlayerCharacter::GetSingleton(); player && GetOrInitializePlayer() && Config::SpecialWeapon) {
+            const auto mcmSelectedRelic = (RelicType)(uint8_t)Config::SpecialWeapon->value;
+            const auto rObject = player->GetEquippedObject(false);
+            const auto rWeapon = rObject ? rObject->As<RE::TESObjectWEAP>() : nullptr;
+            RelicWeapon* relic = nullptr;
+            if (rWeapon) {
+                const auto identity = GetOrCreateEquippedRelicIdentity(player).value_or(0x0);
+                if (identity == 0x0) return;
+
+                auto it = activeRelics.find(identity);
+
+                if (mcmSelectedRelic == RelicType::kNone) {
+                    if (it != activeRelics.end()) {
+                        if (auto rRelic = it->second ? it->second.get() : nullptr) {
+                            if (auto thrownWeapon = rRelic ? dynamic_cast<ThrowableRelicWeapon*>(rRelic) : nullptr)
+                                thrownRelics.erase(thrownWeapon->projectile);
+
+                            if (rRelic && rRelic->GetWielder())
+                                rRelic->GetWielder()->SetRightHandRelic(nullptr);
+                        }
+
+                        activeRelics.erase(it);
+                    }
+                    return;
+                }
+
+                if (it != activeRelics.end()) {
+                    if (it->second->GetType() == mcmSelectedRelic) {
+                        return;
+                    }
+                    if (auto thrownWeapon = it->second ? dynamic_cast<ThrowableRelicWeapon*>(it->second.get()) : nullptr)
+                        thrownRelics.erase(thrownWeapon->projectile);
+
+                    activeRelics.erase(it);
+                }
+
+                auto relicPtr = RelicFactory::Create(mcmSelectedRelic, rWeapon);
+                if (relicPtr) {
+                    relicPtr->relicIdentity = identity;
+                    relicPtr->OnEquip(GetPlayer());
+                    relic = relicPtr.get();
+                }
+
+                activeRelics.emplace(identity, std::move(relicPtr));
+            }
+            GetPlayer()->OnEquip(relic);
+        }
+    }
+
     void OnEquip(RE::Actor* a_actor)
     {
-        if (!a_actor) return;
+        if (!a_actor || !Config::SpecialWeapon) return;
 
-        Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
+        uint8_t relicType = (uint8_t)RelicType::kNone;
+
+        if (a_actor->IsPlayer())
+            Config::SpecialWeapon->value = relicType;
 
         auto rObject = a_actor->GetEquippedObject(false);
         auto lObject = a_actor->GetEquippedObject(true);
         auto rWeapon = rObject ? rObject->As<RE::TESObjectWEAP>() : nullptr;
         auto lWeapon = lObject ? lObject->As<RE::TESObjectWEAP>() : nullptr;
 
+        BaseActor* activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetOrCreateActor(a_actor->GetHandle());
+        if (!activeActor) {
+            spdlog::error("failed to get or initialize {}", a_actor->GetName());
+            return;
+        }
+
+        RelicWeapon* activeRelic = nullptr;
+
         if (rWeapon) {
-            if (auto type = GetRelicType(rWeapon); type != RelicType::kNone) {
+            auto relicID = GetOrCreateEquippedRelicIdentity(a_actor).value_or(0x0);
+            if (relicID == 0x0) return;
 
-                BaseActor* activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetOrCreateActor(a_actor->GetHandle());
-                if (!activeActor) {
-                    spdlog::error("failed to get or initialize player");
-                    return;
+            auto it = activeRelics.find(relicID);
+
+            activeRelic = it != activeRelics.end() && it->second ? it->second.get() : nullptr;
+
+            activeActor->SetRightHandRelic(activeRelic);
+
+            if (activeRelic) {
+                activeRelic->OnEquip(activeActor);
+                spdlog::debug("relic equipped");
+
+                relicType = (uint8_t)activeRelic->GetType();
+
+                auto& knownRelics = activeActor->GetKnownRelics();
+                if (std::find(knownRelics.rbegin(), knownRelics.rend(), relicID) == knownRelics.rend()) {
+                    knownRelics.emplace_back(relicID);
                 }
-
-                auto relicID = GetOrCreateEquippedRelicIdentity(a_actor).value_or(0x0);
-                if (relicID == 0x0) return;
-
-                auto& activeRelic = activeRelics[relicID];
-                if (activeRelic) {
-                    activeRelic->OnEquip(activeActor);
-                    spdlog::debug("relic equipped, {}", typeid(type).name());
-                } else {
-                    activeRelic = RelicFactory::Create(type, rWeapon);
-                    if (activeRelic) {
-                        activeRelic->relicIdentity = relicID;
-                        activeRelic->OnEquip(activeActor);
-                        spdlog::debug("relic created, {}", typeid(type).name());
-                    } else{
-                        activeRelics.erase(relicID);
-                        spdlog::error("failed to initialize relic weapon");
-                    }
-                }
-
-                activeActor->SetRightHandRelic(activeRelic.get());
-
-                if (activeRelic) {
-                    Config::SpecialWeapon->value = (uint8_t)activeRelic->GetType();
-                    auto& knownRelics = activeActor->GetKnownRelics();
-                    if (std::find(knownRelics.rbegin(), knownRelics.rend(), activeRelic.get()) == knownRelics.rend()) {
-                        knownRelics.emplace_back(activeRelic.get());
+                if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
+                    if (throwableRelic->projectile) {
+                        thrownRelics.erase(throwableRelic->projectile);
                     }
                 }
             }
@@ -520,7 +576,11 @@ public:
         if (lWeapon) {
             // sadece blades of chaos için
         }
-        a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
+
+        if (a_actor->IsPlayer())
+            Config::SpecialWeapon->value = relicType;
+
+        activeActor->OnEquip(activeRelic);
     }
     bool OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
     {
@@ -536,6 +596,7 @@ public:
             it->second->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
         }
     }
+
     void OnMenuOpenCloseEvent(const bool a_opening)
     {
         for (const auto& [id, relic] : activeRelics) {
@@ -549,7 +610,7 @@ public:
         thrownRelics.emplace(a_projectile, a_relic);
     }
 
-    BaseActor* GetPlayer() const {return player;}
+    Kratos* GetPlayer() const {return player;}
     void UpdateRelic(RE::Projectile* a_this)
     {
         if (a_this) {
@@ -560,6 +621,7 @@ public:
     }
     void UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta)
     {
+
         if (GetOrInitializePlayer()) {
             player->Update(a_delta);
         }
@@ -579,8 +641,8 @@ public:
     }
 
 private:
-    BaseActorPtr playerPtr;
-    BaseActor* player = nullptr;
+    KratosPtr playerPtr;
+    Kratos* player = nullptr;
     std::unordered_map<RE::ActorHandle, BaseActorPtr> activeActors;
 
     std::unordered_map<RelicIdentity, RelicWeaponPtr> activeRelics;
@@ -651,12 +713,22 @@ private:
             auto& knownRelics = baseActor->GetKnownRelics();
             knownRelics.clear();
 
-            for (const auto& key : saved.knownRelics) {
-                if (auto relic = FindRuntimeRelic(key, a_serialization)) {
-                    knownRelics.push_back(relic);
-                } else {
+            for (const auto& key : saved.knownRelicKeys) {
+                if (key.baseFormID == 0 || key.uniqueID == 0) {
                     unresolved = true;
+                    continue;
                 }
+
+                RE::FormID resolvedFormID = 0;
+
+                if (!a_serialization->ResolveFormID(key.baseFormID, resolvedFormID)) {
+                    unresolved = true;
+                    continue;
+                }
+
+                const auto identity = MakeRelicIdentity(resolvedFormID, key.uniqueID);
+
+                knownRelics.push_back(identity);
             }
 
             auto resolveOptional = [&](const SavedRelicKey& key) -> RelicWeapon* {
@@ -664,7 +736,7 @@ private:
                     return nullptr;
                 }
 
-                auto* relic = FindRuntimeRelic(key, a_serialization);
+                auto relic = FindRuntimeRelic(key, a_serialization);
 
                 if (!relic) {
                     unresolved = true;
@@ -677,6 +749,10 @@ private:
             baseActor->SetLeftHandRelic(resolveOptional(saved.leftHandRelic));
             baseActor->SetLastRightHandRelic(resolveOptional(saved.lastRightHandRelic));
             baseActor->SetLastLeftHandRelic(resolveOptional(saved.lastLeftHandRelic));
+
+            baseActor->OnEquip(baseActor->GetRightHandRelic());
+            if (baseActor->GetRightHandRelic())
+                baseActor->GetRightHandRelic()->OnEquip(baseActor);
         }
         return !unresolved;
     }
@@ -715,7 +791,7 @@ private:
             if (activeRelics.contains(identity)) {
                 auto& relic = activeRelics.at(identity);
 
-                if (relic && relic->GetType() != saved.type) {
+                if (relic && (std::uint8_t)relic->GetType() != saved.type) {
                     spdlog::error(
                         "Relic type mismatch for identity {:X}: runtime: {}, saved: {}",
                         identity,
@@ -727,7 +803,7 @@ private:
                 continue;
             }
 
-            auto relic = RelicFactory::Create(saved.type, weapon);
+            auto relic = RelicFactory::Create((RelicType)saved.type, weapon);
 
             if (!relic) {
                 unresolved = true;
@@ -780,9 +856,6 @@ private:
             baseActor->level = saved.level;
             baseActor->meleeSkill = saved.meleeSkill;
             baseActor->damageMult = saved.damageMult;
-            baseActor->SetSkipEquipAnim(saved.skipEquipAnim);
-            baseActor->SetUnequipWhenAnimEnds(saved.unequipWhenAnimEnds);
-            baseActor->SetBarehanded(saved.isBarehanded);
             baseActor->SetTitles(saved.titles);
         }
         return !unresolved;
@@ -792,6 +865,7 @@ private:
         if (!restorePending || !a_serialization) {
             return;
         }
+        spdlog::info("loading saved state...");
 
         bool pending = false;
 
@@ -800,7 +874,12 @@ private:
         pending |= !RelinkActorsToRelics(a_serialization);
 
         restorePending = pending;
+        if (restorePending)
+            spdlog::warn("save is not loaded successfully!");
+        else 
+            spdlog::info("save loaded successfully!");
     }
+
     void ClearRuntimeState()
     {
         activeRelics.clear();
@@ -810,6 +889,8 @@ private:
         player = nullptr;
 
         thrownRelics.clear();
+
+        if (Config::SpecialWeapon) Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
     }
     void ClearSavedState()
     {
@@ -826,7 +907,7 @@ private:
             a_intfc->ReadRecordData(a_key.baseFormID) &&
             a_intfc->ReadRecordData(a_key.uniqueID);
     }
-
+/*
     RelicType GetRelicType(const RE::TESObjectWEAP* a_weap) const
     {
         RelicType type = RelicType::kNone;
@@ -845,7 +926,7 @@ private:
         }
         return type;
     }
-
+*/
     BaseActor* GetOrInitializePlayer()
     {
         if (!player) {
@@ -883,461 +964,3 @@ private:
         thrownRelics.reserve(128);
     }
 };
-/*
-void Initialize(RE::Actor* a_actor)
-{
-    lastEquippedRelic = Kratos::Relic::kNone;
-    lastThrownRelic = Kratos::Relic::kNone;
-    if (a_actor) {
-        auto kratos = Kratos::GetSingleton();
-        auto invChanges = a_actor->GetInventoryChanges();
-        auto entries = invChanges->entryList;
-        spdlog::info("Kratos's special weapons initializing...");
-        for (auto entry : *entries) {
-            if (entry && entry->object && entry->object->GetFile()) {
-                if (entry->object->IsWeapon()) {
-#ifdef NEW_WEAPON_REGISTER_METHOD
-#else
-                    if (kratos->gLeviathanAxeFormID && entry->object->GetLocalFormID() == kratos->gLeviathanAxeFormID->value && entry->object->GetFile()->fileName == Config::registeredLeviathanFileName) {
-                        if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
-                            weap->RemoveKeywords(Config::SpecialKWDs);
-                            weap->AddKeyword(Config::LeviathanAxeKWD);
-                            LeviathanAxe = weap;
-                            spdlog::info("{} is your Leviathan Axe", weap->GetName());
-                        }
-                    } else if (kratos->gBladeOfChaosFormID && entry->object->GetLocalFormID() == kratos->gBladeOfChaosFormID->value && entry->object->GetFile()->fileName == Config::registeredBladeOfChaosFileName) {
-                        if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
-                            weap->RemoveKeywords(Config::SpecialKWDs);
-                            weap->AddKeyword(Config::BladeOfChaosKWD);
-                            BladeOfChaos = weap;
-                            spdlog::info("{} is your Blade of Chaos", weap->GetName());
-                        }
-                    } else if (kratos->gBladeOfChaosFormID && entry->object->GetLocalFormID() == kratos->gBladeOfChaosFormID->value+1 && entry->object->GetFile()->fileName == Config::registeredLBladeOfChaosFileName) {
-                        if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
-                            weap->RemoveKeywords(Config::SpecialKWDs);
-                            weap->AddKeyword(Config::BladeOfChaosKWD);
-                            BladeOfChaosL = weap;
-                            spdlog::info("{} is your left Blade of Chaos", weap->GetName());
-                        }
-                    } else if (kratos->gDraupnirSpearFormID && entry->object->GetLocalFormID() == kratos->gDraupnirSpearFormID->value && entry->object->GetFile()->fileName == Config::registeredDraupnirFileName) {
-                        if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
-                            weap->RemoveKeywords(Config::SpecialKWDs);
-                            weap->AddKeyword(Config::DraupnirSpearKWD);
-                            DraupnirSpear = weap;
-                            spdlog::info("{} is your Draupnir Spear", weap->GetName());
-                        }
-                    } else if (kratos->gBladeOfOlympusFormID && entry->object->GetLocalFormID() == kratos->gBladeOfOlympusFormID->value && entry->object->GetFile()->fileName == Config::registeredBladeOfOlympusFileName) {
-                        if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
-                            weap->RemoveKeywords(Config::SpecialKWDs);
-                            weap->AddKeyword(Config::BladeOfOlympusKWD);
-                            BladeOfOlympus = weap;
-                            spdlog::info("{} is your Blade of Olympus", weap->GetName());
-                        }
-                    } else if (kratos->gMjolnirFormID && entry->object->GetLocalFormID() == kratos->gMjolnirFormID->value && entry->object->GetFile()->fileName == Config::registeredMjolnirFileName) {
-                        if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
-                            weap->RemoveKeywords(Config::SpecialKWDs);
-                            weap->AddKeyword(Config::MjolnirKWD);
-                            Mjolnir = weap;
-                            spdlog::info("{} is your Mjolnir", weap->GetName());
-                        }
-                    }
-#ifdef TRIDENT
-                    else if (kratos->gTridentFormID && entry->object->GetLocalFormID() == kratos->gTridentFormID->value && entry->object->GetFile()->fileName == Config::registeredTridentFileName) {
-                        if (auto weap = entry->object->As<RE::TESObjectWEAP>(); weap) {
-                            weap->RemoveKeywords(Config::SpecialKWDs);
-                            weap->AddKeyword(Config::TridentKWD);
-                            Trident = weap;
-                            spdlog::info("{} is your Trident", weap->GetName());
-                        }
-                    }
-#endif
-#endif
-                } else if (entry->object->IsArmor()) {
-#ifdef NEW_WEAPON_REGISTER_METHOD
-#else
-                    if (entry->object->GetLocalFormID() == kratos->gGuardianShieldFormID->value && entry->object->GetFile()->fileName == Config::registeredGuardianShieldFileName) {
-                        if (auto shield = entry->object->As<RE::TESObjectARMO>(); shield) {
-                            shield->RemoveKeywords(Config::SpecialKWDs);
-                            shield->AddKeyword(Config::GuardianShieldKWD);
-                            GuardianShield = shield;
-                            spdlog::info("{} is your Guardian Shield", shield->GetName());
-                        }
-                    }
-#endif
-                }
-            } else spdlog::info("entry is not an ordinary object");
-        } spdlog::info("Kratos's special weapons initialized.");
-    }
-}
-void ResetRegistrations()
-{
-    Config::registeredLeviathanID      = 105;
-    Config::registeredBladeOfChaosID   = 105;
-    Config::registeredLBladeOfChaosID  = 105;
-    Config::registeredDraupnirID       = 105;
-    Config::registeredBladeOfOlympusID = 105;
-    Config::registeredMjolnirID        = 105;
-    Config::registeredTridentID        = 105;
-    Config::registeredGuardianShieldID = 105;
-    Config::registeredLeviathanFileName      = "Not Registered";
-    Config::registeredBladeOfChaosFileName   = "Not Registered";
-    Config::registeredLBladeOfChaosFileName  = "Not Registered";
-    Config::registeredDraupnirFileName       = "Not Registered";
-    Config::registeredBladeOfOlympusFileName = "Not Registered";
-    Config::registeredMjolnirFileName        = "Not Registered";
-    Config::registeredTridentFileName        = "Not Registered";
-    Config::registeredGuardianShieldFileName = "Not Registered";
-}
-void WeaponIdentifier(RE::Actor* a_actor, RE::TESObjectWEAP* a_RHandWeapon, RE::TESObjectWEAP* a_LHandWeapon, RE::TESObjectARMO* a_shield)
-{
-    Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
-    Config::SpecialShield->value = (uint8_t)Kratos::Shield::kNone;
-    auto RelicName = "not a Relic";
-//  auto address = reinterpret_cast<std::uintptr_t>(a_RHandWeapon);
-    auto kratos = Kratos::GetSingleton();
-    if (a_RHandWeapon && a_RHandWeapon->GetFile()) {
-        const auto equippedWeaponFile = a_RHandWeapon->GetFile()->fileName;
-        const FormID equippedWeaponID = a_RHandWeapon->GetLocalFormID();
-        spdlog::debug("registering the {:8x} from {}", equippedWeaponID, equippedWeaponFile);
-        if (kratos->IsInRage(a_actor) && !kratos->IsWantFinishRage())
-            kratos->EndRage(kratos->GetLastTriggeredRageType(), false, false, false, a_actor);
-        if (Config::LeviathanAxeKWD && a_RHandWeapon->HasKeyword(Config::LeviathanAxeKWD)) {
-            isLeviathanAxe = true;
-            isRelic = true;
-            isKratos = true;
-            RelicName = "the Leviathan Axe";
-            LeviathanAxe = a_RHandWeapon;
-            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kLeviathanAxe;
-            Config::registeredLeviathanFileName = equippedWeaponFile;
-            Config::registeredLeviathanID = equippedWeaponID;
-            kratos->gLeviathanAxeFormID->value = equippedWeaponID;
-            lastEquippedRelic = Kratos::Relic::kLeviathanAxe;
-
-            auto Levi = LeviathanAxe::GetSingleton();
-            Levi->data.weap     = LeviathanAxe;
-            Levi->data.ench     = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(a_actor, false);
-#ifdef EXPERIMENTAL_THROWPOISON
-            Levi->data.poison   = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
-#endif
-            Levi->data.damage   = static_cast<float>(LeviathanAxe->attackDamage);
-            if (WeaponIdentify::LeviathanAxe->HasWorldModel()) {
-                spdlog::debug("Levi is throwable");
-                Levi->SetThrowState(tState::kThrowable);
-                Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, true);
-                kratos->SetIsCanCallAxe(a_actor, false);
-            } else spdlog::warn("Levi is not equipped for real");
-
-            if (Levi->SpellCatchLevi && a_actor->AsMagicTarget()->HasMagicEffect(Levi->EffCatchLevi)) {a_actor->RemoveSpell(Levi->SpellCatchLevi);}
-
-            if (Levi->LeviathanAxeProjectileA 
-            && (Levi->GetThrowState() == tState::kArriving
-             || Levi->GetThrowState() == tState::kArrived)) 
-                Levi->Catch(true);
-        }
-        else if (Config::BladeOfChaosKWD && a_RHandWeapon->HasKeyword(Config::BladeOfChaosKWD)) {
-            isBladeOfChaos = true;
-            isRelic = true;
-            isKratos = true;
-            RelicName = "the Blade of Chaos";
-            BladeOfChaos = a_RHandWeapon;
-            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kBladeOfChaos;
-            Config::registeredBladeOfChaosFileName = equippedWeaponFile;
-            if (a_LHandWeapon && (a_LHandWeapon->HasKeyword(Config::BladeOfChaosKWD) || a_LHandWeapon->GetFile() == a_RHandWeapon->GetFile())) {
-                Config::registeredLBladeOfChaosFileName = a_LHandWeapon->GetFile()->fileName;
-                Config::registeredLBladeOfChaosID = a_LHandWeapon->GetLocalFormID();
-                BladeOfChaosL = a_LHandWeapon;
-            }
-            Config::registeredBladeOfChaosID = equippedWeaponID;
-            kratos->gBladeOfChaosFormID->value = equippedWeaponID;
-            lastEquippedRelic = Kratos::Relic::kBladeOfChaos;
-
-            auto BoC = BladeOfChaos::GetSingleton();
-            BoC->data.weap  = BladeOfChaos;
-            BoC->data.weaponModel   = WeaponBone;
-            BoC->data.weaponModelL  = ShieldBone;
-        }
-        else if (Config::DraupnirSpearKWD && a_RHandWeapon->HasKeyword(Config::DraupnirSpearKWD)) {
-            isDraupnirSpear = true;
-            isRelic = true;
-            isKratos = true;
-            RelicName = "the Draupnir Spear";
-            DraupnirSpear = a_RHandWeapon;
-            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kDraupnirSpear;
-            Config::registeredDraupnirFileName = equippedWeaponFile;
-            Config::registeredDraupnirID = equippedWeaponID;
-            kratos->gDraupnirSpearFormID->value = equippedWeaponID;
-            lastEquippedRelic = Kratos::Relic::kDraupnirSpear;
-
-            Draupnir::data.weap     = DraupnirSpear;
-            Draupnir::data.ench     = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(a_actor, false);
-#ifdef EXPERIMENTAL_THROWPOISON
-            Draupnir::data.poison   = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
-#endif
-            Draupnir::data.damage   = static_cast<float>(DraupnirSpear->attackDamage);
-        }
-        else if (Config::BladeOfOlympusKWD && a_RHandWeapon->HasKeyword(Config::BladeOfOlympusKWD)) {
-            isBladeOfOlympus = true;
-            isRelic = true;
-            isKratos = true;
-            RelicName = "the Blade of Olympus";
-            BladeOfOlympus = a_RHandWeapon;
-            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kBladeOfOlympus;
-            Config::registeredBladeOfOlympusFileName = equippedWeaponFile;
-            Config::registeredBladeOfOlympusID = equippedWeaponID;
-            kratos->gBladeOfOlympusFormID->value = equippedWeaponID;
-            lastEquippedRelic = Kratos::Relic::kBladeOfOlympus;
-        }
-        else if (Config::MjolnirKWD && a_RHandWeapon->HasKeyword(Config::MjolnirKWD)) {
-            isMjolnir = true;
-            isRelic = true;
-            isThor = true;
-            RelicName = "the Mjolnir";
-            Mjolnir = a_RHandWeapon;
-            Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kMjolnir;
-            Config::registeredMjolnirFileName = equippedWeaponFile;
-            Config::registeredMjolnirID = equippedWeaponID;
-            kratos->gMjolnirFormID->value = equippedWeaponID;
-            lastEquippedRelic = Kratos::Relic::kMjolnir;
-
-            auto mjolnir = Mjolnir::GetSingleton();
-            mjolnir->data.weap      = Mjolnir;
-            mjolnir->data.ench      = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(a_actor, false);
-#ifdef EXPERIMENTAL_THROWPOISON
-            mjolnir->data.poison    = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
-#endif
-            mjolnir->data.damage    = static_cast<float>(Mjolnir->attackDamage);
-        //    mjolnir->MjolnirProjBaseT->model = Mjolnir->model;
-        //    mjolnir->MjolnirProjBaseA->model = Mjolnir->model;
-            if (WeaponIdentify::Mjolnir->HasWorldModel()) {
-                spdlog::debug("Mjolnir is throwable");
-                mjolnir->SetThrowState(tStateM::kThrowable);
-                mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag, true);
-                kratos->SetIsCanCallMjolnir(a_actor, false);
-            } else spdlog::warn("Mjolnir is not equipped for real");
-
-            if (mjolnir->SpellCatchMjolnir && a_actor->AsMagicTarget()->HasMagicEffect(mjolnir->EffCatchMjolnir)) {a_actor->RemoveSpell(mjolnir->SpellCatchMjolnir);}
-
-            if (mjolnir->MjolnirProjectileA 
-            && (mjolnir->GetThrowState() == tStateM::kArriving
-             || mjolnir->GetThrowState() == tStateM::kArrived)) 
-                mjolnir->Catch(true);
-        }
-#ifdef TRIDENT
-        else if (Config::TridentKWD && a_RHandWeapon->HasKeyword(Config::TridentKWD)) {
-            isTrident = true;
-            isRelic = true;
-            isPoseidon = true;
-            RelicName = "the Trident";
-            Trident = a_RHandWeapon;
-            Config::SpecialWeapon->value = 3U;//(uint8_t)Kratos::Relic::kTrident;
-            Config::registeredTridentFileName = equippedWeaponFile;
-            Config::registeredTridentID = equippedWeaponID;
-            kratos->gTridentFormID->value = equippedWeaponID;
-            lastEquippedRelic = Kratos::Relic::kTrident;
-
-            auto trident = Trident::GetSingleton();
-            trident->data.weap      = Trident;
-            trident->data.ench      = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(a_actor, false);
-#ifdef EXPERIMENTAL_THROWPOISON
-            trident->data.poison    = ObjectUtil::Poison::GetEquippedObjPoison(a_actor, false);
-#endif
-            trident->data.damage    = static_cast<float>(Trident->attackDamage);
-            trident->TridentProjBaseL->model = Trident->model;
-            if (WeaponIdentify::Trident->HasWorldModel()) {
-                trident->isTridentThrowable = true;
-                spdlog::debug("Trident is throwable");
-            } else spdlog::warn("Trident is not equipped for real");
-        }
-#endif
-        spdlog::info("{} is {}", a_RHandWeapon->GetName(), RelicName);
-    } if (a_shield && a_shield->GetFile()) {
-        const auto equippedShieldFile = a_shield->GetFile()->fileName;
-        RelicName = "not a Relic";
-        if (Config::GuardianShieldKWD && a_shield->HasKeyword(Config::GuardianShieldKWD)) {
-            isGuardianShield = true;
-            isKratos = true;
-            Config::SpecialShield->value = (uint8_t)Kratos::Shield::kGuardianShield;
-            Config::registeredGuardianShieldFileName = equippedShieldFile;
-            RelicName = "the Guardian Shield";
-            GuardianShield = a_shield;
-            kratos->gGuardianShieldFormID->value = a_shield->formID;
-        }
-        spdlog::info("{} is {}", a_shield->GetName(), RelicName);
-    }
-    a_actor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
-}
-void SpecialityCheck(RE::TESObjectWEAP* a_RHandWeapon, RE::TESObjectWEAP* a_LHandWeapon, RE::TESObjectARMO* a_shield, const Kratos::Relic a_relic, const Kratos::Shield a_specialShield)
-{
-    if (Config::SpecialKWDs.size() < 6) {spdlog::error("check the special equipment keyword list!"); return;}
-    if (a_RHandWeapon) {
-        switch (a_relic)
-        {
-        case Kratos::Relic::kNone:
-            if (a_RHandWeapon->HasKeywordInArray(Config::SpecialKWDs, false)) {
-                if (a_RHandWeapon->HasKeyword(Config::LeviathanAxeKWD)) {Config::registeredLeviathanID = 105; Config::registeredLeviathanFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfChaosKWD)) {Config::registeredBladeOfChaosID = 105; Config::registeredBladeOfChaosFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::DraupnirSpearKWD)) {Config::registeredDraupnirID = 105; Config::registeredDraupnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfOlympusKWD)) {Config::registeredBladeOfOlympusID = 105; Config::registeredBladeOfOlympusFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::MjolnirKWD)) {Config::registeredMjolnirID = 105; Config::registeredMjolnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::TridentKWD)) {Config::registeredTridentID = 105; Config::registeredTridentFileName = "Not Registered";}
-                a_RHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-            }
-            break;
-        case Kratos::Relic::kLeviathanAxe:
-            if (!isLeviathanAxe) {
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfChaosKWD)) {Config::registeredBladeOfChaosID = 105; Config::registeredBladeOfChaosFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::DraupnirSpearKWD)) {Config::registeredDraupnirID = 105; Config::registeredDraupnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfOlympusKWD)) {Config::registeredBladeOfOlympusID = 105; Config::registeredBladeOfOlympusFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::MjolnirKWD)) {Config::registeredMjolnirID = 105; Config::registeredMjolnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::TridentKWD)) {Config::registeredTridentID = 105; Config::registeredTridentFileName = "Not Registered";}
-                a_RHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-                a_RHandWeapon->AddKeyword(Config::LeviathanAxeKWD);
-            } break;
-        case Kratos::Relic::kBladeOfChaos:
-            if (!isBladeOfChaos) {
-                if (a_RHandWeapon->HasKeyword(Config::LeviathanAxeKWD)) {Config::registeredLeviathanID = 105; Config::registeredLeviathanFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::DraupnirSpearKWD)) {Config::registeredDraupnirID = 105; Config::registeredDraupnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfOlympusKWD)) {Config::registeredBladeOfOlympusID = 105; Config::registeredBladeOfOlympusFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::MjolnirKWD)) {Config::registeredMjolnirID = 105; Config::registeredMjolnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::TridentKWD)) {Config::registeredTridentID = 105; Config::registeredTridentFileName = "Not Registered";}
-                a_RHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-                a_RHandWeapon->AddKeyword(Config::BladeOfChaosKWD);
-                if (a_LHandWeapon && !a_LHandWeapon->HasKeywordInArray(Config::SpecialKWDs, false)) {
-                    a_LHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-                    a_LHandWeapon->AddKeyword(Config::BladeOfChaosKWD);
-                }
-            } break;
-        case Kratos::Relic::kDraupnirSpear:
-            if (!isDraupnirSpear) {
-                if (a_RHandWeapon->HasKeyword(Config::LeviathanAxeKWD)) {Config::registeredLeviathanID = 105; Config::registeredLeviathanFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfChaosKWD)) {Config::registeredBladeOfChaosID = 105; Config::registeredBladeOfChaosFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfOlympusKWD)) {Config::registeredBladeOfOlympusID = 105; Config::registeredBladeOfOlympusFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::MjolnirKWD)) {Config::registeredMjolnirID = 105; Config::registeredMjolnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::TridentKWD)) {Config::registeredTridentID = 105; Config::registeredTridentFileName = "Not Registered";}
-                a_RHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-                a_RHandWeapon->AddKeyword(Config::DraupnirSpearKWD);
-            } break;
-        case Kratos::Relic::kBladeOfOlympus:
-            if (!isBladeOfOlympus) {
-                if (a_RHandWeapon->HasKeyword(Config::LeviathanAxeKWD)) {Config::registeredLeviathanID = 105; Config::registeredLeviathanFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfChaosKWD)) {Config::registeredBladeOfChaosID = 105; Config::registeredBladeOfChaosFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::DraupnirSpearKWD)) {Config::registeredDraupnirID = 105; Config::registeredDraupnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::MjolnirKWD)) {Config::registeredMjolnirID = 105; Config::registeredMjolnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::TridentKWD)) {Config::registeredTridentID = 105; Config::registeredTridentFileName = "Not Registered";}
-                a_RHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-                a_RHandWeapon->AddKeyword(Config::BladeOfOlympusKWD);
-            } break;
-        case Kratos::Relic::kMjolnir:
-            if (!isMjolnir) {
-                if (a_RHandWeapon->HasKeyword(Config::LeviathanAxeKWD)) {Config::registeredLeviathanID = 105; Config::registeredLeviathanFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfChaosKWD)) {Config::registeredBladeOfChaosID = 105; Config::registeredBladeOfChaosFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::DraupnirSpearKWD)) {Config::registeredDraupnirID = 105; Config::registeredDraupnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfOlympusKWD)) {Config::registeredBladeOfOlympusID = 105; Config::registeredBladeOfOlympusFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::TridentKWD)) {Config::registeredTridentID = 105; Config::registeredTridentFileName = "Not Registered";}
-                a_RHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-                a_RHandWeapon->AddKeyword(Config::MjolnirKWD);
-            } break;
-#ifdef TRIDENT
-        case Kratos::Relic::kTrident:
-            if (!isTrident) {
-                if (a_RHandWeapon->HasKeyword(Config::LeviathanAxeKWD)) {Config::registeredLeviathanID = 105; Config::registeredLeviathanFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfChaosKWD)) {Config::registeredBladeOfChaosID = 105; Config::registeredBladeOfChaosFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::DraupnirSpearKWD)) {Config::registeredDraupnirID = 105; Config::registeredDraupnirFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::BladeOfOlympusKWD)) {Config::registeredBladeOfOlympusID = 105; Config::registeredBladeOfOlympusFileName = "Not Registered";}
-                if (a_RHandWeapon->HasKeyword(Config::MjolnirKWD)) {Config::registeredMjolnirID = 105; Config::registeredMjolnirFileName = "Not Registered";}
-                a_RHandWeapon->RemoveKeywords(Config::SpecialKWDs);
-                a_RHandWeapon->AddKeyword(Config::TridentKWD);
-            } break;
-#endif
-        default:
-            break;
-        }
-    }
-    if (a_shield) {
-        switch (a_specialShield)
-        {
-        case Kratos::Shield::kNone:
-            if (isGuardianShield) {
-                if (a_RHandWeapon->HasKeyword(Config::GuardianShieldKWD)) {Config::registeredGuardianShieldID = 105; Config::registeredGuardianShieldFileName = "Not Registered";}
-                a_shield->RemoveKeywords(Config::SpecialKWDs);
-            } break;
-        case Kratos::Shield::kGuardianShield:
-            if (!isGuardianShield) {
-                a_shield->RemoveKeywords(Config::SpecialKWDs);
-                a_shield->AddKeyword(Config::GuardianShieldKWD);
-            } break;
-        case Kratos::Shield::kDauntlessShield:
-            break;
-        case Kratos::Shield::kStoneWallShield:
-            break;
-        case Kratos::Shield::kShatterStarShield:
-            break;
-        case Kratos::Shield::kOnslaughtShield:
-            break;
-
-        default:
-            break;
-        }
-    }
-}
-void WeaponCheck(const bool a_specialityCheck)
-{
-    isLeviathanAxe  = false;
-    isBladeOfChaos  = false;
-    isDraupnirSpear = false;
-    isBladeOfOlympus = false;
-    isMjolnir = false;
-    isTrident = false;
-    isRelic = false;
-    isKratos = false;
-    isThor = false;
-
-    auto AnArchos = PlayerCharacter::GetSingleton();
-
-    RHandBone = GetRhandBone(AnArchos);
-    LHandBone = GetLhandBone(AnArchos);
-    WeaponBone = GetWeaponBone(AnArchos);
-    ShieldBone = GetShieldBone(AnArchos);
-    AnimObjectRBone = GetAnimObjectRBone(AnArchos);
-
-    auto pcSkillArchery = AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kArchery);
-    auto pcSkill1Handed = AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kOneHanded);
-    auto pcDamageMult   = AnArchos->AsActorValueOwner()->GetActorValue(RE::ActorValue::kAttackDamageMult);
-    DamageMult  = 1.f + (pcSkill1Handed / 120) + (pcSkillArchery / 80);
-    DamageMult  *= pcDamageMult;
-
-    RE::TESObjectWEAP* RHandWeapon = nullptr;
-    RE::TESObjectWEAP* LHandWeapon = nullptr;
-    RE::TESObjectARMO* shield = nullptr;
-    auto rObj = AnArchos->GetEquippedObject(false);
-    auto lObj = AnArchos->GetEquippedObject(true);
-    if (rObj) {
-        EquippedObjR = rObj->As<TESBoundObject>();
-        if (rObj->IsWeapon()) {
-            RHandWeapon = rObj->As<TESObjectWEAP>();
-        }
-    } if (lObj) {
-        EquippedObjL = lObj->As<TESBoundObject>();
-        if (lObj->IsArmor()) {
-            shield = lObj->As<TESObjectARMO>();
-        } else if (lObj->IsWeapon()) {
-            LHandWeapon = lObj->As<TESObjectWEAP>();
-        }
-    } if (!lObj && !rObj) {
-        isBarehanded = true;
-    } else isBarehanded = false;
-
-    if (RHandWeapon || LHandWeapon || shield) {
-        if (!RHandWeapon && !LHandWeapon) isBarehanded = true;
-        else isBarehanded = false;
-        if (a_specialityCheck) {
-            SpecialityCheck(RHandWeapon, LHandWeapon, shield, static_cast<Kratos::Relic>((uint8_t)Config::SpecialWeapon->value), static_cast<Kratos::Shield>((uint8_t)Config::SpecialShield->value));
-        }
-        WeaponIdentifier(AnArchos, RHandWeapon, LHandWeapon, shield);
-    } else {
-        Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
-        Config::SpecialShield->value = (uint8_t)Kratos::Shield::kNone;
-        AnArchos->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
-    }
-}
-*/
