@@ -51,6 +51,7 @@ void BaseActor::OnEquip(RelicWeapon* a_relic)
     if (IsValid() && GetActor()) {
         auto type = a_relic ? (uint8_t)a_relic->GetType() : (uint8_t)RelicType::kNone;
         GetActor()->SetGraphVariableInt("iRelicWeapon", type);
+        spdlog::debug("SyncRelicGraphState: relic type = {}", (int)type);
         SetRightHandRelic(a_relic);
         SetLastRightHandRelic(a_relic);
         if (a_relic) {

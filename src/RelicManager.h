@@ -19,7 +19,12 @@ public:
 
     static constexpr std::uint32_t kRecordRelics = 'RELC';
     static constexpr std::uint32_t kRecordActors = 'ACTR';
-    static constexpr std::uint32_t kSerializationVersion = 1;
+
+    static constexpr std::uint32_t kRelicsVersion = 1;
+    static constexpr std::uint32_t kActorsVersion = 1;
+
+    static constexpr std::uint32_t kMinRelicsVersion = 1;
+    static constexpr std::uint32_t kMinActorsVersion = 1;
 
     struct SavedRelicKey
     {
@@ -116,6 +121,12 @@ public:
         return it != activeRelics.end() ? it->second.get() : nullptr;
     }
 
+    void OnRevert()
+    {
+        ClearRuntimeState();
+        ClearSavedState();
+        spdlog::debug("states reverted");
+    }
     void OnPreLoadGame()
     {
         if (GetOrInitializePlayer()) {
@@ -140,149 +151,24 @@ public:
     }
     void OnPostLoadGame(SKSE::SerializationInterface* a_intfc = nullptr)
     {
-        if (!a_intfc) {
-            return;
-        }
+        if (!a_intfc) return;
+
+        ClearRuntimeState();
+        ClearSavedState();
 
         std::uint32_t type = 0;
         std::uint32_t version = 0;
         std::uint32_t length = 0;
 
-        ClearRuntimeState();
-        ClearSavedState();
-
         while (a_intfc->GetNextRecordInfo(type, version, length)) {
-
-            if (version != kSerializationVersion) {
-                continue;
-            }
-
-            //
-            // RELICS
-            //
-
             if (type == kRecordRelics) {
-
-                std::uint32_t count = 0;
-
-                if (!a_intfc->ReadRecordData(count) || count > 65536) {
-                    ClearSavedState();
-                    return;
-                }
-
-                savedRelics.clear();
-                savedRelics.reserve(count);
-
-                for (std::uint32_t i = 0; i < count; i++) {
-
-                    SavedRelic saved;
-
-                    if (!ReadRelicKey(a_intfc, saved.key) || !a_intfc->ReadRecordData(saved.type)) {
-                        ClearSavedState();
-                        return;
-                    }
-
-                    if (saved.key.baseFormID == 0 || saved.key.uniqueID == 0) {
-                        continue;
-                    }
-
-                    savedRelics.push_back(std::move(saved));
-                }
-            }
-
-
-            //
-            // ACTORS
-            //
-
-            else if (type == kRecordActors) {
-
-                std::uint32_t count = 0;
-
-                if (!a_intfc->ReadRecordData(count) || count > 65536) {
-                    ClearSavedState();
-                    return;
-                }
-
-                savedActors.reserve(count);
-
-                for (std::uint32_t i = 0; i < count; i++) {
-
-                    SavedActor saved;
-
-                    if (!a_intfc->ReadRecordData(saved.formID) ||
-                        !a_intfc->ReadRecordData(saved.titles) ||
-                        !a_intfc->ReadRecordData(saved.level) ||
-                        !a_intfc->ReadRecordData(saved.meleeSkill) ||
-                        !a_intfc->ReadRecordData(saved.damageMult))
-                    {
-                        ClearSavedState();
-                        return;
-                    }
-
-
-                    //
-                    // Known relics
-                    //
-
-                    std::uint32_t knownCount = 0;
-
-                    if (!a_intfc->ReadRecordData(knownCount) || knownCount > 65536) {
-                        ClearSavedState();
-                        return;
-                    }
-
-                    saved.knownRelicKeys.reserve(knownCount);
-
-                    for (std::uint32_t j = 0; j < knownCount; j++) {
-                        SavedRelicKey key;
-
-                        if (!ReadRelicKey(a_intfc, key)) {
-                            ClearSavedState();
-                            return;
-                        }
-
-                        saved.knownRelicKeys.push_back(key);
-                    }
-
-
-                    //
-                    // Equipped relics
-                    //
-
-                    auto readOptionalRelic = [&](SavedRelicKey& a_key) -> bool
-                    {
-                        bool valid = false;
-
-                        if (!a_intfc->ReadRecordData(valid)) {
-                            return false;
-                        }
-
-                        if (!valid) {
-                            a_key = {};
-                            return true;
-                        }
-
-                        return ReadRelicKey(a_intfc, a_key);
-                    };
-
-                    if (!readOptionalRelic(saved.rightHandRelic) ||
-                        !readOptionalRelic(saved.leftHandRelic) ||
-                        !readOptionalRelic(saved.lastRightHandRelic) ||
-                        !readOptionalRelic(saved.lastLeftHandRelic))
-                    {
-                        ClearSavedState();
-                        return;
-                    }
-
-                    if (saved.formID != 0) {
-                        savedActors.push_back(std::move(saved));
-                    }
-                }
+                ReadRelicsRecord(a_intfc, version);
+            } else if (type == kRecordActors) {
+                ReadActorsRecord(a_intfc, version);
             }
         }
-        restorePending = !savedRelics.empty() || !savedActors.empty();
 
+        restorePending = !savedRelics.empty() || !savedActors.empty();
         RestoreSavedState(a_intfc);
     }
     void OnSaveGame(SKSE::SerializationInterface* a_intfc = nullptr)
@@ -298,181 +184,35 @@ public:
             player->GetActor()->SetGraphVariableBool("Skip3DLoading", _skipLoad3D);
         }
 
-        if (!a_intfc) {
-            return;
-        }
-        spdlog::debug("saving...");
+        if (!a_intfc) return;
 
-        //
-        // RELICS
-        //
+        spdlog::debug("saving (relics v{}, actors v{})...",
+                      kRelicsVersion, kActorsVersion);
 
-        if (!a_intfc->OpenRecord(kRecordRelics, kSerializationVersion)) {
+        //  ── RELICS ───────────────────────────────────────────────
+        if (!a_intfc->OpenRecord(kRecordRelics, kRelicsVersion)) {
             spdlog::error("couldn't open record for relics.");
             return;
         }
-
-        std::uint32_t relicCount = 0;
-
-        for (const auto& [identity, relic] : activeRelics) {
-            if (relic) {
-                relicCount++;
-            }
+        switch (kRelicsVersion) {
+        case 1: WriteRelicsV1(a_intfc); break;
+        //  case 2: WriteRelicsV2(a_intfc); break;
+        default: break;
         }
 
-        if (!a_intfc->WriteRecordData(relicCount)) {
-            return;
-        }
-
-        for (const auto& [identity, relic] : activeRelics) {
-
-            if (!relic) {
-                continue;
-            }
-
-            const auto key = MakeSavedRelicKey(*relic);
-
-            if (!a_intfc->WriteRecordData(key.baseFormID) ||
-                !a_intfc->WriteRecordData(key.uniqueID) ||
-                !a_intfc->WriteRecordData((std::uint8_t)relic->GetType()))
-            {
-                return;
-            }
-        }
-
-
-        //
-        // ACTORS
-        //
-
-        if (!a_intfc->OpenRecord(kRecordActors, kSerializationVersion))
-        {
+        //  ── ACTORS ───────────────────────────────────────────────
+        if (!a_intfc->OpenRecord(kRecordActors, kActorsVersion)) {
             spdlog::error("couldn't open record for actors.");
             return;
         }
-
-        std::uint32_t actorCount = 0;
-
-        for (const auto& [handle, actor] : activeActors) {
-            if (!actor || !actor->IsValid()) {
-                continue;
-            }
-
-            if (actor && actor->GetActor()) {
-                actorCount++;
-            }
+        switch (kActorsVersion) {
+        case 1: WriteActorsV1(a_intfc); break;
+        //  case 2: WriteActorsV2(a_intfc); break;
+        default: break;
         }
 
-        if (!a_intfc->WriteRecordData(actorCount)) {
-            return;
-        }
-
-        for (const auto& [handle, actor] : activeActors) {
-
-            if (!actor || !actor->IsValid()) {
-                continue;
-            }
-
-            auto gameActor = actor->GetActor();
-
-            const RE::FormID formID = gameActor->formID;
-
-            if (!a_intfc->WriteRecordData(formID)) {
-                return;
-            }
-
-
-            //
-            // Actor state
-            //
-
-            const auto titles = actor->GetTitles().underlying();
-
-            if (!a_intfc->WriteRecordData(titles) ||
-                !a_intfc->WriteRecordData(actor->level) ||
-                !a_intfc->WriteRecordData(actor->meleeSkill) ||
-                !a_intfc->WriteRecordData(actor->damageMult))
-            {
-                return;
-            }
-
-
-            //
-            // Known relics
-            //
-
-            const auto& knownRelics = actor->GetKnownRelics();
-
-            std::vector<SavedRelicKey> knownRelicKeys;
-            knownRelicKeys.reserve(knownRelics.size());
-
-            for (const RelicIdentity identity : knownRelics) {
-                if (identity == 0) continue;
-
-                SavedRelicKey key;
-                key.baseFormID = static_cast<RE::FormID>(identity >> 16);
-                key.uniqueID   = static_cast<std::uint16_t>(identity & 0xFFFFu);
-
-                if (key.baseFormID == 0 || key.uniqueID == 0) continue;
-
-                knownRelicKeys.push_back(key);
-            }
-
-            const std::uint32_t knownCount = static_cast<std::uint32_t>(knownRelicKeys.size());
-            if (!a_intfc->WriteRecordData(knownCount)) {
-                return;
-            }
-
-            for (const auto& key : knownRelicKeys) {
-
-                if (!a_intfc->WriteRecordData(key.baseFormID) ||
-                    !a_intfc->WriteRecordData(key.uniqueID))
-                {
-                    return;
-                }
-            }
-
-
-            //
-            // Equipped / last relics
-            //
-
-            auto writeRelicKey = [&](RelicWeapon* a_relic) -> bool
-            {
-                const bool valid = a_relic != nullptr;
-
-                if (!a_intfc->WriteRecordData(valid)) {
-                    return false;
-                }
-
-                if (!valid) {
-                    return true;
-                }
-
-                const auto key = MakeSavedRelicKey(*a_relic);
-
-                return
-                    a_intfc->WriteRecordData(key.baseFormID) &&
-                    a_intfc->WriteRecordData(key.uniqueID);
-            };
-
-            if (!writeRelicKey(actor->GetRightHandRelic()) ||
-                !writeRelicKey(actor->GetLeftHandRelic()) ||
-                !writeRelicKey(actor->GetLastRightHandRelic()) ||
-                !writeRelicKey(actor->GetLastLeftHandRelic()))
-            {
-                return;
-            }
-        }
         spdlog::debug("save success!");
     }
-    void OnRevert()
-    {
-        ClearRuntimeState();
-        ClearSavedState();
-        spdlog::debug("states reverted");
-    }
-
     void OnConfigClose()
     {
         if (auto player = RE::PlayerCharacter::GetSingleton(); player && GetOrInitializePlayer() && Config::SpecialWeapon) {
@@ -682,7 +422,6 @@ private:
         for (const auto& saved : savedActors) {
 
             RE::FormID resolvedActorFormID = 0;
-
             if (saved.formID == 0x0) {
                 unresolved = true;
                 continue;
@@ -728,7 +467,11 @@ private:
 
                 const auto identity = MakeRelicIdentity(resolvedFormID, key.uniqueID);
 
-                knownRelics.push_back(identity);
+                if (activeRelics.contains(identity)) {
+                    knownRelics.push_back(identity);
+                } else {
+                    unresolved = true;
+                }
             }
 
             auto resolveOptional = [&](const SavedRelicKey& key) -> RelicWeapon* {
@@ -830,8 +573,7 @@ private:
 
             RE::FormID resolvedFormID = 0;
 
-            if (!a_serialization->ResolveFormID(saved.formID, resolvedFormID))
-            {
+            if (!a_serialization->ResolveFormID(saved.formID, resolvedFormID)) {
                 unresolved = true;
                 continue;
             }
@@ -907,26 +649,238 @@ private:
             a_intfc->ReadRecordData(a_key.baseFormID) &&
             a_intfc->ReadRecordData(a_key.uniqueID);
     }
-/*
-    RelicType GetRelicType(const RE::TESObjectWEAP* a_weap) const
+
+    void ReadRelicsV1(SKSE::SerializationInterface* a_intfc)
     {
-        RelicType type = RelicType::kNone;
-        if (a_weap->HasKeyword(Config::LeviathanAxeKWD)) {
-            type = RelicType::kLeviathanAxe;
-        } else if (a_weap->HasKeyword(Config::BladeOfChaosKWD)) {
-            type = RelicType::kBladesOfChaos;
-        } else if (a_weap->HasKeyword(Config::DraupnirSpearKWD)) {
-            type = RelicType::kDraupnir;
-        } else if (a_weap->HasKeyword(Config::MjolnirKWD)) {
-            type = RelicType::kMjolnir;
-        } else if (a_weap->HasKeyword(Config::BladeOfOlympusKWD)) {
-            type = RelicType::kBladeOfOlympus;
-        } else if (a_weap->HasKeyword(Config::TridentKWD)) {
-            type = RelicType::kTrident;
+        std::uint32_t count = 0;
+        if (!a_intfc->ReadRecordData(count) || count > 65536) {
+            ClearSavedState();
+            return;
         }
-        return type;
+
+        savedRelics.clear();
+        savedRelics.reserve(count);
+
+        for (std::uint32_t i = 0; i < count; i++) {
+            SavedRelic saved;
+            if (!ReadRelicKey(a_intfc, saved.key) ||
+                !a_intfc->ReadRecordData(saved.type)) {
+                ClearSavedState();
+                return;
+            }
+            if (saved.key.baseFormID == 0 || saved.key.uniqueID == 0) continue;
+            savedRelics.push_back(std::move(saved));
+        }
     }
-*/
+    void ReadActorsV1(SKSE::SerializationInterface* a_intfc)
+    {
+        std::uint32_t count = 0;
+        if (!a_intfc->ReadRecordData(count) || count > 65536) {
+            ClearSavedState();
+            return;
+        }
+
+        savedActors.reserve(count);
+
+        for (std::uint32_t i = 0; i < count; i++) {
+            SavedActor saved;
+
+            if (!a_intfc->ReadRecordData(saved.formID) ||
+                !a_intfc->ReadRecordData(saved.titles) ||
+                !a_intfc->ReadRecordData(saved.level) ||
+                !a_intfc->ReadRecordData(saved.meleeSkill) ||
+                !a_intfc->ReadRecordData(saved.damageMult))
+            {
+                ClearSavedState();
+                return;
+            }
+
+            std::uint32_t knownCount = 0;
+            if (!a_intfc->ReadRecordData(knownCount) || knownCount > 65536) {
+                ClearSavedState();
+                return;
+            }
+            saved.knownRelicKeys.reserve(knownCount);
+
+            for (std::uint32_t j = 0; j < knownCount; j++) {
+                SavedRelicKey key;
+                if (!ReadRelicKey(a_intfc, key)) {
+                    ClearSavedState();
+                    return;
+                }
+                saved.knownRelicKeys.push_back(key);
+            }
+
+            auto readOptionalRelic = [&](SavedRelicKey& a_key) -> bool {
+                bool valid = false;
+                if (!a_intfc->ReadRecordData(valid)) return false;
+                if (!valid) { a_key = {}; return true; }
+                return ReadRelicKey(a_intfc, a_key);
+            };
+
+            if (!readOptionalRelic(saved.rightHandRelic) ||
+                !readOptionalRelic(saved.leftHandRelic) ||
+                !readOptionalRelic(saved.lastRightHandRelic) ||
+                !readOptionalRelic(saved.lastLeftHandRelic))
+            {
+                ClearSavedState();
+                return;
+            }
+
+            if (saved.formID != 0x0) {
+                savedActors.push_back(std::move(saved));
+            }
+        }
+    }
+
+    void WriteRelicsV1(SKSE::SerializationInterface* a_intfc)
+    {
+        std::uint32_t relicCount = 0;
+        for (const auto& [identity, relic] : activeRelics) {
+            if (relic) relicCount++;
+        }
+
+        if (!a_intfc->WriteRecordData(relicCount)) return;
+
+        for (const auto& [identity, relic] : activeRelics) {
+            if (!relic) continue;
+
+            const auto key = MakeSavedRelicKey(*relic);
+            if (!a_intfc->WriteRecordData(key.baseFormID) ||
+                !a_intfc->WriteRecordData(key.uniqueID) ||
+                !a_intfc->WriteRecordData((std::uint8_t)relic->GetType()))
+            {
+                return;
+            }
+        }
+    }
+    void WriteActorsV1(SKSE::SerializationInterface* a_intfc)
+    {
+        auto isValid = [](BaseActor* a) {
+            return a && a->IsValid();
+        };
+
+        BaseActor* playerActor = GetOrInitializePlayer();
+        const bool hasPlayer = isValid(playerActor);
+
+        std::uint32_t actorCount = playerActor ? 1u : 0u;
+        for (const auto& [handle, actor] : activeActors) {
+            if (isValid(actor.get())) actorCount++;
+        }
+
+        if (!a_intfc->WriteRecordData(actorCount)) return;
+
+        auto writeActor = [&](BaseActor* actor) -> bool {
+            if (!isValid(actor)) return false;
+
+            auto gameActor = actor->GetActor();
+            const RE::FormID formID = gameActor->formID;
+
+            if (!a_intfc->WriteRecordData(formID)) return false;
+
+            const auto titles = actor->GetTitles().underlying();
+            if (!a_intfc->WriteRecordData(titles) ||
+                !a_intfc->WriteRecordData(actor->level) ||
+                !a_intfc->WriteRecordData(actor->meleeSkill) ||
+                !a_intfc->WriteRecordData(actor->damageMult))
+            {
+                return false;
+            }
+
+            const auto& knownRelics = actor->GetKnownRelics();
+            std::vector<SavedRelicKey> knownRelicKeys;
+            knownRelicKeys.reserve(knownRelics.size());
+
+            for (const RelicIdentity identity : knownRelics) {
+                if (identity == 0) continue;
+                SavedRelicKey key;
+                key.baseFormID = static_cast<RE::FormID>(identity >> 16);
+                key.uniqueID   = static_cast<std::uint16_t>(identity & 0xFFFFu);
+                if (key.baseFormID == 0 || key.uniqueID == 0) continue;
+                knownRelicKeys.push_back(key);
+            }
+
+            const std::uint32_t knownCount =
+                static_cast<std::uint32_t>(knownRelicKeys.size());
+            if (!a_intfc->WriteRecordData(knownCount)) return false;
+
+            for (const auto& key : knownRelicKeys) {
+                if (!a_intfc->WriteRecordData(key.baseFormID) ||
+                    !a_intfc->WriteRecordData(key.uniqueID))
+                {
+                    return false;
+                }
+            }
+
+            auto writeRelicKey = [&](RelicWeapon* a_relic) -> bool {
+                const bool valid = a_relic != nullptr;
+                if (!a_intfc->WriteRecordData(valid)) return false;
+                if (!valid) return true;
+                const auto key = MakeSavedRelicKey(*a_relic);
+                return a_intfc->WriteRecordData(key.baseFormID) &&
+                       a_intfc->WriteRecordData(key.uniqueID);
+            };
+
+            if (!writeRelicKey(actor->GetRightHandRelic()) ||
+                !writeRelicKey(actor->GetLeftHandRelic()) ||
+                !writeRelicKey(actor->GetLastRightHandRelic()) ||
+                !writeRelicKey(actor->GetLastLeftHandRelic()))
+            {
+                return false;
+            }
+            return true;
+        };
+            if (hasPlayer && !writeActor(playerActor)) return;
+
+            for (const auto& [handle, actor] : activeActors) {
+                if (!isValid(actor.get())) continue;
+                if (!writeActor(actor.get())) return;
+            }
+    }
+
+    void ReadRelicsRecord(SKSE::SerializationInterface* a_intfc, std::uint32_t a_version)
+    {
+        if (a_version < kMinRelicsVersion) {
+            spdlog::warn("relics record v{} < min v{}, skipping",
+                         a_version, kMinRelicsVersion);
+            return;   //  SKSE zaten kaydın sonuna atlar
+        }
+        if (a_version > kRelicsVersion) {
+            spdlog::warn("relics record v{} is newer than this build (v{}), skipping",
+                         a_version, kRelicsVersion);
+            return;
+        }
+
+        switch (a_version) {
+        case 1: ReadRelicsV1(a_intfc); break;
+
+        default:
+            spdlog::warn("unknown relics version {}, skipping", a_version);
+            break;
+        }
+    }
+    void ReadActorsRecord(SKSE::SerializationInterface* a_intfc, std::uint32_t a_version)
+    {
+        if (a_version < kMinActorsVersion) {
+            spdlog::warn("actors record v{} < min v{}, skipping",
+                         a_version, kMinActorsVersion);
+            return;
+        }
+        if (a_version > kActorsVersion) {
+            spdlog::warn("actors record v{} is newer than this build (v{}), skipping",
+                         a_version, kActorsVersion);
+            return;
+        }
+
+        switch (a_version) {
+        case 1: ReadActorsV1(a_intfc); break;
+
+        default:
+            spdlog::warn("unknown actors version {}, skipping", a_version);
+            break;
+        }
+    }
+
     BaseActor* GetOrInitializePlayer()
     {
         if (!player) {

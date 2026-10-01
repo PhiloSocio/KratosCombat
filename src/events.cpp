@@ -78,6 +78,9 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
                 rHandRelic->ResetCharge(rHandRelic->enchMag, rHandRelic->defaultEnchMag);
             break;
         case "ThrowWeapon"_h:
+            player->ThrowWeapon(RotationType::kNone, ThrowType::kNormalThrow);
+            break;
+        case "ThrowWeaponL"_h:
             player->ThrowWeapon(RotationType::kSpinLateral, ThrowType::kNormalThrow);
             break;
         case "ThrowWeaponV"_h:
