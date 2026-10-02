@@ -283,7 +283,6 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
 {
     bool result = false;
 
-//    thrower = dynamic_cast<Thrower*>(GetWielder());
     thrower = a_thrower;
     if (!thrower || !thrower->IsValid()) {
         spdlog::debug("thrower is invalid");
@@ -321,7 +320,6 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     const auto handVelocity = (handTransform.translate - handPeviousTransform.translate) / *g_deltaTime;    // g_deltaTimeRealTime?
     auto origin = handTransform.translate;
 
-    RE::ProjectileHandle pHandle;
     if (a_pRot.has_value())
         projectileRotation = a_pRot.value();
     else
@@ -353,6 +351,7 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
 
     if (!PreThrow()) return false;
 
+    RE::ProjectileHandle pHandle;
     if (projectileHandle = RE::Projectile::Launch(&pHandle, lData); projectileHandle && projectileHandle->get().get()) {
 
         projectile = projectileHandle->get().get();
@@ -361,12 +360,12 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
         rtData.weaponDamage *= thrower->IsThrowing(ThrowType::kPowerThrow) ? 1.5f : 1.f;
 
-        _modelInitiated = false;
         _rotationBlended = false;
         _transformInitiated = false;
         _collisionInitiated = false;
 
-        if (!weaponModelSterilizedCopy) {
+        if (!weaponModelSterilizedCopy && !replacedProjectileModel) {
+            _modelInitiated = false;
             auto copyWeaponModel = weaponBone->Clone();
             auto copyWeaponModelNode = copyWeaponModel ? copyWeaponModel->AsNode() : nullptr;
             weaponModelCopy.reset(copyWeaponModelNode);
@@ -388,6 +387,9 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
                     weaponModelSterilizedCopy->GetFlags() |= RE::NiAVObject::Flag::kAlwaysDraw;
                 }
             }
+        } else if (replacedProjectileModel) {
+            weaponModelSterilizedCopy = std::move(replacedProjectileModel);
+            _modelInitiated = false;
         }
 
         RelicManager::GetSingleton()->OnRelicThrow(projectile, this);
