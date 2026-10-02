@@ -1,7 +1,10 @@
 #include "BaseActor.h"
 #include "util.h"
 #include "Weapons/RelicWeapon.h"
-#include "Capabilities/ActorCapability.h"
+#include "Capabilities/Thrower.h"
+#include "Capabilities/Charger.h"
+#include "Capabilities/Caller.h"
+#include "Capabilities/Rager.h"
 
 BaseActor::~BaseActor()
 {
@@ -99,4 +102,45 @@ ActorCapability* BaseActor::GetCapability(ActorType a_type)
         }
     }
     return nullptr;
+}
+
+void BaseActor::CallWeapon()
+{
+    if (auto cap = GetCapabilityAs<Caller>()) cap->CallWeapon();
+}
+void BaseActor::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
+{
+    if (auto cap = GetCapabilityAs<Thrower>()) {
+        cap->ThrowWeapon(a_rotationType, a_throwType);
+    }
+}
+void BaseActor::StartChargingThrow()
+{
+    if (auto cap = GetCapabilityAs<Thrower>()) cap->StartChargingThrow();
+}
+
+void BaseActor::StopChargingThrow()
+{
+    if (auto cap = GetCapabilityAs<Thrower>()) cap->StopChargingThrow();
+}
+void BaseActor::StartRage(bool a_justAnim)
+{
+    if (auto cap = GetCapabilityAs<Rager>()) cap->StartRage(a_justAnim);
+}
+void BaseActor::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bool a_justAnim)
+{
+    if (auto cap = GetCapabilityAs<Rager>()) cap->EndRage(a_fromAnnotation, a_playAnim, a_justAnim);
+}
+void BaseActor::RestoreRage(const float a_value, const bool a_justRestore)
+{
+    if (auto cap = GetCapabilityAs<Rager>()) cap->RestoreRage(cap->CalcRageDamageOrBuffAmount(a_value), a_justRestore);
+}
+void BaseActor::SetRageType(RageType a_rageType)
+{
+    if (auto cap = GetCapabilityAs<Rager>()) cap->SetRageType(a_rageType);
+}
+bool BaseActor::IsCanRage()
+{
+    if (auto cap = GetCapabilityAs<Rager>()) return cap->IsCanRage();
+    return false;
 }

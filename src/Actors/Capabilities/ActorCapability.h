@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Actors/BaseActor.h"
 #include "Types.h"
 
 class BaseActor;

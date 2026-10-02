@@ -1,5 +1,4 @@
 #pragma once
-#include "util.h"
 #include "ThrowableWeaponState.h"
 
 class HomingState : public ThrowableWeaponState

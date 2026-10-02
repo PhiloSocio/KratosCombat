@@ -86,6 +86,17 @@ public:
     [[nodiscard]] float GetDamageMult() const { return damageMult; };
     [[nodiscard]] bool GetSkipEquipAnim() const { return skipEquipAnim; };
     [[nodiscard]] bool GetUnequipWhenAnimEnds() const { return unequipWhenAnimEnds; };
+
+    void CallWeapon();
+    void ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType);
+    void StartChargingThrow();
+    void StopChargingThrow();
+    void StartRage(bool a_justAnim = false);
+    void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);
+    void RestoreRage(const float a_value, const bool a_justRestore);
+    void SetRageType(RageType a_rageType);
+    bool IsCanRage();
+
 protected:
 friend class Rager;
 

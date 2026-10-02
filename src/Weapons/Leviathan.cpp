@@ -1,5 +1,6 @@
 #include "Leviathan.h"
 #include "RelicManager.h"
+#include "Actors/Capabilities/Caller.h"
 
 using namespace Util;
 
@@ -112,7 +113,7 @@ void LeviathanAxe::SetState(RelicWeaponState::Type a_type)
             if (isPenetrating && previous) {
                 SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*previous, startPoint));
             } else {
-                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this, startPoint, &caller->GetRHandBone()));
+                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this, startPoint, &callerParent->GetRHandBone()));
                 spdlog::debug("Levi call is started");
             }
         }
@@ -319,22 +320,13 @@ void LeviathanAxe::Throw(const bool a_isVertical, const bool isPenetrating, cons
 bool LeviathanAxe::PreThrow()
 {
     return true;
-    trailRemoveUpdate.Done();
-
-    bool isLeviathanAxe = thrower->GetRightHandRelic() == this;
-    if (!isLeviathanAxe) {
-        spdlog::debug("Leviathan Axe not equipped for throwing!");
-        return false;
-    }
-
-    return true;
 }
 void LeviathanAxe::PostThrow()
 {
-    auto rHandBone = thrower->GetRHandBone();
+    auto rHandBone = throwerParent->GetRHandBone();
     if (!rHandBone) {spdlog::error("LeviathanAxe::Throw - RHandBone is null"); return;}
 
-    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
+    auto throwerActor = throwerParent ? throwerParent->GetActor() : nullptr;
     if (!throwerActor) {spdlog::error("LeviathanAxe::Throw - thrower actor is null"); return;}
 
     if (!projectile) {spdlog::error("LeviathanAxe::Throw - projectile is null"); return;}
@@ -376,8 +368,8 @@ void LeviathanAxe::PostThrow()
 
         if (Config::IsAdvancedThrowingInstalled) {
             ResetCharge(enchMag, defaultEnchMag, true);
-            thrower->SetSkipEquipAnim(true);
-            ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, true, true, thrower->GetSkipEquipAnim(), true);
+            throwerParent->SetSkipEquipAnim(true);
+            ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, true, true, throwerParent->GetSkipEquipAnim(), true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
             spdlog::debug("Leviathan unequipped after throwing");
         } else {
@@ -385,8 +377,8 @@ void LeviathanAxe::PostThrow()
     //        WeaponIdentify::isRelic = false;
         //    Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
         //    throwerActor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
-            thrower->SetSkipEquipAnim(true);
-            thrower->SetUnequipWhenAnimEnds(true);
+            throwerParent->SetSkipEquipAnim(true);
+            throwerParent->SetUnequipWhenAnimEnds(true);
         }
 
         throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
@@ -403,149 +395,13 @@ void LeviathanAxe::PostThrow()
     }
 }
 
-void LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
+bool LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
 {
-    SmartRelicWeapon::Call(a_caller, a_justDestroy, a_delay);
-    return;
-    caller = a_caller;
-    if (caller && caller->IsValid() && weap) {
-        spdlog::debug("Levi is calling...");
-        projectileUpdate.Done();
-
-        trailUpdate.Done();
-        trailRemoveUpdate.Done();
-
-        if (projectileModel) {
-            transformPW = projectileModel->world;
-            transformPL = projectileModel->local;
-        }
-        projectileModel = nullptr;
-    //    if (replacedProjectileModel) {
-    //        if (projState == ProjectileState::kHavok && replacedProjectileModel->collisionObject && replacedProjectileModel->collisionObject->AsBhkRigidBody()) {
-    //            RE::hkTransform rbTransform;
-    //            replacedProjectileModel->collisionObject->AsBhkRigidBody()->GetTransform(rbTransform);
-    //            RE::NiTransform niTransform;
-    //            niTransform.translate = MathUtil::Algebra::HkVectorToNiPoint(rbTransform.translation);
-    //            niTransform.rotate = MathUtil::Algebra::HKMatrixToNiMatrix(rbTransform.rotation);
-    //            transformW = niTransform;
-    //            transformL = niTransform;
-    //        } else {
-    //            transformW = replacedProjectileModel->world;
-    //            transformL = replacedProjectileModel->local;
-    //        }
-    //    }
-
-        soundData.FadeThrowingLoopSounds(369);
-
-        if (projectile) {
-            if (!isPenetrating) position = projectile->data.location;
-            auto& projectileRTD = projectile->GetProjectileRuntimeData();
-            auto& pFlags = projectileRTD.flags;
-            if (!(pFlags & pFlag::kDestroyed)) {
-                pFlags |= pFlag::kDestroyed;
-            } else  spdlog::debug("levi is already destroyed");
-
-            if (a_justDestroy) {
-                if (stuckedActor) {
-#ifdef EXPERIMENTAL_EXTRAARROW
-                    ObjectUtil::Projectile::DeleteAnExtraArrow(stuckedActor, projectileModel);
-#else
-                    stuckedActor->RemoveExtraArrows3D();
-#endif
-                    spdlog::debug("levi stucked actor's extra arrows removed");
-                    stuckedActor = nullptr;
-                } else spdlog::debug("levi not stucked anybody");
-                    return;
-            }
-        } else {spdlog::debug("Stucked Levi is nullptr!");}
-
-        if (auto AnArchos = caller->GetActor(); !a_justDestroy && AnArchos && ArrivingWeaponDummyAmmo && ArrivingWeaponDummyProjectile) {
-            RE::NiPoint3 startPoint = position;
-            auto rHandBone = caller->GetRHandBone();
-            RE::NiPoint3 targetPoint = rHandBone ? rHandBone->world.translate : AnArchos->GetPosition();
-            if (!isPenetrating) {
-                soundData.PlayCallingHandSounds(rHandBone);
-                GetPosition(startPoint);
-            }
-            RE::ProjectileHandle pHandle;
-            projectileRotation = MathUtil::Algebra::VectorToPitchYaw(direction);
-            RE::Projectile::LaunchData lData(AnArchos, startPoint, projectileRotation, SpellLeviProjA);
-
-            lData.noDamageOutsideCombat = true; //  can be an option
-            lData.weaponSource = weap;
-#ifdef EXPERIMENTAL_THROWPOISON
-            lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(AnArchos, false);
-#endif
-            if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(AnArchos) > 0.f)
-                lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(AnArchos);
-
-            projectileHandle = RE::Projectile::Launch(&pHandle, lData);
-            projectile = pHandle.get().get();
-
-            projectileUpdate.RegisterForUpdate(0.0f, false);
-
-            SetState(RelicWeaponState::Type::kArriving);
-
-            SetThrowState(ThrowState::kArriving);
-            spdlog::info("Levi is arriving...");
-        } else {spdlog::warn("WEIRD SpellLeviProjA is nullptr!");}
-    } else {spdlog::warn("WEIRD you don't have the axe for calling!!");}
+    return SmartRelicWeapon::Call(a_caller, a_justDestroy, a_delay);
 }
 void LeviathanAxe::Catch(const bool a_justDestroy)
 {
-    if (projectile) {
-    //    if (APIs::precision || APIs::Request()) {
-    //        APIs::precision->RemoveProjectileCollision(throwerActor->GetHandle(), collisionDefinition);
-    //    }
-
-        auto& runtimeData = projectile->GetProjectileRuntimeData();
-        runtimeData.flags |= pFlag::kDestroyed;
-        if (a_justDestroy) return;
-    }
-
-    auto callerActor = caller ? caller->GetActor() : nullptr;
-    if (callerActor && !caller->GetRightHandRelic()) {
-        callerActor->SetGraphVariableBool("bLeviInCatchRange", true);
-
-        SetThrowState(ThrowState::kArrived);
-
-        auto assets = Assets::GetSingleton();
-        auto rHandBone = caller->GetRHandBone();
-        if (auto handEffect = assets->VFXeffects.handFrost; handEffect) 
-            callerActor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone);
-
-        soundData.FadeArrivingNearSounds(469);
-        soundData.FadeArrivingLoopSounds(469);
-        soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
-        soundData.PlayCatchingSounds(rHandBone);
-
-        if (weap && GetWeaponContainer()) {
-            caller->SetSkipEquipAnim(true);
-            caller->SetUnequipWhenAnimEnds(false);
-            caller->DoAction(ActionType::kWeaponCharge);
-            GetWeaponContainer()->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, callerActor);
-            ObjectUtil::Actor::EquipItem(callerActor, weap, caller->GetSkipEquipAnim());//, 1U, true, false, false, true);
-            ObjectUtil::Actor::ResetEquipAnimationAfter(100, callerActor);
-            RE::ShakeCamera(0.3f, position, 0.5f);
-            if (caller->GetSkipEquipAnim()) caller->SetSkipEquipAnim(false);
-        } else spdlog::warn("you not have the leviathan axe");
-
-        if (stuckedBone)   stuckedBone    = nullptr;
-        if (stuckedActor)  stuckedActor   = nullptr;
-        lastHitActors.clear();
-        lastHitForms.clear();
-
-        if (Config::UsePrecisionTrails) {
-            if (caller->GetAnimObjectRBone() && caller->GetAnimObjectRBone()->AsNode() && replacedProjectileModel && replacedProjectileModel->parent) {
-                caller->GetAnimObjectRBone()->AsNode()->AttachChild(replacedProjectileModel->parent);
-                replacedProjectileModel->parent->local.translate = RE::NiPoint3();
-                replacedProjectileModel->parent->local.rotate = replacedProjectileModel->parent->local.rotate * RE::NiMatrix3(PI2, 0.f, PI2);
-            }
-        }
-        trailUpdate.Done();
-        projectileModel = nullptr;
-        trailRemoveUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
-    }
+    SmartRelicWeapon::Catch(a_justDestroy);
 }
 void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
 {

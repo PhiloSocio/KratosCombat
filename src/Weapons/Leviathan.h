@@ -6,6 +6,8 @@
 #include "Weapons/States/HomingState.h"
 #include "Weapons/States/ArrivingState.h"
 
+class Caller;
+
 class LeviathanAxe : public SmartRelicWeapon
 {
 public:
@@ -24,7 +26,7 @@ public:
 //    void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false) override;
     bool PreThrow() override;
     void PostThrow() override;
-    void Call(Caller* a_caller, const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt) override;
+    bool Call(Caller* a_caller, const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt) override;
     void Catch(bool a_justDestroy = false) override;
     void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_stage = 3u, const uint8_t a_coolDown = 15u) override;
     void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false) override;

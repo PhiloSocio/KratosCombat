@@ -4,13 +4,20 @@
 
 Caller::Caller()
 {
+    if (parent && parent->IsValid()) {
+        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
+            alterationLevel = callerAVO->GetActorValue(RE::ActorValue::kAlteration);
+        }
+    }
 }
 
 void Caller::CallWeapon()
 {
     if (parent) {
         if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(_weaponToCall)) {
-            weaponToCall->Call(parent);
+            if (weaponToCall->Call(this)) {
+                RelicManager::GetSingleton()->OnRelicThrow(weaponToCall->projectile, weaponToCall);
+            }
         } else {
             spdlog::info("no callable weapon found!");
         }
@@ -66,7 +73,6 @@ RelicWeapon* Caller::GetCallableRelic()
     }
     return _weaponToCall;
 }
-
 
 void Caller::HandleAction(const ActionType a_action)
 {

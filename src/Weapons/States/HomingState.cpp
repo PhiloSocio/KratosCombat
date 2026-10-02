@@ -1,4 +1,6 @@
 #include "HomingState.h"
+#include "Actors/Capabilities/Thrower.h"
+#include "Util.h"
 
 HomingState::HomingState(
     SmartRelicWeapon& a_weapon,
@@ -17,7 +19,8 @@ HomingState::HomingState(
 void HomingState::InitializeTargets()
 {
     auto thrower = weapon.thrower;
-    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
+    auto throwerParent = thrower ? thrower->GetParent() : nullptr;
+    auto throwerActor = throwerParent && throwerParent->IsValid() ? throwerParent->GetActor() : nullptr;
 
     if (!throwerActor) return;
 
@@ -133,7 +136,8 @@ Status HomingState::Update(float a_delta)
         float waveCos = waveAmplitude * sin(waveFrequency * hLivingTime);
 
         auto thrower = weapon.thrower;
-        auto throwerActor = thrower ? thrower->GetActor() : nullptr;
+        auto throwerParent = thrower ? thrower->GetParent() : nullptr;
+        auto throwerActor = throwerParent && throwerParent->IsValid() ? throwerParent->GetActor() : nullptr;
         if (!throwerActor) return Status::kCancelled;
 
         auto targetPos = throwerActor->GetPosition() + (throwerActor->GetBoundMax() + throwerActor->GetBoundMin()) * 0.75f;
@@ -163,7 +167,7 @@ Status HomingState::Update(float a_delta)
 }
 void HomingState::Exit()
 {
-    if (auto thrower = weapon.GetThrower(); isBoomerang && thrower) {
-        thrower->DoAction(ActionType::kWeaponCall);
+    if (auto throwerParent = weapon.GetThrower()->GetParent(); isBoomerang && throwerParent) {
+        throwerParent->DoAction(ActionType::kWeaponCall);
     }
 }

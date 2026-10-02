@@ -1,6 +1,6 @@
 #include "ThrowableRelicWeapon.h"
 #include "Assets.h"
-#include "RelicManager.h"
+#include "Actors/Capabilities/Thrower.h"
 
 using namespace MathUtil;
 using namespace GameSettingUtil;
@@ -130,6 +130,8 @@ bool ThrowableRelicWeapon::Initialize()
     ThrowableWeaponDummyAmmo = CreateBaseAmmo(ThrowableWeaponDummyProjectile, "DummyAmmo", "Dummy Ammo");
     return ThrowableWeaponDummyAmmo != nullptr;
 }
+
+RE::Actor* ThrowableRelicWeapon::GetThrowerActor() {return GetThrower() && GetThrower()->GetParent() ? GetThrower()->GetParent()->GetActor() : nullptr;}
 
 RE::NiTransform ThrowableRelicWeapon::GetWorldTransform()
 {
@@ -279,12 +281,13 @@ void ThrowableRelicWeapon::RemoveTrail()
     }
 }
 
-bool ThrowableRelicWeapon::Throw(BaseActor* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
+bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
 {
     bool result = false;
 
     thrower = a_thrower;
-    if (!thrower || !thrower->IsValid()) {
+    throwerParent = thrower ? thrower->GetParent() : nullptr;
+    if (!thrower || !throwerParent || !throwerParent->IsValid()) {
         spdlog::debug("thrower is invalid");
         return result;
     }
@@ -295,15 +298,16 @@ bool ThrowableRelicWeapon::Throw(BaseActor* a_thrower, const RotationType a_rota
         return result;
     }
 
-    auto rHandBone = thrower->GetRHandBone();
-    auto weaponBone = thrower->GetWeaponBone();
-    auto animObjectRBone = thrower->GetAnimObjectRBone();
+    auto rHandBone = throwerParent->GetRHandBone();
+    auto weaponBone = throwerParent->GetWeaponBone();
+    auto animObjectRBone = throwerParent->GetAnimObjectRBone();
     if (!rHandBone ||
         !weaponBone ||
         !animObjectRBone ||
         !weap ||
         !ThrowableWeaponDummyAmmo ||
-        !ThrowableWeaponDummyProjectile) {
+        !ThrowableWeaponDummyProjectile)
+    {
         spdlog::debug("thrower bones are invalid");
         return result;
     }
@@ -392,7 +396,6 @@ bool ThrowableRelicWeapon::Throw(BaseActor* a_thrower, const RotationType a_rota
             _modelInitiated = false;
         }
 
-        RelicManager::GetSingleton()->OnRelicThrow(projectile, this);
         if (GetThrowState() != ThrowState::kThrowable) return true;
 
         SetThrowState(ThrowState::kThrown);
@@ -411,7 +414,7 @@ bool ThrowableRelicWeapon::Throw(BaseActor* a_thrower, const RotationType a_rota
             ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, false, true, true, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
             throwerActor->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, GetWeaponContainer());
-            thrower->SetRightHandRelic(nullptr);
+            throwerParent->SetRightHandRelic(nullptr);
             isEquipped = false;
             SetWielder(nullptr);
             result = true;
@@ -493,12 +496,12 @@ void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
 bool ThrowableRelicWeapon::InitiateTransform() noexcept
 {
     if (!_transformInitiated) {
-        if (weaponParentNode && thrower->GetWeaponBone()) {
+        if (weaponParentNode && throwerParent->GetWeaponBone()) {
             startLocalTranslation = weaponParentNode->local.translate;
             if (weaponParentNode->parent) {
-                startLocalRotation = weaponParentNode->parent->world.rotate.Transpose() * thrower->GetWeaponBone()->world.rotate;
+                startLocalRotation = weaponParentNode->parent->world.rotate.Transpose() * throwerParent->GetWeaponBone()->world.rotate;
             } else {
-                startLocalRotation = thrower->GetWeaponBone()->world.rotate;
+                startLocalRotation = throwerParent->GetWeaponBone()->world.rotate;
             }
             _transformInitiated = true;
         }
@@ -542,14 +545,14 @@ bool ThrowableRelicWeapon::InitiateTrail() noexcept
                     bone->AttachChild(node, false);
                     APIs::precision->AddTrailEffect(
                         node, 
-                        thrower->GetActor()->GetParentCell(), 
+                        throwerParent->GetActor()->GetParentCell(), 
                         trailData.trailOverride, 
                         trailData.transformOverride);
                     if (isCharged) {
                         trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
                         APIs::precision->AddTrailEffect(
                             node, 
-                            thrower->GetActor()->GetParentCell(), 
+                            throwerParent->GetActor()->GetParentCell(), 
                             trailData.trailOverride, 
                             trailData.transformOverride);
                     }

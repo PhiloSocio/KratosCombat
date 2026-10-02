@@ -1,6 +1,15 @@
 #include "Charger.h"
-#include "Weapons/RelicWeapon.h"
 #include "Settings.h"
+#include "Weapons/RelicWeapon.h"
+
+Charger::Charger()
+{
+    if (parent && parent->IsValid()) {
+        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
+            enchantingLevel = callerAVO->GetActorValue(RE::ActorValue::kEnchanting);
+        }
+    }
+}
 
 void Charger::StartWeaponCharging() {
     if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic /*&& IsCanCharge(rHandRelic->type)*/) {

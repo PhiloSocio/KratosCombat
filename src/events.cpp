@@ -162,7 +162,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         //    player->WeaponDrawEvent();
             break;
         case "weaponSwing"_h:
-            player->RestoreRage(player->CalcRageDamageOrBuffAmount(360), true);
+            player->RestoreRage(360.f, true);
             break;
     //    case "CastOKStart"_h:
         case "MCO_AttackInitiate"_h:
@@ -286,7 +286,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "FootRight"_h:
         case "PickNewIdle"_h:
             if (player->IsInRage())
-                player->RestoreRage(player->GetRageDamageAmount() * 0.25f, false);
+                player->RestoreRage(Config::RageDamageRate->value * 0.25f, false);
             break;
         }
     }

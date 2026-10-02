@@ -63,45 +63,8 @@ protected:
     float speed = 0.f;
 
 private:
-    void InitializeCallerData()
-    {
-        callerActor = (weapon.GetCaller() && weapon.GetCaller()->IsValid()) ? weapon.GetCaller()->GetActor() : nullptr;
-
-        callerBreastBone.reset(
-            callerActor
-                ? callerActor->GetNodeByName("NPC Spine2 [Spn2]")
-                : nullptr);
-
-        callerWeaponBoneSource = &weapon.GetCaller()->GetWeaponBone();
-        callerWeaponBone = GetCallerWeaponBone();
-        callerHandBone = GetCallerHandBone();
-
-        const auto callerHandPosition =
-            callerHandBone
-                ? callerHandBone->world.translate
-                : callerActor
-                    ? callerActor->GetPosition()
-                    : RE::NiPoint3();
-
-        linearArrivingDir = callerHandPosition - startPosition;
-        linearArrivingDir.Unitize();
-
-        linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
-
-        linearDistanceFromLastCallPos = linearDistanceFromStart;
-    }
-    void InitializeRoute()
-    {
-        arrivingRoute = MathUtil::Algebra::BezierCurve();
-        arrivingRouteClosestIndex = 0;
-
-        bezierControlPoints[0] = startPosition;
-        bezierControlPoints[1] =
-            startPosition +
-            linearArrivingDir *
-            linearDistanceFromLastCallPos *
-            0.33f;
-    }
+    void InitializeCallerData();
+    void InitializeRoute();
 
 public:
     float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - startingTime;}

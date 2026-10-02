@@ -1,6 +1,11 @@
 #include "Rager.h"
 #include "Assets.h"
 #include "util.h"
+#include "Actors/BaseActor.h"
+
+Rager::Rager()
+{
+}
 
 float Rager::CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult)
 {

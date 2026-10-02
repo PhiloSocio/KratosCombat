@@ -1,12 +1,22 @@
 #include "Thrower.h"
-#include "Weapons/SmartRelicWeapon.h"
-#include "util.h"
 #include "Assets.h"
+#include "util.h"
+#include "Weapons/SmartRelicWeapon.h"
+#include "RelicManager.h"
 
 using namespace MathUtil;
 
 constexpr float maxEffectiveChargeDuration = 1.5f;
 constexpr float maxChargeDuration = 3.f;
+
+Thrower::Thrower()
+{
+    if (parent && parent->IsValid()) {
+        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
+            archeryLevel = callerAVO->GetActorValue(RE::ActorValue::kArchery);
+        }
+    }
+}
 
 bool Thrower::IsThrowing(const ThrowType a_type) noexcept
 {
@@ -62,12 +72,13 @@ float Thrower::GetChargeMultiplier() const noexcept
 void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
 {
     if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic())) {
-        if(const bool success = throwableRelic->Throw(parent, a_rotationType); success) {
+        if(const bool success = throwableRelic->Throw(this, a_rotationType); success) {
             if (a_throwType == ThrowType::kHomingThrow) {
                 if (auto smartRelicWeapon = dynamic_cast<SmartRelicWeapon*>(throwableRelic); smartRelicWeapon) {
                     smartRelicWeapon->SetState(RelicWeaponState::Type::kHoming);
                 }
             }
+            RelicManager::GetSingleton()->OnRelicThrow(throwableRelic->projectile, throwableRelic);
         } else {
             spdlog::error("throw failed");
         }

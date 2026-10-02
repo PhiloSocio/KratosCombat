@@ -37,6 +37,8 @@ private:
 protected:
     ThrowableRelicWeapon* lastThrownRelic = nullptr;
 
+    float archeryLevel = 80.f;
+
     float explosiveStrength = 80.f;     //  [N]
     float peakStrength = 120.f;         //  [N]
 };

@@ -1,4 +1,5 @@
 #include "Draupnir.h"
+#include "Actors/Capabilities/Thrower.h"
 
 bool Draupnir::Initialize()
 {
@@ -105,10 +106,10 @@ bool Draupnir::PreThrow()
 
     trailRemoveUpdate.Done();
 
-    auto throwerActor = thrower ? thrower->GetActor() : nullptr;
+    auto throwerActor = throwerParent ? throwerParent->GetActor() : nullptr;
     if (!throwerActor) {spdlog::error("Draupnir::PreThrow - thrower actor is null"); return result;}
 
-    bool isDraupnirSpear = thrower->GetRightHandRelic() == this;
+    bool isDraupnirSpear = throwerParent->GetRightHandRelic() == this;
     if (!isDraupnirSpear) return result;
 
     return result;
@@ -133,6 +134,8 @@ void Draupnir::ArtilleryOfTheAncients(const float a_delay, const float a_duratio
 }
 void Draupnir::RainOfDraupnir()
 {
+    if (!GetWielder()) return;
+
     if (nextLaunchTime > lastLaunchTime) {
         draupnirRainStarted = false;
         spdlog::info("rain of draupnir done");
@@ -150,16 +153,16 @@ void Draupnir::RainOfDraupnir()
 //    spdlog::debug("aim angle: {} heading angle: {}", pRot.x, pRot.z);
     RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
 
-    Throw(dynamic_cast<Thrower*>(GetWielder()), RotationType::kNone, pRot, origin);
+    Throw(GetWielder()->GetCapabilityAs<Thrower>(), RotationType::kNone, pRot, origin);
 
     nextLaunchTime = AsyncUtil::GameTime::GetEngineTime() + nextLaunchDelay;
 }
-void Draupnir::Call(Caller* a_caller, const bool a_damage, std::optional<float> a_force)
+bool Draupnir::Call(Caller* a_caller, const bool a_damage, std::optional<float> a_force)
 {
     if (SpellDraupnirsCallProjL && DraupnirExplosion) {
     //    DraupnirExplosion->data.force = a_force * explosionMagnitude;
         StartExplosions(Config::DraupnirExplosionsInterval);
-    }
+    } return false;
 }
 void Draupnir::AddSpearHit(RE::NiNode* bone, RE::Actor* actor)
 {
@@ -279,7 +282,7 @@ void Draupnir::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjec
         auto& missileRTD = missileProjectile->GetMissileRuntimeData();
         auto shooter = rtData.shooter ? rtData.shooter.get()->As<RE::Actor>() : nullptr;
         const auto projBase = missileProjectile->GetProjectileBase();
-        bool isDraupnirSpear = thrower->GetRightHandRelic() == this;
+        bool isDraupnirSpear = throwerParent->GetRightHandRelic() == this;
 
         if (projBase == DraupnirsCallProjBase) {
             missileRTD.impactResult = RE::ImpactResult::kImpale;

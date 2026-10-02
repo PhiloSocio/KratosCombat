@@ -18,5 +18,6 @@ public:
     bool IsCanCharge(const RelicType a_relic) const;
 
 protected:
+    float enchantingLevel = 0.f;
     std::array<bool, static_cast<std::size_t>(RelicType::kCount)> canCharge{};
 };

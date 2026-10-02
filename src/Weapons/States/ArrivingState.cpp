@@ -1,5 +1,6 @@
 #include "ArrivingState.h"
 #include "Weapons/SmartRelicWeapon.h"
+#include "Actors/Capabilities/Caller.h"
 
 ArrivingState::ArrivingState(SmartRelicWeapon& a_weapon, const RE::NiPoint3& a_startPosition, RE::NiAVObject** a_targetBone)
     : ThrowableWeaponState(a_weapon),
@@ -20,6 +21,50 @@ ArrivingState::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3
 {
 }
 
+void ArrivingState::InitializeCallerData()
+{
+    if (!weapon.GetCaller() ||
+        !weapon.GetCaller()->GetParent() ||
+        !weapon.GetCaller()->GetParent()->IsValid())
+    {
+        callerActor = nullptr;
+        return;
+    }
+
+    callerActor = weapon.GetCaller()->GetParent()->GetActor();
+
+    callerBreastBone.reset(callerActor->GetNodeByName("NPC Spine2 [Spn2]"));
+
+    callerWeaponBoneSource = &weapon.GetCaller()->GetParent()->GetWeaponBone();
+    callerWeaponBone = GetCallerWeaponBone();
+    callerHandBone = GetCallerHandBone();
+
+    const auto callerHandPosition =
+        callerHandBone
+            ? callerHandBone->world.translate
+            : callerActor
+                ? callerActor->GetPosition()
+                : RE::NiPoint3();
+
+    linearArrivingDir = callerHandPosition - startPosition;
+    linearArrivingDir.Unitize();
+
+    linearDistanceFromStart = startPosition.GetDistance(callerHandPosition) + 1.f;
+
+    linearDistanceFromLastCallPos = linearDistanceFromStart;
+}
+void ArrivingState::InitializeRoute()
+{
+    arrivingRoute = MathUtil::Algebra::BezierCurve();
+    arrivingRouteClosestIndex = 0;
+
+    bezierControlPoints[0] = startPosition;
+    bezierControlPoints[1] =
+        startPosition +
+        linearArrivingDir *
+        linearDistanceFromLastCallPos *
+        0.33f;
+}
 void ArrivingState::InitiateTransform()
 {
     if (!_transformInitiated) {
@@ -27,17 +72,17 @@ void ArrivingState::InitiateTransform()
             model->world = weapon.transformPW;
             model->local = weapon.transformPL;
             auto& replacedPMParent = weapon.replacedProjectileModel->parent;
-            auto parentWorldInverse = replacedPMParent->world.Invert();
-            auto previousWorld = weapon.transformW;
+        //    auto parentWorldInverse = replacedPMParent->world.Invert();
+        //    auto previousWorld = weapon.transformW;
             auto& localRotation = replacedPMParent->local.rotate;
-            auto& localPosition = replacedPMParent->local.translate;
-            if (replacedPMParent->parent) {
-                localRotation = parentWorldInverse.rotate * previousWorld.rotate;
-            //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
-            } else {
-                localRotation = previousWorld.rotate;
-            //    localPosition = previousWorld.translate;
-            }
+    //        auto& localPosition = replacedPMParent->local.translate;
+        //    if (replacedPMParent->parent) {
+        //        localRotation = parentWorldInverse.rotate * previousWorld.rotate;
+        //    //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
+        //    } else {
+        //        localRotation = previousWorld.rotate;
+        //    //    localPosition = previousWorld.translate;
+        //    }
             startRotation = localRotation;
             _transformInitiated = true;
             spdlog::debug("start rotation initiated");
@@ -215,7 +260,7 @@ void ArrivingState::Enter()
 }
 Status ArrivingState::Update(const float a_delta)
 {
-    if (!weapon.GetCaller() || !weapon.GetCaller()->IsValid()) return Status::kCancelled;
+    if (!callerActor) return Status::kCancelled;
 
     model = weapon.projectileModel;
     if (!model) return Status::kCancelled;
@@ -251,12 +296,10 @@ Status ArrivingState::Update(const float a_delta)
             weapon.GetSoundManager().PlayArrivingLoopSounds(model);
         }
     }
-    Status status = Status::kRunning;
     if (isCatchable) {
         if (weapon.GetThrowState() == ThrowState::kArriving) weapon.SetThrowState(ThrowState::kArrived);
         weapon.Catch();
-        spdlog::debug("Levi proj catched");
-        status = Status::kCompleted;
+        return Status::kCompleted;
     }
     InitiateTransform();
 
@@ -335,7 +378,7 @@ Status ArrivingState::Update(const float a_delta)
     UpdateRotation();
     UpdateAI(vel);
     UpdateArrivingDirection();
-    return status;
+    return Status::kRunning;
 }
 void ArrivingState::Exit()
 {
