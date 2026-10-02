@@ -279,7 +279,7 @@ void ThrowableRelicWeapon::RemoveTrail()
     }
 }
 
-bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
+bool ThrowableRelicWeapon::Throw(BaseActor* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
 {
     bool result = false;
 

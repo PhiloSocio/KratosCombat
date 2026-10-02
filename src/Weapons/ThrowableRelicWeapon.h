@@ -2,10 +2,7 @@
 #include "util.h"
 #include "settings.h"
 #include "RelicWeapon.h"
-#include "Actors/Thrower.h"
 #include "SoundManager.h"
-
-class Thrower;
 
 class ThrowableRelicWeapon : public RelicWeapon
 {
@@ -75,7 +72,7 @@ public:
     };
     TrailData trailData;
 
-    Thrower* thrower = nullptr;
+    BaseActor* thrower = nullptr;
 
     RE::ObjectRefHandle droppedWeaponKeep;
 
@@ -130,7 +127,7 @@ public:
     [[nodiscard]] SoundManager GetSoundManager() const {return soundData;}
     [[nodiscard]] bool IsCharged(const bool a_forLastThrow = false) const {return RelicWeapon::IsCharged() ? true : (a_forLastThrow ? _isLastThrowCharged : false);}
 
-    [[nodiscard]] Thrower* GetThrower() {return thrower;}
+    [[nodiscard]] BaseActor* GetThrower() {return thrower;}
     [[nodiscard]] RE::Actor* GetThrowerActor() {return GetThrower() ? GetThrower()->GetActor() : nullptr;}
     [[nodiscard]] ThrowState GetThrowState() const {return _throwState;}
     [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return droppedWeaponKeep.get().get(); }
@@ -139,7 +136,7 @@ public:
 
     void SetThrowState(const ThrowState a_throwState) {_throwState = a_throwState;};
 
-    bool Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt);
+    bool Throw(BaseActor* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt);
     bool InitiateTransform() noexcept;
     void InitiateModel() noexcept;
     bool InitiateTrail() noexcept;

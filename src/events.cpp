@@ -71,6 +71,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
 //            break;
         case "CallWeapon"_h:
             player->CallWeapon();
+            break;
         case "CatchLevi"_h:
             break;
         case "ThrowAttackStart"_h:

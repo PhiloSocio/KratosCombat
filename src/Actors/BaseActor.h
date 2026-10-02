@@ -3,6 +3,9 @@
 #include "Types.h"
 
 class RelicWeapon;
+class ActorCapability;
+
+using ActorCapabilityPtr = std::unique_ptr<ActorCapability>;
 
 class BaseActor
 {
@@ -13,8 +16,24 @@ public:
 
     void OnEquip(RelicWeapon* a_relic);
 
-    virtual void Update(float a_delta) = 0;
-    virtual void DoAction(const ActionType a_action) = 0;
+    virtual void Update(float a_delta);
+    virtual void DoAction(const ActionType a_action);  // Dispatcher: BaseActor owns the action flow
+
+    void AddCapability(ActorCapabilityPtr a_capability);
+    [[nodiscard]] ActorCapability* GetCapability(ActorType a_type);
+    [[nodiscard]] const std::vector<ActorCapabilityPtr>& GetCapabilities() const { return actorCapabilities; }
+    template <typename T>
+    [[nodiscard]] T* GetCapabilityAs()
+    {
+        for (auto& cap : actorCapabilities) {
+            if (auto casted = dynamic_cast<T*>(cap.get())) {
+                return casted;
+            }
+        }
+        return nullptr;
+    }
+
+    bool IsInRage() const { return isInRage; }
 
     void SetRightHandRelic(RelicWeapon* a_relic) { rightHandRelic = a_relic; };
     void SetLeftHandRelic(RelicWeapon* a_relic) { leftHandRelic = a_relic; };
@@ -68,6 +87,8 @@ public:
     [[nodiscard]] bool GetSkipEquipAnim() const { return skipEquipAnim; };
     [[nodiscard]] bool GetUnequipWhenAnimEnds() const { return unequipWhenAnimEnds; };
 protected:
+friend class Rager;
+
     RE::ActorHandle actorHandle;
     RE::Actor* actor = nullptr;
 
@@ -86,10 +107,12 @@ protected:
     std::vector<RelicIdentity> knownRelics;
 
     REX::EnumSet<ActorType, std::uint32_t> titles;
+    std::vector<ActorCapabilityPtr> actorCapabilities;
 
     bool skipEquipAnim = false;
     bool unequipWhenAnimEnds = false;
     bool isBarehanded = false;
+    bool isInRage = false;
 
     explicit BaseActor(RE::ActorHandle a_actorHandle);
 

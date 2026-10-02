@@ -1,7 +1,6 @@
 #pragma once
 
 #include "ThrowableRelicWeapon.h"
-#include "Actors/Caller.h"
 #include "Weapons/States/RelicWeaponState.h"
 
 class SmartRelicWeapon : public ThrowableRelicWeapon
@@ -10,7 +9,7 @@ public:
     ~SmartRelicWeapon() override = default;
     explicit SmartRelicWeapon(RE::TESBoundObject* a_object);
 
-    Caller* caller = nullptr;
+    BaseActor* caller = nullptr;
 
     std::vector<RE::ActorHandle>    lastHitActors;
     std::vector<RE::TESObjectREFR*> lastHitForms;
@@ -25,14 +24,14 @@ public:
     void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnTrailDelete() override;
 
-    [[nodiscard]] Caller* GetCaller() {return caller && caller->IsValid() ? caller : nullptr;}
+    [[nodiscard]] BaseActor* GetCaller() {return caller;}
     [[nodiscard]] RelicWeaponState* GetState() const {return currentState.get();}
 
     virtual void SetState(RelicWeaponState::Type a_type) = 0;
     virtual void SetState(std::unique_ptr<RelicWeaponState> a_state);
     RelicWeaponState* GetCurrentState() const {return currentState.get();}
     void GetPosition(RE::NiPoint3& a_point);
-    virtual void Call(Caller* a_caller, const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt);
+    virtual void Call(BaseActor* a_caller, const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt);
     virtual void Catch(bool a_justDestroy = false);
     virtual bool IsArriving() const {return currentState ? currentState->GetType() == RelicWeaponState::Type::kArriving : false;}
     virtual bool IsHoming() const {return currentState ? currentState->GetType() == RelicWeaponState::Type::kHoming : false;}

@@ -2,7 +2,6 @@
 
 #include "RelicFactory.h"
 #include "Weapons/RelicWeapon.h"
-#include "Actors/Thrower.h"
 #include "Actors/Kratos.h"
 
 class RelicManager {

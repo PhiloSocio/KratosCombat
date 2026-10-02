@@ -1,6 +1,4 @@
 #include "HomingState.h"
-#include "Actors/Rager.h"
-#include "Actors/Caller.h"
 
 HomingState::HomingState(
     SmartRelicWeapon& a_weapon,
@@ -166,11 +164,6 @@ Status HomingState::Update(float a_delta)
 void HomingState::Exit()
 {
     if (auto thrower = weapon.GetThrower(); isBoomerang && thrower) {
-        if (auto caller = dynamic_cast<Caller*>(thrower); caller) {
-            auto rager = dynamic_cast<Rager*>(thrower);
-            if (!rager || !rager->IsInRage()) {
-                caller->CallWeapon();
-            }
-        }
+        thrower->DoAction(ActionType::kWeaponCall);
     }
 }

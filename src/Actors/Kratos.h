@@ -1,11 +1,8 @@
 #pragma once
 
-#include "Thrower.h"
-#include "Charger.h"
-#include "Caller.h"
-#include "Rager.h"
+#include "BaseActor.h"
 
-class Kratos : public Thrower, public Caller, public Charger, public Rager
+class Kratos : public BaseActor
 {
 public:
     explicit Kratos(RE::ActorHandle a_actorHandle);
@@ -15,5 +12,4 @@ public:
     void DoAction(const ActionType a_action) override;
 
 protected:
-
 };

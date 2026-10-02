@@ -20,6 +20,7 @@ void Rager::RestoreRage(const float a_value, const bool a_justRestore)
 
 void Rager::StartRage(const bool a_justAnim)
 {
+    auto actor = parent && parent->IsValid() ? parent->GetActor() : nullptr;
     if (actor) {
         if ((rage - rageDamageAmount * 10.f) < 0.f) return;
         actor->SetGraphVariableInt("iRageType", (int32_t)rageType);
@@ -36,7 +37,7 @@ void Rager::StartRage(const bool a_justAnim)
                 return;
             }
             ObjectUtil::Actor::CastSpell(SpellSpartanRage, actor, actor, actor, 3.f);
-            if (assets->VFXeffects.fury) actor->ApplyArtObject(assets->VFXeffects.fury, 1.f, nullptr, false, false, GetRHandBone());
+            if (assets->VFXeffects.fury) actor->ApplyArtObject(assets->VFXeffects.fury, 1.f, nullptr, false, false, parent->GetRHandBone());
             if (_LastEquippedObjectR)
                 ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
             if (_LastEquippedObjectL)
@@ -51,10 +52,10 @@ void Rager::StartRage(const bool a_justAnim)
                 actor->NotifyAnimationGraph("DoKratosAction");
                 RestoreRage(-(rageDamageAmount * 5.f), true);
             }
-            if (assets->VFXeffects.valor) actor->ApplyArtObject(assets->VFXeffects.valor, 1.f, nullptr, false, false, GetRHandBone());
+            if (assets->VFXeffects.valor) actor->ApplyArtObject(assets->VFXeffects.valor, 1.f, nullptr, false, false, parent->GetRHandBone());
             break;
         case RageType::kWrath:
-            if (assets->VFXeffects.wrath) actor->ApplyArtObject(assets->VFXeffects.wrath, 1.f, nullptr, false, false, GetRHandBone());
+            if (assets->VFXeffects.wrath) actor->ApplyArtObject(assets->VFXeffects.wrath, 1.f, nullptr, false, false, parent->GetRHandBone());
             return;
         case RageType::kLegacy:
         //    if (BladeOfOlympus) {
@@ -72,10 +73,12 @@ void Rager::StartRage(const bool a_justAnim)
         ObjectUtil::Actor::SendAnimationEvent(actor, "weaponSwing");
         actor->SetGraphVariableBool("IsInRage", true);
         _isInRage = true;
+        parent->isInRage = _isInRage;
     }
 }
 void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bool a_justAnim)
 {
+    auto actor = parent && parent->IsValid() ? parent->GetActor() : nullptr;
     if (actor) {
         _isWantFinishRage = true;
         switch (rageType)
@@ -123,6 +126,7 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
         }
         actor->SetGraphVariableBool("IsInRage", false);
         _isInRage = false;
+        parent->isInRage = _isInRage;
         _isWantFinishRage = false;
         _LastEquippedObjectR = nullptr;
         _LastEquippedObjectL = nullptr;
@@ -132,4 +136,23 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
 void Rager::Update(const float a_delta)
 {
     if (IsInRage()) RestoreRage(-(rageDamageAmount * a_delta), true);
+}
+
+void Rager::HandleAction(const ActionType a_action)
+{
+    switch (a_action)
+    {
+    case ActionType::kRage:
+        if (!IsInRage()) StartRage(true); else EndRage();
+        break;
+    case ActionType::kWeaponCharge:
+        break;
+    case ActionType::kSpecialIdle:
+        break;
+    case ActionType::kWeaponCall:
+        break;
+
+    default:
+        break;
+    }
 }

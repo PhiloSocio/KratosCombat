@@ -2,36 +2,43 @@
 #include "Weapons/SmartRelicWeapon.h"
 #include "RelicManager.h"
 
+Caller::Caller()
+{
+}
+
 void Caller::CallWeapon()
 {
-    if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(_weaponToCall)) {
-        weaponToCall->Call(this);
-    } else {
-        spdlog::info("no callable weapon found!");
+    if (parent) {
+        if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(_weaponToCall)) {
+            weaponToCall->Call(parent);
+        } else {
+            spdlog::info("no callable weapon found!");
+        }
     }
 }
 RelicWeapon* Caller::GetCallableRelic()
 {
     _weaponToCall = nullptr;
-    if (!GetRightHandRelic()) {
-        if (auto lastRelic = GetLastRightHandRelic();
-            lastRelic && !lastRelic->IsEquipped() && 
-            lastRelic->GetOwner() && 
-            lastRelic->GetOwner() == this && 
+    if (!parent) return nullptr;
+    if (!parent->GetRightHandRelic()) {
+        if (auto lastRelic = parent->GetLastRightHandRelic();
+            lastRelic && !lastRelic->IsEquipped() &&
+            lastRelic->GetOwner() &&
+            lastRelic->GetOwner() == parent &&
             lastRelic->HasAbility(RelicAbility::kCallable))
         {
             _weaponToCall = lastRelic;
-        } else if (auto& knownRelics = GetKnownRelics(); !knownRelics.empty()) {
+        } else if (auto& knownRelics = parent->GetKnownRelics(); !knownRelics.empty()) {
             for (const auto& relicID : knownRelics) {
                 auto relic = RelicManager::GetSingleton()->GetActiveRelic(relicID);
                 if (!relic || !relic->HasAbility(RelicAbility::kCallable)) continue;
                 if (auto owner = relic->GetOwner()) {
-                    if (owner == this) {
+                    if (owner == parent) {
                         if (!relic->IsEquipped()) {
                             _weaponToCall = relic;
                             break;
                         } else if (auto wielder = relic->GetWielder()) {
-                            if (this->alterationLevel > wielder->meleeSkill * 2.f) {
+                            if (alterationLevel > wielder->meleeSkill * 2.f) {
                                 _weaponToCall = relic;
                                 break;
                             }
@@ -39,7 +46,7 @@ RelicWeapon* Caller::GetCallableRelic()
                             spdlog::error("WEIRD! Relic is not owned by this actor, but it's equipped. This should never happen.");
                         }
                     } else if (auto wielder = relic->GetWielder()) {
-                        if (this->alterationLevel > wielder->meleeSkill * 3.f) {
+                        if (alterationLevel > wielder->meleeSkill * 3.f) {
                             _weaponToCall = relic;
                             break;
                         }
@@ -58,4 +65,31 @@ RelicWeapon* Caller::GetCallableRelic()
         spdlog::info("you already have a relic weapon equipped.");
     }
     return _weaponToCall;
+}
+
+
+void Caller::HandleAction(const ActionType a_action)
+{
+    switch (a_action)
+    {
+    case ActionType::kRage:
+        break;
+    case ActionType::kWeaponCharge:
+        break;
+    case ActionType::kSpecialIdle:
+        break;
+    case ActionType::kWeaponCall:
+        if (!parent->IsInRage() && !parent->GetRightHandRelic()) {
+            if (_weaponToCall = GetCallableRelic(); _weaponToCall) {
+                parent->GetActor()->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kWeaponCharge);   //  intentional
+                parent->GetActor()->NotifyAnimationGraph("DoKratosAction");
+            }
+        } else if (parent->IsInRage()) {
+            //  todo
+        }
+        break;
+
+    default:
+        break;
+    }
 }

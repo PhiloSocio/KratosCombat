@@ -1,7 +1,7 @@
 #include "SmartRelicWeapon.h"
 #include "Weapons/States/ArrivingState.h"
 #include "Weapons/States/HomingState.h"
-#include "Actors/Rager.h"
+#include "Actors/Capabilities/Rager.h"
 #include "Assets.h"
 
 SmartRelicWeapon::SmartRelicWeapon(RE::TESBoundObject* a_object)
@@ -79,7 +79,7 @@ void SmartRelicWeapon::SetState(std::unique_ptr<RelicWeaponState> a_state)
     }
 }
 
-void SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
+void SmartRelicWeapon::Call(BaseActor* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
 {
     caller = a_caller;
     if (caller && caller->IsValid() && weap) {

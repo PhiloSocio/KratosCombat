@@ -12,13 +12,16 @@ bool Thrower::IsThrowing(const ThrowType a_type) noexcept
 {
     bool ret = false;
 
-    actor->GetGraphVariableBool("bIsThrowing", _isNormalThrowing);
-    actor->GetGraphVariableBool("bIsPowerThrowing", _isPowerThrowing);
+    auto actor = parent && parent->IsValid() ? parent->GetActor() : nullptr;
+    if (actor) {
+        actor->GetGraphVariableBool("bIsThrowing", _isNormalThrowing);
+        actor->GetGraphVariableBool("bIsPowerThrowing", _isPowerThrowing);
+    }
 
     switch (a_type) {
     case ThrowType::kAny:                   ret = _isNormalThrowing || _isPowerThrowing;    break;
-    case ThrowType::kNormalThrow:        ret = _isNormalThrowing;                        break;
-    case ThrowType::kPowerThrow:         ret = _isPowerThrowing;                         break;
+    case ThrowType::kNormalThrow:           ret = _isNormalThrowing;                        break;
+    case ThrowType::kPowerThrow:            ret = _isPowerThrowing;                         break;
     case ThrowType::kChargingThrow:         ret = _isCharging;                              break;
     case ThrowType::kPowerChargingThrow:    ret = _isCharging && _isPowerThrowing;          break;
     default:                                ret = false;                                    break;
@@ -28,14 +31,14 @@ bool Thrower::IsThrowing(const ThrowType a_type) noexcept
 }
 void Thrower::StartChargingThrow() noexcept
 {
-    if (!IsValid()) return;
+    if (!parent->IsValid()) return;
     _chargeDuration = 0.f;
     _isCharging = true;
-    auto rHandBone = GetRHandBone();
-    auto rHandRelic = GetRightHandRelic() ? dynamic_cast<ThrowableRelicWeapon*>(GetRightHandRelic()) : nullptr;
+    auto rHandBone = parent->GetRHandBone();
+    auto rHandRelic = parent->GetRightHandRelic() ? dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic()) : nullptr;
     if (auto assets = Assets::GetSingleton(); assets && rHandBone && rHandRelic) {
         rHandRelic->GetSoundManager().PlayChargingLoopSounds(rHandBone);
-        GetActor()->ApplyArtObject(assets->VFXeffects.handFrostBright, 5.f, nullptr, false, false, rHandBone);
+        parent->GetActor()->ApplyArtObject(assets->VFXeffects.handFrostBright, 5.f, nullptr, false, false, rHandBone);
     }
 }
 void Thrower::StopChargingThrow() noexcept
@@ -58,8 +61,8 @@ float Thrower::GetChargeMultiplier() const noexcept
 
 void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
 {
-    if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(GetRightHandRelic())) {
-        if(const bool success = throwableRelic->Throw(this, a_rotationType); success) {
+    if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic())) {
+        if(const bool success = throwableRelic->Throw(parent, a_rotationType); success) {
             if (a_throwType == ThrowType::kHomingThrow) {
                 if (auto smartRelicWeapon = dynamic_cast<SmartRelicWeapon*>(throwableRelic); smartRelicWeapon) {
                     smartRelicWeapon->SetState(RelicWeaponState::Type::kHoming);
@@ -68,7 +71,7 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
         } else {
             spdlog::error("throw failed");
         }
-    } else if (GetRightHandRelic()) {
+    } else if (parent->GetRightHandRelic()) {
         spdlog::warn("relic is not throwable!");
     } else {
         spdlog::warn("your weapon is not a relic");
@@ -81,4 +84,8 @@ void Thrower::Update(float a_delta)
         _chargeDuration += a_delta;
         if (_chargeDuration > maxChargeDuration) _chargeDuration = maxChargeDuration;
     }
+}
+void Thrower::HandleAction(const ActionType a_action)
+{
+    // Thrower-specific actions handled via parent if needed
 }

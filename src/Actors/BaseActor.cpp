@@ -1,6 +1,7 @@
 #include "BaseActor.h"
 #include "util.h"
 #include "Weapons/RelicWeapon.h"
+#include "Capabilities/ActorCapability.h"
 
 BaseActor::~BaseActor()
 {
@@ -63,4 +64,39 @@ void BaseActor::OnEquip(RelicWeapon* a_relic)
             }
         }
     }
+}
+
+void BaseActor::Update(float a_delta)
+{
+    for (auto& cap : actorCapabilities) {
+        if (cap && cap->IsActive()) {
+            cap->Update(a_delta);
+        }
+    }
+}
+
+void BaseActor::DoAction(const ActionType a_action)
+{
+    for (auto& cap : actorCapabilities) {
+        if (cap && cap->IsActive()) {
+            cap->HandleAction(a_action);
+        }
+    }
+}
+
+void BaseActor::AddCapability(ActorCapabilityPtr a_capability)
+{
+    if (!a_capability) return;
+    a_capability->OnAttach(this);
+    actorCapabilities.push_back(std::move(a_capability));
+}
+
+ActorCapability* BaseActor::GetCapability(ActorType a_type)
+{
+    for (auto& cap : actorCapabilities) {
+        if (cap && cap->GetCapabilityType() == a_type) {
+            return cap.get();
+        }
+    }
+    return nullptr;
 }

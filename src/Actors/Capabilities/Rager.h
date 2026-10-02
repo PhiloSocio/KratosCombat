@@ -1,16 +1,18 @@
 #pragma once
 
-#include "BaseActor.h"
+#include "ActorCapability.h"
+#include "Types.h"
 
-class Rager : virtual public BaseActor
+class Rager : public ActorCapability
 {
 public:
-    explicit Rager(RE::ActorHandle a_actorHandle) :
-        BaseActor(a_actorHandle)
-    {titles.set(ActorType::kRager);}
+    Rager();
     virtual ~Rager() = default;
 
     void Update(float a_delta) override;
+    void HandleAction(const ActionType a_action) override;
+
+    [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kRager; }
 
     void StartRage(const bool a_justAnim = false);
     void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);

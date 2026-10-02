@@ -1,16 +1,19 @@
 #pragma once
 
-#include "BaseActor.h"
+#include "ActorCapability.h"
+#include "Types.h"
 
 class ThrowableRelicWeapon;
 
-class Thrower : virtual public BaseActor
+class Thrower : public ActorCapability
 {
 public:
-    explicit Thrower(RE::ActorHandle a_actorHandle) :
-        BaseActor(a_actorHandle)
-    {titles.set(ActorType::kThrower);}
+    Thrower();
     virtual ~Thrower() = default;
+
+    void HandleAction(const ActionType a_action) override;
+
+    [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kThrower; }
 
     void ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType);
 
