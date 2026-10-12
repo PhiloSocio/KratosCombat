@@ -91,6 +91,8 @@ public:
     void ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType);
     void StartChargingThrow();
     void StopChargingThrow();
+    void StartWeaponCharging();
+    void StopWeaponCharging();
     void StartRage(bool a_justAnim = false);
     void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);
     void RestoreRage(const float a_value, const bool a_justRestore);

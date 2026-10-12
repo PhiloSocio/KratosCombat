@@ -47,6 +47,8 @@ inline void InstallHooks()
 {
     ProjectileHook::Hook();
     PlayerHook::Hook();
+    NPCHook::Hook();
+    ActorEquipManagerHook::Hook();
     AttackHook::Hook();
 }
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg)

@@ -103,6 +103,7 @@ RE::Actor* HomingState::GetNextTarget(RE::NiPoint3 a_origin)
 void HomingState::Enter()
 {
     startingTime = AsyncUtil::GameTime::GetEngineTime();
+    weapon.isPenetrating = true;
     InitializeTargets();
 }
 Status HomingState::Update(float a_delta)
@@ -168,6 +169,7 @@ Status HomingState::Update(float a_delta)
 void HomingState::Exit()
 {
     if (auto throwerParent = weapon.GetThrower()->GetParent(); isBoomerang && throwerParent) {
+        weapon.isPenetrating = false;
         throwerParent->DoAction(ActionType::kWeaponCall);
     }
 }

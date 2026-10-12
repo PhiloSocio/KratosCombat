@@ -11,11 +11,6 @@ constexpr float maxChargeDuration = 3.f;
 
 Thrower::Thrower()
 {
-    if (parent && parent->IsValid()) {
-        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
-            archeryLevel = callerAVO->GetActorValue(RE::ActorValue::kArchery);
-        }
-    }
 }
 
 bool Thrower::IsThrowing(const ThrowType a_type) noexcept
@@ -86,6 +81,16 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
         spdlog::warn("relic is not throwable!");
     } else {
         spdlog::warn("your weapon is not a relic");
+    }
+}
+
+void Thrower::OnAttach(BaseActor* a_actor)
+{
+    ActorCapability::OnAttach(a_actor);
+    if (parent && parent->IsValid()) {
+        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
+            archeryLevel = callerAVO->GetActorValue(RE::ActorValue::kArchery);
+        }
     }
 }
 

@@ -68,64 +68,43 @@ void ArrivingState::InitializeRoute()
 void ArrivingState::InitiateTransform()
 {
     if (!_transformInitiated) {
-        if (weapon.replacedProjectileModel && weapon.replacedProjectileModel->parent) {
-            model->world = weapon.transformPW;
-            model->local = weapon.transformPL;
-            auto& replacedPMParent = weapon.replacedProjectileModel->parent;
-        //    auto parentWorldInverse = replacedPMParent->world.Invert();
-        //    auto previousWorld = weapon.transformW;
+        if (weapon.weaponParentNode && weapon.replacedProjectileModel) {
+            auto& replacedPMParent = weapon.weaponParentNode;
             auto& localRotation = replacedPMParent->local.rotate;
-    //        auto& localPosition = replacedPMParent->local.translate;
-        //    if (replacedPMParent->parent) {
-        //        localRotation = parentWorldInverse.rotate * previousWorld.rotate;
-        //    //    localPosition = parentWorldInverse.rotate * (previousWorld.translate - localPosition);
-        //    } else {
-        //        localRotation = previousWorld.rotate;
-        //    //    localPosition = previousWorld.translate;
-        //    }
+            const auto& desiredParentWorldRotate = weapon.transformPW.rotate;
+            const auto& parentWorldRotate = replacedPMParent->parent->world.rotate;
+            localRotation = parentWorldRotate.Transpose() * desiredParentWorldRotate;
             startRotation = localRotation;
             _transformInitiated = true;
-            spdlog::debug("start rotation initiated");
         }
     }
 }
 void ArrivingState::UpdateRotation()
 {
-    if (weapon.replacedProjectileModel && weapon.replacedProjectileModel->parent) {
-        auto& replacedPMParent = weapon.replacedProjectileModel->parent;
+    if (weapon.weaponParentNode) {
+        auto& replacedPMParent = weapon.weaponParentNode;
         auto& localRotation = replacedPMParent->local.rotate;
         RE::NiMatrix3 targetLocalRotation;
-    //    float targetAngleZ;
         if (replacedPMParent->parent) {
             targetLocalRotation = replacedPMParent->parent->world.rotate.Transpose() * callerWeaponBone->world.rotate;
-        //    targetAngleZ = std::atan2(
-        //        targetLocalRotation.entry[0][1],
-        //        targetLocalRotation.entry[0][0]
-        //    );
         } else {
             targetLocalRotation = callerWeaponBone->world.rotate;
-        //    targetAngleZ = std::atan2(
-        //        targetLocalRotation.entry[0][1],
-        //        targetLocalRotation.entry[0][0]
-        //    );
         }
         const float angleZ = livingTime * rotationSpeed;
         MathUtil::Angle::NormalAbsoluteAngle(angleZ);
-        arrivalSpin = (int)(std::floor(1 + (livingTime + remainingTimeToArrive) * rotationSpeed / TWO_PI)) * TWO_PI;
-        const float blendZ = std::lerp(angleZ, arrivalSpin, tReal);
+
+        float tZrot = tReal;
+        if (tReal < 0.33333f) {
+            arrivalSpin = (int)(std::floor(1 + (livingTime + remainingTimeToArrive) * rotationSpeed / TWO_PI)) * TWO_PI;
+            if (tReal < 0.16666667f)
+                tZrot = 6.f * tReal * tReal;
+        }
+
+        const float blendZ = std::lerp(angleZ, arrivalSpin, tReal * tZrot);
         const auto& startRotationC = startRotation;
         localRotation = MathUtil::Algebra::InterpolateRotation(startRotationC, targetLocalRotation, tReal);
         localRotation = localRotation * RE::NiMatrix3(0.f, 0.f, blendZ);
-    //    spdlog::debug("target angle: {} calculated target angle: {} blended angle: {} tau: {}", angleZ, arrivalSpin, blendZ, tReal);
     }
-//    leviAngle.x = asin(desiredDir.z);
-//    leviAngle.z = atan2(desiredDir.x, desiredDir.y);
-//    if (leviAngle.z < 0.0) {
-//        leviAngle.z += PI;
-//    }
-//    if (desiredDir.x < 0.0) {
-//        leviAngle.z += PI;
-//    }
 }
 void ArrivingState::UpdateAI(RE::NiPoint3& a_outVel)
 {
@@ -244,6 +223,7 @@ void ArrivingState::UpdateArrivingRoute()
 
 void ArrivingState::Enter()
 {
+    weapon.isPenetrating = true;
     InitializeCallerData();
     UpdateTargets();
     UpdateArrivingDirection(!_justContinue);
@@ -303,7 +283,6 @@ Status ArrivingState::Update(const float a_delta)
     }
     InitiateTransform();
 
-    livingTime = GetLivingTime();
     UpdateArrivingRoute();
 
     const float minArrivalTime = *g_deltaTime * 2.f;
@@ -378,8 +357,10 @@ Status ArrivingState::Update(const float a_delta)
     UpdateRotation();
     UpdateAI(vel);
     UpdateArrivingDirection();
+    livingTime = GetLivingTime();
     return Status::kRunning;
 }
 void ArrivingState::Exit()
 {
+    weapon.isPenetrating = false;
 }

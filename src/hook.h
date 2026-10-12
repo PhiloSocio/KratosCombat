@@ -10,12 +10,13 @@ public:
         spdlog::info("Hooking Projectiles...");
         REL::Relocation<std::uintptr_t> MissileProjectileVtbl{ RE::VTABLE_MissileProjectile[0] };
         REL::Relocation<std::uintptr_t> ArrowProjectileVtbl{ RE::VTABLE_ArrowProjectile[0] };
+        REL::Relocation<std::uintptr_t> ConeProjectileVtbl{ RE::VTABLE_BeamProjectile[0] };
 
         _GetCollisionMissile        = MissileProjectileVtbl.write_vfunc(0xBE, GetCollisionMissile);
         _GetMissileImpactData       = MissileProjectileVtbl.write_vfunc(0xBD, GetMissileImpactData);
         _GetLinearVelocityArrow     = ArrowProjectileVtbl.write_vfunc(0x86, GetLinearVelocityArrow);
         _GetCollisionArrow          = ArrowProjectileVtbl.write_vfunc(0xBE, GetCollisionArrow);
-//      _GetKillOnCollisionArrow    = ArrowProjectileVtbl.write_vfunc(0xB8, GetKillOnCollisionArrow);
+        _GetKillOnCollisionArrow    = ArrowProjectileVtbl.write_vfunc(0xB8, GetKillOnCollisionArrow);
         _GetArrowImpactData         = ArrowProjectileVtbl.write_vfunc(0xBD, GetArrowImpactData);
 
         spdlog::info("ProjectileHook done, long live Ersh and Fenix!");
@@ -53,7 +54,6 @@ public:
         _OnEquipItem        = PlayerCharacterVtbl.write_vfunc(0xB2, OnEquipItem);
     }
 private:
-    using EventChecker = RE::BSEventNotifyControl;
     static void Update(RE::PlayerCharacter* a_this, const float a_delta);
     static EventChecker ProcessEventPC(RE::BSTEventSink<RE::BSAnimationGraphEvent>* a_sink, RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_dispatcher);
 //  static void UnequipItem(RE::PlayerCharacter* a_this, std::uint64_t a_arg1, RE::TESBoundObject* a_object);
@@ -74,23 +74,24 @@ public:
     static void Hook()
     {
         REL::Relocation<std::uintptr_t> ActorVtbl{ RE::VTABLE_Actor[0] };
+        REL::Relocation<std::uintptr_t> CharacterVtbl{ RE::VTABLE_Character[0] };
 
-        _Update             = ActorVtbl.write_vfunc(0xAD, Update);
-//      _ProcessEventPC     = PlayerActorVtbl.write_vfunc(0x01, ProcessEventPC);
-//      _UnequipItem        = PlayerActorVtbl.write_vfunc(0xA1, UnequipItem);
-        _OnEquipItem        = ActorVtbl.write_vfunc(0xB2, OnEquipItem);
+        _Update                 = ActorVtbl.write_vfunc(0xAD, Update);
+//      _ProcessEventPC         = PlayerActorVtbl.write_vfunc(0x01, ProcessEventPC);
+//      _UnequipItem            = PlayerActorVtbl.write_vfunc(0xA1, UnequipItem);
+        _OnEquipItem            = ActorVtbl.write_vfunc(0xB2, OnEquipItem);
+        _AddObjectToContainer   = CharacterVtbl.write_vfunc(0x5A, AddObjectToContainer);
     }
 private:
-    using EventChecker = RE::BSEventNotifyControl;
     static void Update(RE::Actor* a_this, const float a_delta);
-    static EventChecker ProcessEventPC(RE::BSTEventSink<RE::BSAnimationGraphEvent>* a_sink, RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_dispatcher);
 //  static void UnequipItem(RE::Actor* a_this, std::uint64_t a_arg1, RE::TESBoundObject* a_object);
     static void OnEquipItem(RE::Actor* a_this, bool a_playAnim);
+    static void AddObjectToContainer(RE::Actor* a_this, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraList, std::int32_t a_count, RE::TESObjectREFR* a_fromRefr);
 
     static inline REL::Relocation<decltype(Update)>         _Update;
-    static inline REL::Relocation<decltype(ProcessEventPC)> _ProcessEventPC;
 //  static inline REL::Relocation<decltype(UnequipItem)>    _UnequipItem;
     static inline REL::Relocation<decltype(OnEquipItem)>    _OnEquipItem;
+    static inline REL::Relocation<decltype(AddObjectToContainer)>   _AddObjectToContainer;
 };
 
 class AttackHook
@@ -114,4 +115,50 @@ private:
 
     static inline REL::Relocation<decltype(ProcessButton)> _ProcessButton;
     static inline REL::Relocation<decltype(OnMeleeHit)> _OnMeleeHit;
+};
+
+struct ActorEquipManagerHook
+{
+public:
+    using EquipObject_t = decltype(&RE::ActorEquipManager::EquipObject);
+    using UnequipObject_t = decltype(&RE::ActorEquipManager::UnequipObject);
+
+    static void Hook()
+    {
+        REL::Relocation<std::uintptr_t> target1{RELOCATION_ID(37938, 38894), REL::VariantOffset(0xE5, 0x170, 0xE5)};
+        REL::Relocation<std::uintptr_t> target2{RELOCATION_ID(37945, 38901), REL::VariantOffset(0x138, 0x1B9, 0x0)};
+
+        auto& trampoline = SKSE::GetTrampoline();
+        _EquipObject    = trampoline.write_call<5>(target1.address(), EquipObject);
+        _UnequipObject  = trampoline.write_call<5>(target2.address(), UnequipObject);
+    }
+
+private:
+    static void EquipObject(
+        RE::ActorEquipManager* a_manager,
+        RE::Actor* a_actor,
+        RE::TESBoundObject* a_object,
+        RE::ExtraDataList* a_extraData,
+        std::uint32_t a_count,
+        const RE::BGSEquipSlot* a_slot,
+        bool a_queueEquip,
+        bool a_forceEquip,
+        bool a_playSounds,
+        bool a_applyNow);
+
+    static void UnequipObject(
+        RE::ActorEquipManager* a_manager,
+        RE::Actor* a_actor,
+        RE::TESBoundObject* a_object,
+        RE::ExtraDataList* a_extraData,
+        std::uint32_t a_count,
+        const RE::BGSEquipSlot* a_slot,
+        bool a_queueEquip,
+        bool a_forceEquip,
+        bool a_playSounds,
+        bool a_applyNow,
+        const RE::BGSEquipSlot* a_slotToReplace);
+
+    static inline REL::Relocation<EquipObject_t> _EquipObject;
+    static inline REL::Relocation<UnequipObject_t> _UnequipObject;
 };

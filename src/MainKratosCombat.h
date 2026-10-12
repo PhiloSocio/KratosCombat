@@ -381,7 +381,7 @@ public:
         float defaultEnchMag;
         float damage            = 0.f;
         float yAngle            = 0.35f;
-        float throwedTime       = 0.f;
+        float launchTime        = 0.f;
         float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
         float gravity           = 3.21f;
         float throwingChargeDuration = 0.f;
@@ -418,7 +418,7 @@ public:
         bool  isAlmostArrived = false;
         bool  isCatchable = false;
         bool  isInCallingAnimation = false;
-        float throwedTime = 0.f;
+        float launchTime = 0.f;
         float livingTime = 0.f;
         float timeToArrive = Config::ArrivalTime;
         float remainingTimeToArrive = Config::ArrivalTime;
@@ -432,7 +432,7 @@ public:
         float arrivingRelativeAngleSnapStrength = Config::ArrivalAngleSnap;
         float speed = 0.f;
 
-        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
+        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - launchTime;}
         RE::NiAVObject* GetCallerHandBone() const {return callerHandBoneSource ? *callerHandBoneSource : nullptr;}
         std::vector<RE::Actor*> GetTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
             targets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(caller.get(), linearDistance, true);
@@ -490,7 +490,7 @@ public:
             RE::NiPoint3& a_startPosition) : parent(a_parent), proj(a_proj),
             caller(a_caller), callerHandBoneSource(a_callerHandBone), startPosition(a_startPosition)
         {
-            throwedTime = AsyncUtil::GameTime::GetEngineTime();
+            launchTime = AsyncUtil::GameTime::GetEngineTime();
             callerBreastBone.reset(caller ? caller->GetNodeByName("NPC Spine2 [Spn2]") : nullptr);
             callerHandBone = GetCallerHandBone();
             auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
@@ -513,7 +513,7 @@ public:
         ArrivingWeapon(const ArrivingWeapon& a_aWeapon, RE::Projectile* a_proj, RE::NiPoint3& a_startPosition) : parent(a_aWeapon.parent), proj(a_proj),
             caller(a_aWeapon.caller), callerHandBoneSource(a_aWeapon.callerHandBoneSource), startPosition(a_startPosition)
         {
-            throwedTime = a_aWeapon.throwedTime;
+            launchTime = a_aWeapon.launchTime;
             callerBreastBone = a_aWeapon.callerBreastBone;
             callerHandBone = GetCallerHandBone();
             auto callerHandPosition = callerHandBone ? callerHandBone->world.translate : caller ? caller->GetPosition() : RE::NiPoint3();
@@ -538,12 +538,12 @@ public:
         uint8_t hitCount;           //  how many times it will hit the targets?
         bool isBoomerang;           //  it will come back after hit all targets?
         float speed;
-        float throwedTime;
+        float launchTime;
         float angularVelocity;
         float waveAmplitude = 400.f;
         float waveFrequency = 20.f;
 
-        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
+        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - launchTime;}
         //  give an origin point if you want to get nearest target
         RE::Actor* GetNextTarget(RE::NiPoint3 a_origin = RE::NiPoint3()) {
             std::erase_if(targets, [](const RE::Actor* actor) {
@@ -601,7 +601,7 @@ public:
             speed(a_speed), 
             angularVelocity(a_angularVelocity)
         {
-            throwedTime = AsyncUtil::GameTime::GetEngineTime();
+            launchTime = AsyncUtil::GameTime::GetEngineTime();
             if (targets.size() == 1u) {hitCount = 4u;}
             else if (hitCount < 1u) hitCount = 1u;
             if (!targets.empty()) {
@@ -1015,7 +1015,7 @@ public:
         float defaultEnchMag;
         float damage            = 0.f;
         float yAngle            = 0.35f;
-        float throwedTime       = 0.f;
+        float launchTime       = 0.f;
         float gravity           = 3.69f;
         float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
         float throwingChargeDuration = 0.f;
@@ -1314,12 +1314,12 @@ public:
         uint8_t hitCount;           //  how many times it will hit the targets?
         bool isBoomerang;           //  it will come back after hit all targets?
         float speed;
-        float throwedTime;
+        float launchTime;
         float angularVelocity;
         float waveAmplitude = 400.f;
         float waveFrequency = 20.f;
 
-        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - throwedTime;}
+        float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - launchTime;}
         //  give an origin point if you want to get nearest target
         RE::Actor* GetNextTarget(RE::NiPoint3 a_origin = RE::NiPoint3()) {
             std::erase_if(targets, [](const RE::Actor* actor) {
@@ -1377,7 +1377,7 @@ public:
             speed(a_speed), 
             angularVelocity(a_angularVelocity)
         {
-            throwedTime = AsyncUtil::GameTime::GetEngineTime();
+            launchTime = AsyncUtil::GameTime::GetEngineTime();
             if (targets.size() == 1u) {hitCount = 4u;}
             else if (hitCount < 1u) hitCount = 1u;
             if (!targets.empty()) {
@@ -1595,7 +1595,7 @@ public:
         float defaultEnchMag;
         float damage            = 0.f;
         float yAngle            = 0.35f;
-        float throwedTime       = 0.f;
+        float launchTime       = 0.f;
     };
 
     Data data;

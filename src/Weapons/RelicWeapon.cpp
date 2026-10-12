@@ -2,7 +2,7 @@
 
 RelicWeapon::~RelicWeapon()
 {
-    spdlog::warn("relic weapon destructed");
+    spdlog::debug("relic weapon destructed");
 }
 RelicWeapon::RelicWeapon(RE::TESBoundObject* a_object)
     : weap(a_object->As<RE::TESObjectWEAP>())
@@ -15,6 +15,7 @@ void RelicWeapon::OnEquip(BaseActor* a_actor) {
         wielder = a_actor;
         lastWielder = a_actor;
         isEquipped = true;
+        currentReference = nullptr;
     } else {
         wielder = nullptr;
         isEquipped = false;

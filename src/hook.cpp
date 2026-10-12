@@ -161,7 +161,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
     //        }
             if (!Levi->isAxeCalled) {
                 Levi->data.lastVelocity = vel;
-                Levi->data.throwedTime = livingTime;
+                Levi->data.launchTime = livingTime;
                 Levi->data.projState = LeviathanAxe::ProjectileState::kLaunched;
 
                 if (Levi->IsHoming(a_this)) {
@@ -278,7 +278,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
             if (!mjolnir->isMjolnirCalled) {
                 mjolnir->data.lastVelocity = vel;
                 mjolnir->data.lastEulerAngles = mjolnirAngle;
-                mjolnir->data.throwedTime = livingTime;
+                mjolnir->data.launchTime = livingTime;
                 mjolnir->data.projState = Mjolnir::ProjectileState::kLaunched;
 
                 if (mjolnir->IsHoming(a_this)) {
@@ -344,7 +344,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     mjolnirAngle.y = rot;
                 }
             } else {
-            //  float passedArrTime = livingTime - mjolnir->throwedTime;
+            //  float passedArrTime = livingTime - mjolnir->launchTime;
             //  if (passedArrTime < 0.f) passedArrTime = livingTime;
                 float arrivingTime = Config::ArrivalTime - livingTime;//passedArrTime;
                 if (arrivingTime < *g_deltaTime * 2.f) arrivingTime = *g_deltaTime * 2.f;
@@ -924,6 +924,8 @@ bool ProjectileHook::GetKillOnCollisionArrow(RE::ArrowProjectile* a_this)
     bool result = _GetKillOnCollisionArrow(a_this);
 
 #ifdef KRATOS_COMBAT_3
+    if (result);
+        result = RelicManager::GetSingleton()->GetKillOnCollision(a_this, result);
 #else
     if (WeaponIdentify::IsRelic(a_this, Kratos::Relic::kMjolnir))
         if (Mjolnir::GetSingleton()->data.isPenetrating)
@@ -938,11 +940,18 @@ bool ProjectileHook::GetKillOnCollisionArrow(RE::ArrowProjectile* a_this)
 void PlayerHook::OnEquipItem(RE::PlayerCharacter* a_this, bool a_playAnim)
 {
 #ifdef KRATOS_COMBAT_3
-    RelicManager::GetSingleton()->OnEquip(a_this);
+    //RelicManager::GetSingleton()->OnEquip(a_this);
     _OnEquipItem(a_this, a_playAnim);
 #else
     _OnEquipItem(a_this, !SkipAnim(a_this, a_playAnim));
 #endif
+}
+void NPCHook::OnEquipItem(RE::Actor* a_this, bool a_playAnim)
+{
+#ifdef KRATOS_COMBAT_3
+    //RelicManager::GetSingleton()->OnEquip(a_this);
+#endif
+    _OnEquipItem(a_this, a_playAnim);
 }
 bool PlayerHook::SkipAnim(RE::PlayerCharacter* a_this, bool a_playAnim)
 {
@@ -953,6 +962,64 @@ bool PlayerHook::SkipAnim(RE::PlayerCharacter* a_this, bool a_playAnim)
 #endif
     return !a_playAnim;
 }
+void NPCHook::AddObjectToContainer(RE::Actor* a_this, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraList, std::int32_t a_count, RE::TESObjectREFR* a_fromRefr)
+{
+    spdlog::warn("{} {} picked up by {}", a_object->GetName(), a_object->formID, a_this->GetName());
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->OnPickUp(a_this, a_object, a_count, a_fromRefr);
+#endif
+    _AddObjectToContainer(a_this, a_object, a_extraList, a_count, a_fromRefr);
+}
+
+void ActorEquipManagerHook::EquipObject(
+    RE::ActorEquipManager* a_manager,
+    RE::Actor* a_actor,
+    RE::TESBoundObject* a_object,
+    RE::ExtraDataList* a_extraData,
+    std::uint32_t a_count,
+    const RE::BGSEquipSlot* a_slot,
+    bool a_queueEquip,
+    bool a_forceEquip,
+    bool a_playSounds,
+    bool a_applyNow)
+{
+    _EquipObject(a_manager, a_actor, a_object, a_extraData, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow);
+#ifdef KRATOS_COMBAT_3
+//    spdlog::info(
+//        "EquipObject: actor {:08X}, object {:08X}",
+//        a_actor ? a_actor->GetFormID() : 0,
+//        a_object ? a_object->GetFormID() : 0
+//    );
+
+    RelicManager::GetSingleton()->OnEquip(a_actor, a_object);
+#endif
+
+}
+void ActorEquipManagerHook::UnequipObject(
+    RE::ActorEquipManager* a_manager,
+    RE::Actor* a_actor,
+    RE::TESBoundObject* a_object,
+    RE::ExtraDataList* a_extraData,
+    std::uint32_t a_count,
+    const RE::BGSEquipSlot* a_slot,
+    bool a_queueEquip,
+    bool a_forceEquip,
+    bool a_playSounds,
+    bool a_applyNow,
+    const RE::BGSEquipSlot* a_slotToReplace)
+{
+#ifdef KRATOS_COMBAT_3
+//    spdlog::info(
+//        "UnequipObject: actor {:08X}, object {:08X}",
+//        a_actor ? a_actor->GetFormID() : 0,
+//        a_object ? a_object->GetFormID() : 0
+//    );
+
+    RelicManager::GetSingleton()->OnUnequip(a_actor, a_object, a_slotToReplace);
+#endif
+    _UnequipObject(a_manager, a_actor, a_object, a_extraData, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow, a_slotToReplace);
+
+}
 
 void PlayerHook::Update(RE::PlayerCharacter* a_this, const float a_delta)
 {
@@ -961,6 +1028,15 @@ void PlayerHook::Update(RE::PlayerCharacter* a_this, const float a_delta)
     RelicManager::GetSingleton()->UpdatePlayer(a_this, a_delta);
 #else
     Kratos::GetSingleton()->Update(a_this, a_delta);
+#endif
+
+    _Update(a_this, a_delta);
+}
+void NPCHook::Update(RE::Actor* a_this, const float a_delta)
+{
+
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->UpdateNPC(a_this, a_delta);
 #endif
 
     _Update(a_this, a_delta);

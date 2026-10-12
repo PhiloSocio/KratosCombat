@@ -17,6 +17,7 @@ public:
     RE::TESObjectWEAP*   weap           = nullptr;
     RE::EnchantmentItem* ench           = nullptr;
     RE::AlchemyItem*     poison         = nullptr;
+    RE::ExtraHotkey*     favoriteData   = nullptr;
     float*               enchMag        = nullptr;
     float                defaultEnchMag = 0.f;
     float                damage         = 0.f;

@@ -57,14 +57,18 @@ void BaseActor::OnEquip(RelicWeapon* a_relic)
         GetActor()->SetGraphVariableInt("iRelicWeapon", type);
         spdlog::debug("SyncRelicGraphState: relic type = {}", (int)type);
         SetRightHandRelic(a_relic);
-        SetLastRightHandRelic(a_relic);
         if (a_relic) {
+            SetLastRightHandRelic(a_relic);
+            SetBarehanded(false);
+
             if (knownRelics.empty()) {
                 knownRelics.push_back(a_relic->relicIdentity);
             } else {
                 auto it = std::find(knownRelics.rbegin(), knownRelics.rend(), a_relic->relicIdentity);
                 if (it == knownRelics.rend()) knownRelics.push_back(a_relic->relicIdentity);
             }
+        } else {
+            SetBarehanded(true);
         }
     }
 }
@@ -108,6 +112,7 @@ void BaseActor::CallWeapon()
 {
     if (auto cap = GetCapabilityAs<Caller>()) cap->CallWeapon();
 }
+
 void BaseActor::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
 {
     if (auto cap = GetCapabilityAs<Thrower>()) {
@@ -118,11 +123,20 @@ void BaseActor::StartChargingThrow()
 {
     if (auto cap = GetCapabilityAs<Thrower>()) cap->StartChargingThrow();
 }
-
 void BaseActor::StopChargingThrow()
 {
     if (auto cap = GetCapabilityAs<Thrower>()) cap->StopChargingThrow();
 }
+
+void BaseActor::StartWeaponCharging()
+{
+    if (auto cap = GetCapabilityAs<Charger>()) cap->StartWeaponCharging();
+}
+void BaseActor::StopWeaponCharging()
+{
+    if (auto cap = GetCapabilityAs<Charger>()) cap->StopWeaponCharging();
+}
+
 void BaseActor::StartRage(bool a_justAnim)
 {
     if (auto cap = GetCapabilityAs<Rager>()) cap->StartRage(a_justAnim);

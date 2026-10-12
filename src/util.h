@@ -77,7 +77,8 @@ namespace GameSettingUtil
     }
 }
 
-namespace FenixUtils {  //credits to master fenix https://github.com/fenix31415/UselessFenixUtils
+namespace FenixUtils   //credits to master fenix https://github.com/fenix31415/UselessFenixUtils
+{
     static void stagger(float val, RE::Actor* victim, RE::Actor* attacker = nullptr)
     {
         if (victim) {
@@ -141,6 +142,251 @@ namespace AsyncUtil
         bool _single;
         bool _done = true;
     };
+}
+namespace ExtraDataUtil //  huge thanks to D7ry
+{
+    static std::optional<uint16_t> GetUniqueID(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    {
+        if (!a_actor || !a_object) return std::nullopt;
+
+        const auto& inventory = a_actor->GetInventory();
+
+        auto it = inventory.find(a_object);
+        if (it == inventory.end()) return std::nullopt;
+
+        auto eData = it->second.second.get();
+        if (!eData || !eData->extraLists || eData->extraLists->empty()) return std::nullopt;
+
+        for (auto xList : *eData->extraLists) {
+            if (auto xUniqueID = xList ? xList->GetByType<RE::ExtraUniqueID>() : nullptr) {
+                if (xUniqueID->uniqueID != 0)
+                    return xUniqueID->uniqueID;
+            }
+        }
+        return std::nullopt;
+    }
+
+    static bool DeleteAnExtraArrow(RE::TESObjectREFR* a_victim, RE::BSFixedString& a_arrow3Dname)
+    {
+        bool result = false;
+        if (a_victim) {
+            if (auto* xList = &a_victim->extraList; xList) 
+                if (auto xArrows = xList->GetByType<RE::ExtraAttachedArrows3D>(); xArrows)
+                    if (!xArrows->data.empty())
+                        for (auto& extraArrow : xArrows->data) {
+                            if (extraArrow.arrow3D.get() && extraArrow.arrow3D.get()->name == a_arrow3Dname) {
+                                extraArrow.timeStamp = 0; 
+                                extraArrow.arrow3D.reset();
+                                result = true; 
+                            }
+                        }
+        } return result;
+    }
+    static bool DeleteAnExtraArrow(RE::TESObjectREFR* a_victim, RE::NiAVObject* a_arrow3D)
+    {
+        bool result = false;
+        if (a_victim) {
+            if (auto* xList = &a_victim->extraList; xList) 
+                if (auto xArrows = xList->GetByType<RE::ExtraAttachedArrows3D>(); xArrows)
+                    if (!xArrows->data.empty())
+                        for (auto& extraArrow : xArrows->data) {
+                            if (extraArrow.arrow3D.get() && extraArrow.arrow3D.get() == a_arrow3D) {
+                                extraArrow.timeStamp = 0; 
+                                extraArrow.arrow3D.reset();
+                                result = true; 
+                            }
+                        }
+        } return result;
+    }
+
+#define IMPORTANT_EXTRA_DATA_TYPES_FOR_WEAPONS(X) \
+    X(RE::ExtraSoul,             ExtraDataType::kSoul)      \
+    X(RE::ExtraCount,            ExtraDataType::kCount)      \
+    X(RE::ExtraHealth,           ExtraDataType::kHealth)      \
+    X(RE::ExtraCharge,           ExtraDataType::kCharge)       \
+    X(RE::ExtraPoison,           ExtraDataType::kPoison)        \
+    X(RE::ExtraHotkey,           ExtraDataType::kHotkey)         \
+    X(RE::ExtraUniqueID,         ExtraDataType::kUniqueID)        \
+    X(RE::ExtraOwnership,        ExtraDataType::kOwnership)        \
+    X(RE::ExtraEnchantment,      ExtraDataType::kEnchantment)       \
+    X(RE::ExtraTextDisplayData,  ExtraDataType::kTextDisplayData)
+
+    inline RE::ExtraDataList* InitExtraDataList(RE::ExtraDataList* a_list)
+    {
+        using func_t = RE::ExtraDataList* (*)(RE::ExtraDataList*);
+        REL::Relocation<func_t> func{ RELOCATION_ID(11437, 11583) };
+        return func(a_list);
+    }
+    inline RE::ExtraDataList* CreateExtraDataList()
+    {
+        auto* memoryManager = RE::MemoryManager::GetSingleton();
+        auto* newList = static_cast<RE::ExtraDataList*>(memoryManager->Allocate(sizeof(RE::ExtraDataList), 0, false));
+        if (newList) {
+            std::memset(newList, 0, sizeof(RE::ExtraDataList));
+            InitExtraDataList(newList);
+        }
+        return newList;
+    }
+/*
+    inline RE::ExtraDataList* DeepCopyExtraDataList(const RE::ExtraDataList* a_xListToCopy)
+    {
+        if (!a_xListToCopy || a_xListToCopy->GetCount() < 1) {
+            return nullptr;
+        }
+
+        auto* newList = CreateExtraDataList();
+        if (!newList) {
+            return nullptr;
+        }
+
+        for (const auto& xData : *a_xListToCopy) {
+            auto type = xData.GetType();
+
+            #define COPY_IF_MATCH(TypeClass, EnumValue)                        \
+                if (type == RE::EnumValue) {                                    \
+                    auto* xDataSpecific = static_cast<const TypeClass*>(&xData); \
+                    auto* newXData = RE::BSExtraData::Create<TypeClass>();        \
+                    if (xDataSpecific && newXData) { \
+                        *newXData = *xDataSpecific;   \
+                        newXData->next = nullptr;      \
+                        newList->Add(newXData);         \
+                    }        \
+                    continue; \
+                }
+
+            IMPORTANT_EXTRA_DATA_TYPES_FOR_WEAPONS(COPY_IF_MATCH)
+
+            #undef COPY_IF_MATCH
+        }
+
+        return newList;
+    }
+*/
+    inline RE::ExtraDataList* DeepCopyExtraDataList(const RE::ExtraDataList* a_xListToCopy)
+    {
+        if (!a_xListToCopy || a_xListToCopy->GetCount() < 1) {
+            return nullptr;
+        }
+
+        auto* newList = CreateExtraDataList();
+        if (!newList) {
+            return nullptr;
+        }
+
+        int i = 0;
+        for (const auto& xData : *a_xListToCopy) {
+            auto* current = std::addressof(xData);
+            auto* next = current->next;
+
+            spdlog::debug(
+                "[{}] current={:p}, next={:p}, type={}",
+                i++,
+                static_cast<const void*>(current),
+                static_cast<void*>(next),
+                static_cast<int>(current->GetType())
+            );
+            switch (xData.GetType()) {
+
+            case RE::ExtraDataType::kSoul: {
+                auto* src = static_cast<const RE::ExtraSoul*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraSoul>();
+                copy->soul = src->soul;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kCount: {
+                auto* src = static_cast<const RE::ExtraCount*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraCount>();
+                copy->count = src->count;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kHealth: {
+                auto* src = static_cast<const RE::ExtraHealth*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraHealth>();
+                copy->health = src->health;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kHotkey: {
+                auto* src = static_cast<const RE::ExtraHotkey*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraHotkey>();
+                copy->hotkey = src->hotkey;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kPoison: {
+                auto* src = static_cast<const RE::ExtraPoison*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraPoison>();
+                copy->poison = src->poison;
+                copy->count = src->count;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kCharge: {
+                auto* src = static_cast<const RE::ExtraCharge*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraCharge>();
+                copy->charge = src->charge;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kUniqueID: {
+                auto* src = static_cast<const RE::ExtraUniqueID*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraUniqueID>();
+                copy->pad16 = src->pad16;
+                copy->uniqueID = src->uniqueID;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kOwnership: {
+                auto* src = static_cast<const RE::ExtraOwnership*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraOwnership>();
+                copy->owner = src->owner;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kEnchantment: {
+                auto* src = static_cast<const RE::ExtraEnchantment*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraEnchantment>();
+                copy->enchantment = src->enchantment;
+                copy->charge = src->charge;
+                copy->removeOnUnequip = src->removeOnUnequip;
+                newList->Add(copy);
+                break;
+            }
+
+            case RE::ExtraDataType::kTextDisplayData: {
+                auto* src = static_cast<const RE::ExtraTextDisplayData*>(&xData);
+                auto* copy = RE::BSExtraData::Create<RE::ExtraTextDisplayData>();
+                copy->displayName = src->displayName;
+                copy->customNameLength = src->customNameLength;
+                newList->Add(copy);
+                break;
+            }
+
+            default:
+                break;
+            }
+        }
+
+        return newList;
+    }
+
+    inline void FreeExtraDataList(RE::ExtraDataList* a_list)
+    {
+        if (!a_list) return;
+
+        a_list->~ExtraDataList(); 
+        RE::MemoryManager::GetSingleton()->Deallocate(a_list, false);
+    }
 }
 namespace SystemUtil
 {
@@ -920,11 +1166,11 @@ namespace MathUtil
 namespace ObjectUtil
 {
     struct Capsule
-	{
-		RE::NiPoint3 a;
-		RE::NiPoint3 b;
-		float radius;
-	};
+    {
+        RE::NiPoint3 a;
+        RE::NiPoint3 b;
+        float radius;
+    };
 
     struct Node
     {
@@ -1227,6 +1473,18 @@ namespace ObjectUtil
             REL::Relocation<func_t> func{ RELOCATION_ID(38858, 39895) };
             return func(a_AIprocess, a_target, a_direction, a_force);
         }
+        static void ProcessHit(RE::Actor* a_target, RE::HitData* a_hitData)
+        {
+            using func_t = decltype(&ProcessHit);
+            static REL::Relocation<func_t> func(RELOCATION_ID(37633, 38586));   //  0x16A, 0xFA
+            return func(a_target, a_hitData);
+        }
+        static void ProcessHitImpl(RE::Actor* a_aggressor, RE::Actor* a_target, RE::Projectile* a_sourceProjectile, bool a_bLeftHand)
+        {
+            using func_t = decltype(&ProcessHitImpl);
+            static REL::Relocation<func_t> func(RELOCATION_ID(37673, 38627));   //  0x3c0, 0x4A8, 0x3c0
+            return func(a_aggressor, a_target, a_sourceProjectile, a_bLeftHand);
+        }
         /*
         *  Requires my modder utility for this function: https://github.com/PhiloSocio/SkipEquipAnimation
         */
@@ -1347,7 +1605,7 @@ namespace ObjectUtil
                 auto eData = a_actor->GetEquippedEntryData(a_isLeft);
                 auto xLists = eData ? eData->extraLists : nullptr;
                 auto xList = xLists ? xLists->front() : nullptr;
-                auto obj = a_actor->GetEquippedObject(a_isLeft);
+                auto obj = eData ? eData->object : nullptr;
                 auto boundObj = obj ? obj->As<RE::TESBoundObject>() : nullptr;
                 auto eqManager = RE::ActorEquipManager::GetSingleton();
                 if (boundObj && eqManager)

@@ -79,13 +79,14 @@ public:
 
     RE::ObjectRefHandle droppedWeaponKeep;
 
-    RE::ProjectileHandle*   projectileHandle = nullptr;
+    RE::ProjectileHandle    projectileHandle;
     RE::Projectile*         projectile = nullptr;
     RE::NiNode*             projectileModel = nullptr;
     RE::NiNode*             weaponParentNode = nullptr;
     RE::NiPointer<RE::NiNode>   weaponModelCopy;
     RE::NiPointer<RE::NiNode>   weaponModelSterilizedCopy;
     RE::NiPointer<RE::NiNode>   replacedProjectileModel;
+    std::unique_ptr<InventoryEntryData> weapIED;
 
     ProjectileRot projectileRotation;
     RE::NiMatrix3 startLocalRotation;
@@ -110,7 +111,8 @@ public:
     RE::ImpactResult impactResult = RE::ImpactResult::kBounce;
 
     float yAngle            = 0.35f;
-    float throwedTime       = 0.f;
+    float launchTime        = 0.f;
+    float livingTime        = 0.f;
     float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
     float gravity           = 3.21f;
     float throwingChargeDuration = 0.f;
@@ -122,6 +124,7 @@ public:
 //    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
     void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override {};
     void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
+    bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result);
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
     [[nodiscard]] RE::BGSProjectile* CreateBaseProjectile(const char* a_editorID, const char* a_name);
@@ -136,6 +139,7 @@ public:
     [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return droppedWeaponKeep.get().get(); }
     [[nodiscard]] RE::NiTransform GetWorldTransform();
     [[nodiscard]] RE::NiTransform GetLocalTransform();
+    [[nodiscard]] float GetLivingTime() const noexcept { return AsyncUtil::GameTime::GetEngineTime() - launchTime; }
 
     void SetThrowState(const ThrowState a_throwState) {_throwState = a_throwState;};
 
@@ -145,7 +149,6 @@ public:
     bool InitiateTrail() noexcept;
     void UpdateRotation(const float a_delta, const float a_livingTime) noexcept;
     void UpdateTranslation(const float a_delta, const float a_livingTime) noexcept;
-    void AddTrail();
     void FadeTrail();
     void RemoveTrail();
 
@@ -178,8 +181,7 @@ protected:
     RE::TESAmmo*       ThrowableWeaponDummyAmmo = nullptr;
     RE::TESObjectLIGH* ThrowableWeaponLight = nullptr;
 
-    AsyncUtil::GameTime projectileUpdate;
-    AsyncUtil::GameTime trailUpdate;
+    AsyncUtil::GameTime placeWeaponUpdate;
     AsyncUtil::GameTime trailRemoveUpdate;
 
     ThrowState _throwState = ThrowState::kNone;

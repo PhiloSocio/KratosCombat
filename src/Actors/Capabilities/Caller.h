@@ -12,6 +12,8 @@ public:
     Caller();
     virtual ~Caller() = default;
 
+    void OnAttach(BaseActor* a_actor) override;
+
     void HandleAction(const ActionType a_action) override;
 
     [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kCaller; }

@@ -138,7 +138,10 @@ RE::NiTransform ThrowableRelicWeapon::GetWorldTransform()
     if (replacedProjectileModel) {
         transformW = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(replacedProjectileModel.get());
         return transformW;
-    } else return transformPW;
+    } else if (auto droppedModel = currentReference ? currentReference->GetCurrent3D() : nullptr) {
+        transformW = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(droppedModel);
+        return transformW;
+    }
     return {};
 }
 RE::NiTransform ThrowableRelicWeapon::GetLocalTransform()
@@ -170,17 +173,6 @@ void ThrowableRelicWeapon::UpdateRotation(const float a_delta, const float a_liv
             }
         }
     }
-//    angles.x = asin(direction.z);
-//    angles.z = atan2(direction.x, direction.y);
-//    if (angles.z < 0.0) {
-//        angles.z += PI;
-//    }
-//    if (direction.x < 0.0) {
-//        angles.z += PI;
-//    }
-//    if (projectileModel) {
-//        Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
-//    }
 }
 void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_livingTime) noexcept
 {
@@ -204,50 +196,6 @@ void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_
         }
     }
 }
-void ThrowableRelicWeapon::AddTrail()
-{
-    if (trailUpdate.IsTimeToUpdate()) {
-        trailRemoveUpdate.Done();
-        RemoveTrail();
-        auto bone = replacedProjectileModel;
-        if (bone) {
-            const bool isCharged = IsCharged(true);
-            const float intensity = isCharged ? 3.f : 2.f;
-            const auto meshOverride = isCharged ? Config::TrailModelPathFrost : Config::TrailModelPathDef;
-            float length = bone->worldBound.radius;
-            ObjectUtil::Capsule capsule;
-            ObjectUtil::Node::GetCapsuleParams(bone->AsNode(), capsule);
-            float capsuleLength = capsule.a.GetDistance(capsule.b);
-            length = length > capsuleLength ? length : capsuleLength;
-            float scale = fmax(length, capsule.radius) * 0.01f;
-            float tipOffset = length;
-            trailData = TrailData(meshOverride, intensity);
-
-            if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
-                trailUpdate.Done();
-                trailData.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
-                trailData.transformOverride.scale = bone->worldBound.radius * 0.01f;
-                auto node = RE::NiNode::Create(0);
-                node->name = "trailParentNode";
-                bone->AttachChild(node, false);
-                APIs::precision->AddTrailEffect(
-                    node, 
-                    RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                    trailData.trailOverride, 
-                    trailData.transformOverride);
-                if (isCharged) {
-                    trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
-                    APIs::precision->AddTrailEffect(
-                        node, 
-                        RE::PlayerCharacter::GetSingleton()->GetParentCell(), 
-                        trailData.trailOverride, 
-                        trailData.transformOverride);
-                }
-            //    APIs::precision->AddAttackCollision(RE::PlayerCharacter::GetSingleton()->GetHandle(), collisionDefinition, LastLeviProjectile);
-            }
-        }
-    }
-}
 void ThrowableRelicWeapon::FadeTrail()
 {
     if (trailRemoveUpdate.IsTimeToUpdate()) {
@@ -263,7 +211,6 @@ void ThrowableRelicWeapon::FadeTrail()
                 }
             } else {
                 RemoveTrail();
-            //    replacedProjectileModel.reset();
                 trailRemoveUpdate.Done();
             }
         }
@@ -271,7 +218,7 @@ void ThrowableRelicWeapon::FadeTrail()
 }
 void ThrowableRelicWeapon::RemoveTrail()
 {
-    if (replacedProjectileModel) {
+    if (replacedProjectileModel && !isPenetrating) {
         if (auto trailParentBone = trailData.trailParentNode.get(); trailParentBone) {
             replacedProjectileModel->DetachChild(trailParentBone);
             _trailInitiated = false;
@@ -284,6 +231,7 @@ void ThrowableRelicWeapon::RemoveTrail()
 bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
 {
     bool result = false;
+    isPenetrating = false;
 
     thrower = a_thrower;
     throwerParent = thrower ? thrower->GetParent() : nullptr;
@@ -356,9 +304,10 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     if (!PreThrow()) return false;
 
     RE::ProjectileHandle pHandle;
-    if (projectileHandle = RE::Projectile::Launch(&pHandle, lData); projectileHandle && projectileHandle->get().get()) {
-
-        projectile = projectileHandle->get().get();
+    if (auto pHandlePtr = RE::Projectile::Launch(&pHandle, lData); pHandlePtr && pHandlePtr->get().get()) {
+        projectileHandle = *pHandlePtr;
+        launchTime = AsyncUtil::GameTime::GetEngineTime();
+        projectile = pHandlePtr->get().get();
         auto& rtData = projectile->GetProjectileRuntimeData();
     //    spdlog::info("throw speed: {} force: {} weaponDamage: {} difficulty: {}", ThrowableWeaponDummyProjectile->data.speed, impulse / 1000.f, weaponDamage, difficulty);
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
@@ -411,9 +360,39 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
             if (!droppedWeaponKeep.get()->IsDisabled())
                 droppedWeaponKeep.get()->Disable();
 
+            RE::ExtraUniqueID* xUID = nullptr;
+            RE::ExtraDataList* xDataList = nullptr;
+            auto inventory = throwerActor->GetInventory();
+            for (auto& [obj, entry] : inventory) {
+                if (obj == weap) {
+                    if (auto eData = entry.second.get()) {
+                        auto xLists = eData->extraLists;
+                        xDataList = xLists && !xLists->empty() ? xLists->front() : nullptr;
+                        xUID = xDataList ? xDataList->GetByType<RE::ExtraUniqueID>() : nullptr;
+                    //    auto xHotkey = xDataList ? xDataList->GetByType<RE::ExtraHotkey>() : nullptr;
+                    //    if (xHotkey && favoriteData && favoriteData != xHotkey) {
+                    //        favoriteData = RE::ExtraHotkey::Create<RE::ExtraHotkey>();
+                    //        favoriteData->hotkey = xHotkey->hotkey;
+                    //        spdlog::debug("hotkey copied again");
+                    //    } else if (!favoriteData) {
+                    //        favoriteData = RE::ExtraHotkey::Create<RE::ExtraHotkey>();
+                    //        favoriteData->hotkey = xHotkey->hotkey;
+                    //        spdlog::debug("hotkey copied");
+                    //    }
+                    }
+                }
+            }
+
             ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, false, true, true, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
-            throwerActor->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, GetWeaponContainer());
+
+        //    currentReference = throwerActor->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kDropping, nullptr, nullptr).get().get();
+        //    currentReference->Disable();
+            currentReference = throwerActor->DropObject(weap, xDataList, 1, nullptr, nullptr).get().get();
+            currentReference->Disable();
+
+        //    currentReference->extraList.RemoveByType(RE::ExtraDataType::kHotkey);
+
             throwerParent->SetRightHandRelic(nullptr);
             isEquipped = false;
             SetWielder(nullptr);
@@ -434,10 +413,46 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
         wielder = a_actor;
         lastWielder = a_actor;
         isEquipped = true;
+        if (GetThrowState() != ThrowState::kArrived) {
+            replacedProjectileModel.reset();
+        }
+        if (projectile) {
+            auto& projectileRTD = projectile->GetProjectileRuntimeData();
+            projectileRTD.flags.set(pFlag::kDestroyed);
+            projectileModel = nullptr;
+            projectileHandle.reset();
+            projectile = nullptr;
+        }
         SetThrowState(ThrowState::kThrowable);
+        auto weapIEDnew = ObjectUtil::Actor::GetInventoryEntryDataForBoundObject(wielder->GetActor(), weap);
+        if (weapIEDnew && weapIEDnew->object) {
+            weapIED = std::make_unique<RE::InventoryEntryData>(*weapIEDnew);
+            if (weapIED) {
+                weapIED->DeepCopy(*weapIEDnew);
+            }
+        }
+    //    weaponModelSterilizedCopy = std::move(replacedProjectileModel);
+        if (a_actor->GetActor()->IsPlayerRef()) {
+        //    auto inventory = a_actor->GetActor()->GetInventory();
+        //    for (auto& [obj, entry] : inventory) {
+        //        if (obj == weap) {
+        //            if (auto eData = entry.second.get()) {
+        //                auto xLists = eData->extraLists;
+        //                auto xData = xLists->front();
+        //                auto xHotkey = xData ? xData->GetByType<RE::ExtraHotkey>() : nullptr;
+        //                if (favoriteData && favoriteData != xHotkey) {
+        //                } else if (!favoriteData) {
+        //                } else {
+        //            //        favoriteData->hotkey.set(RE::ExtraHotkey::Hotkey::kSlot4);
+        //                }
+        //            }
+        //        }
+        //    }
+        }
     } else {
         wielder = nullptr;
         isEquipped = false;
+        SetThrowState(ThrowState::kNone);
     }
 }
 /*
@@ -484,6 +499,11 @@ void ThrowableRelicWeapon::PostImpact(RE::Projectile::ImpactData *a_impactData, 
         }
     }
 }
+bool ThrowableRelicWeapon::GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
+{
+    spdlog::debug("is penetrating?: {} default: {}", isPenetrating, a_result);
+    return a_result;//!isPenetrating;
+}
 void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
 {
     if (a_opening) {
@@ -503,6 +523,7 @@ bool ThrowableRelicWeapon::InitiateTransform() noexcept
             } else {
                 startLocalRotation = throwerParent->GetWeaponBone()->world.rotate;
             }
+            weaponParentNode->local.rotate = startLocalRotation;
             _transformInitiated = true;
         }
     } return _transformInitiated;
@@ -516,12 +537,12 @@ void ThrowableRelicWeapon::InitiateModel() noexcept
 
             replacedProjectileModel = std::move(weaponModelSterilizedCopy);
 
-            if (weaponParentNode) {
+            if (weaponParentNode && replacedProjectileModel) {
                 weaponParentNode->local = RE::NiTransform();
                 weaponParentNode->AttachChild(replacedProjectileModel.get(), false);
                 _modelInitiated = true;
-                spdlog::debug("levi projectileModel changed!");
-            } else spdlog::warn("animated node or levinode null");
+                spdlog::debug("projectileModel changed!");
+            } else spdlog::warn("animated node or weapon model null");
         } else spdlog::warn("projectile or projectile->Get3D2() null");
     }
 }
@@ -564,32 +585,25 @@ bool ThrowableRelicWeapon::InitiateTrail() noexcept
 }
 void ThrowableRelicWeapon::Update()
 {
-//    if (soundData.arrivingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopArrivingLoopSounds();}
-//    if (soundData.throwingLoopStopUpdate.IsTimeToUpdate()) {soundData.StopThrowingLoopSounds();}
-    if (Config::DrawTrails) {
-        AddTrail();
-        FadeTrail();
+    if (placeWeaponUpdate.IsTimeToUpdate()) {
+        currentReference->Update3DPosition(true);
+        currentReference->SetMotionType(RE::hkpMotion::MotionType::kKeyframed);
+        if (auto droppedWeaponModel = currentReference->GetCurrent3D()) {
+            const auto& desiredParentWorldRotate = replacedProjectileModel->world.rotate;
+            const auto& parentWorldRotate = droppedWeaponModel->parent->world.rotate;
+            droppedWeaponModel->local.rotate = desiredParentWorldRotate * parentWorldRotate.Transpose();
+            currentReference->data.location = replacedProjectileModel->world.translate;
+            RE::NiUpdateData updateData;
+            updateData.flags.set(RE::NiUpdateData::Flag::kNone);
+            updateData.time = 0.f;
+            droppedWeaponModel->Update(updateData);
+            placeWeaponUpdate.Done();
+        }
     }
-//    if (replacedProjectileModel) {
-//        auto projNiTransform = replacedProjectileModel->world;
-//        auto projBHKTransform = ObjectUtil::Node::GetHavokBHKRigidBodyWorldTransform(replacedProjectileModel.get());
-//        auto projHKPTransform = ObjectUtil::Node::GetHavokHKPRigidBodyWorldTransform(replacedProjectileModel.get());
-//        spdlog::debug(
-//            "NI: ({}, {}, {})  BHK: ({}, {}, {})",
-//            projNiTransform.translate.x,
-//            projNiTransform.translate.y,
-//            projNiTransform.translate.z,
-//            projBHKTransform.translate.x * 70.f,
-//            projBHKTransform.translate.y * 70.f,
-//            projBHKTransform.translate.z * 70.f
-//        );
-    //    spdlog::debug(
-    //        "NI - BHK: ({}, {}, {})",
-    //        projNiTransform.translate.x - projBHKTransform.translate.x * 70.f,
-    //        projNiTransform.translate.y - projBHKTransform.translate.y * 70.f,
-    //        projNiTransform.translate.z - projBHKTransform.translate.z * 70.f
-    //    );
-//    }
+    if (trailRemoveUpdate.IsTimeToUpdate()) {
+        RemoveTrail();
+        trailRemoveUpdate.Done();
+    }
 }
 void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile)
 {
@@ -603,11 +617,13 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile)
         if (GetThrowState() == ThrowState::kThrown) {
             soundData.PlayThrowingLoopSounds(projectileNode);
         }
+        launchTime = AsyncUtil::GameTime::GetEngineTime();
+        livingTime = 0.f;
     }
     InitiateModel();
 
     auto& runtimeData = a_projectile->GetProjectileRuntimeData();
-    const auto& livingTime = runtimeData.livingTime;
+    const auto& projectileLivingTime = runtimeData.livingTime;
     auto& pos   = a_projectile->data.location;
     auto& angle = a_projectile->data.angle;
     auto& vel = runtimeData.linearVelocity;
@@ -616,10 +632,32 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile)
     angles = angle;
     velocity = vel;
     direction = dir;
-    if (livingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
+    if (projectileLivingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
 
-    if (livingTime > *g_deltaTime * 2.f && !InitiateTrail()) {}
+    if (projectileLivingTime > *g_deltaTime * 2.f && !InitiateTrail()) {}
     if (!InitiateTransform()) {}
-    UpdateRotation(*g_deltaTime, livingTime);
-    UpdateTranslation(*g_deltaTime, livingTime);
+
+   //  this is required instead of using *g_deltaTime because the game calls the GetLinearVelocityArrow function two times per frame
+    const float deltaTime = GetLivingTime() - livingTime;
+
+    static constexpr float drag = 0.00018f;
+    const float speed = velocity.Length();
+    vel -= direction * deltaTime * (drag * speed * speed);
+
+    if (auto projBase = a_projectile->GetProjectileBase()) {
+        if (livingTime < Config::NoGravityDurationLeviathan) {
+            projBase->data.gravity = 0.f;
+        } else if (projBase->data.gravity == gravity) {
+            //  do nothing
+        } else {
+            projBase->data.gravity += deltaTime * gravity;
+            if (projBase->data.gravity == gravity) {
+                projBase->data.gravity = gravity;
+            }
+        }
+    }
+
+    UpdateRotation(deltaTime, livingTime);
+    UpdateTranslation(deltaTime, livingTime);
+    livingTime = GetLivingTime();
 }

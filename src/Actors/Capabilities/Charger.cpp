@@ -4,11 +4,6 @@
 
 Charger::Charger()
 {
-    if (parent && parent->IsValid()) {
-        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
-            enchantingLevel = callerAVO->GetActorValue(RE::ActorValue::kEnchanting);
-        }
-    }
 }
 
 void Charger::StartWeaponCharging() {
@@ -18,6 +13,14 @@ void Charger::StartWeaponCharging() {
         spdlog::info("the weapon is not chargeable");
     }
 }
+void Charger::StopWeaponCharging() {
+    if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic /*&& IsCanCharge(rHandRelic->type)*/) {
+        rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, -1u, -1u);
+    } else {
+        spdlog::info("the weapon is not chargeable");
+    }
+}
+
 bool Charger::IsCanCharge(const RelicType a_relic) const
 {
     const auto index = static_cast<std::size_t>(a_relic);
@@ -28,6 +31,17 @@ bool Charger::IsCanCharge(const RelicType a_relic) const
 
     return canCharge[index];
 }
+
+void Charger::OnAttach(BaseActor* a_actor) 
+{
+    ActorCapability::OnAttach(a_actor);
+    if (parent && parent->IsValid()) {
+        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
+            enchantingLevel = callerAVO->GetActorValue(RE::ActorValue::kEnchanting);
+        }
+    }
+}
+
 void Charger::HandleAction(const ActionType a_action)
 {
     switch (a_action)

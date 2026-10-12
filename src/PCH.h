@@ -16,6 +16,7 @@ using namespace std::literals;
 	using EventChecker = RE::BSEventNotifyControl;
 	using rFlag = RE::TESForm::RecordFlags;
 	using pFlag = RE::Projectile::Flags;
+    using pbFlag = RE::BGSProjectileData::BGSProjectileFlags;
 
 
 namespace std

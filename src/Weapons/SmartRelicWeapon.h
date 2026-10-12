@@ -45,10 +45,7 @@ protected:
     RE::BGSProjectile* ArrivingWeaponDummyProjectile = nullptr;
     RE::TESAmmo*       ArrivingWeaponDummyAmmo = nullptr;
 
-    AsyncUtil::GameTime projectileUpdate;
-    AsyncUtil::GameTime trailUpdate;
-    AsyncUtil::GameTime trailRemoveUpdate;
-
+    AsyncUtil::GameTime delayedCallUpdate;
 };
 
 using ThrowState = SmartRelicWeapon::ThrowState;

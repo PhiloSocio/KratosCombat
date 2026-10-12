@@ -4,6 +4,8 @@
 #include "Weapons/RelicWeapon.h"
 #include "Actors/Kratos.h"
 
+using namespace ExtraDataUtil;
+
 class RelicManager {
 public:
     static RelicManager* GetSingleton() {
@@ -38,6 +40,7 @@ public:
     struct SavedRelic
     {
         SavedRelicKey key;
+    //    RE::FormID owner  = 0x0;  //  todo
         std::uint8_t type = (std::uint8_t)RelicType::kNone;
     };
     struct SavedActor
@@ -71,43 +74,55 @@ public:
         return static_cast<RE::FormID>(a_relic.relicIdentity >> 16);
     }
 
+    std::optional<RelicIdentity> GetRelicIdentity(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    {
+        if (!a_actor || !a_object) return std::nullopt;
+
+        const RE::FormID formID = a_object->formID;
+        if (formID == 0x0) return std::nullopt;
+
+        auto uniqueID = GetUniqueID(a_actor, a_object);
+        if (!uniqueID || *uniqueID == 0x0) return std::nullopt;
+
+        return MakeRelicIdentity(formID, *uniqueID);
+    }
     std::optional<RelicIdentity> GetOrCreateEquippedRelicIdentity(RE::Actor* a_actor, const bool a_isLeft = false)
     {
         if (!a_actor) return std::nullopt;
 
-        std::optional<RelicIdentity> result;
-        RE::FormID formID = 0x0;
-        uint16_t uniqueID = 0x0;
-        auto ieData = a_actor->GetEquippedEntryData(a_isLeft);
+        auto* ieData = a_actor->GetEquippedEntryData(a_isLeft);
+        if (!ieData || !ieData->object) return std::nullopt;
 
-        if (ieData && ieData->object) {
-            formID = ieData->object->formID;
+        auto* obj    = ieData->object;
+        auto  formID = obj->formID;
+        if (formID == 0) return std::nullopt;
+
+        if (auto existing = GetRelicIdentity(a_actor, obj)) {
+            return existing;
         }
 
-        auto xLists = ieData ? ieData->extraLists : nullptr;
-        auto xData = xLists && !xLists->empty() ? xLists->front() : nullptr;
-        auto xUniqueID = xData ? xData->GetByType<RE::ExtraUniqueID>() : nullptr;
-        if (xUniqueID) {
-            uniqueID = xUniqueID->uniqueID;
-            formID = formID != 0x0 ? formID : xUniqueID->baseID;
-        } else if (xData) {
-            auto xUniqueIDnew = RE::BSExtraData::Create<RE::ExtraUniqueID>();
-            auto inventoryChanges = a_actor->GetInventoryChanges();
-            uint16_t nextUniqueID = inventoryChanges ? inventoryChanges->GetNextUniqueID() : 0x0;
-            if (xUniqueIDnew && nextUniqueID) {
-                xUniqueIDnew->baseID = formID;
-                xUniqueIDnew->uniqueID = nextUniqueID;
-                xData->Add(xUniqueIDnew);
-                uniqueID = nextUniqueID;
-            } else {
-                delete xUniqueIDnew;
-            }
-        }
+        auto changes = a_actor->GetInventoryChanges();
+        if (!changes) return std::nullopt;
 
-        if (formID == 0x0 || uniqueID == 0x0) result = std::nullopt;
-        else result = std::make_optional<RelicIdentity>(MakeRelicIdentity(formID, uniqueID));
+        uint16_t nextUID = changes->GetNextUniqueID();
+        if (nextUID == 0x0) return std::nullopt;
 
-        return result;
+        auto xList = ieData->extraLists ? ieData->extraLists->front() : nullptr;
+    //    auto xList = CreateExtraDataList();
+        if (!xList) return std::nullopt;
+
+        auto xUID = RE::BSExtraData::Create<RE::ExtraUniqueID>();
+        if (!xUID) return std::nullopt;
+
+        xUID->baseID   = formID;
+        xUID->uniqueID = nextUID;
+    //    xUID->pad16 = 69u;
+        xList->Add(xUID);
+    //    ieData->extraLists->pop_front();
+    //    ieData->AddExtraList(xList);
+    //    ieData->AddExtraList(xListCurrent);
+
+        return MakeRelicIdentity(formID, nextUID);
     }
     SavedRelicKey MakeSavedRelicKey(const RelicWeapon& a_relic)
     {
@@ -221,15 +236,26 @@ public:
             RelicWeapon* relic = nullptr;
             if (rWeapon) {
                 const auto identity = GetOrCreateEquippedRelicIdentity(player).value_or(0x0);
-                if (identity == 0x0) return;
+                if (identity == 0x0) {
+                    spdlog::warn("could not obtain relic identity for {}", rWeapon->GetFullName());
+                    return;
+                }
 
                 auto it = activeRelics.find(identity);
 
                 if (mcmSelectedRelic == RelicType::kNone) {
                     if (it != activeRelics.end()) {
                         if (auto rRelic = it->second ? it->second.get() : nullptr) {
-                            if (auto thrownWeapon = rRelic ? dynamic_cast<ThrowableRelicWeapon*>(rRelic) : nullptr)
-                                thrownRelics.erase(thrownWeapon->projectile);
+                            if (auto thrownWeapon = rRelic ? dynamic_cast<ThrowableRelicWeapon*>(rRelic) : nullptr) {
+                                if (thrownWeapon->projectile) {
+                                    auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
+                                    projectileRTD.flags.set(pFlag::kDestroyed);
+                                    thrownRelics.erase(thrownWeapon->projectile);
+                                    thrownWeapon->projectileModel = nullptr;
+                                    thrownWeapon->projectileHandle.reset();
+                                    thrownWeapon->projectile = nullptr;
+                                }
+                            }
 
                             if (rRelic && rRelic->GetWielder())
                                 rRelic->GetWielder()->SetRightHandRelic(nullptr);
@@ -237,15 +263,23 @@ public:
 
                         activeRelics.erase(it);
                     }
+                    spdlog::info("unregistered relic {}", rWeapon->GetFullName());
                     return;
                 }
 
                 if (it != activeRelics.end()) {
                     if (it->second->GetType() == mcmSelectedRelic) {
+                        spdlog::info("{} is already registered by type {}", rWeapon->GetFullName(), (uint8_t)mcmSelectedRelic);
                         return;
                     }
-                    if (auto thrownWeapon = it->second ? dynamic_cast<ThrowableRelicWeapon*>(it->second.get()) : nullptr)
+                    if (auto thrownWeapon = it->second ? dynamic_cast<ThrowableRelicWeapon*>(it->second.get()) : nullptr) {
                         thrownRelics.erase(thrownWeapon->projectile);
+                        auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
+                        projectileRTD.flags.set(pFlag::kDestroyed);
+                        thrownWeapon->projectileModel = nullptr;
+                        thrownWeapon->projectileHandle.reset();
+                        thrownWeapon->projectile = nullptr;
+                    }
 
                     activeRelics.erase(it);
                 }
@@ -254,52 +288,107 @@ public:
                 if (relicPtr) {
                     relicPtr->relicIdentity = identity;
                     relicPtr->OnEquip(GetPlayer());
+                    relicPtr->SetOwner(GetPlayer());
                     relic = relicPtr.get();
+                    activeRelics.emplace(identity, std::move(relicPtr));
+                    spdlog::info("{} is registered by type {}", rWeapon->GetFullName(), (uint8_t)mcmSelectedRelic);
+                } else {
+                    spdlog::warn("failed to create relic type {}", (uint8_t)mcmSelectedRelic);
+                    activeRelics.erase(identity);
+                    GetPlayer()->OnEquip(nullptr);
                 }
-
-                activeRelics.emplace(identity, std::move(relicPtr));
             }
             GetPlayer()->OnEquip(relic);
         }
     }
-
-    void OnEquip(RE::Actor* a_actor)
+    void OnPickUp(RE::Actor* a_actor, RE::TESBoundObject* a_object, std::int32_t a_count, RE::TESObjectREFR* a_fromRefr)
     {
         if (!a_actor || !Config::SpecialWeapon) return;
+        if (!a_object || !a_object->IsWeapon()) return;
+
+        auto relicID = GetRelicIdentity(a_actor, a_object->As<RE::TESObjectWEAP>()).value_or(0x0);
+        if (relicID == 0x0) {
+            spdlog::warn("OnPickUp: relic ID is not valid");
+            return;
+        }
+
+        auto it = activeRelics.find(relicID);
+
+        auto activeRelic = it != activeRelics.end() && it->second ? it->second.get() : nullptr;
+
+        if (activeRelic) {
+            BaseActor* activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetOrCreateActiveActor(a_actor->GetHandle());
+            if (!activeActor) {
+                spdlog::error("failed to get or initialize {}", a_actor->GetName());
+                return;
+            }
+            activeRelic->OnEquip(activeActor);
+
+            if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
+                if (throwableRelic->projectile) {
+                    thrownRelics.erase(throwableRelic->projectile);
+                    auto& projectileRTD = throwableRelic->projectile->GetProjectileRuntimeData();
+                    projectileRTD.flags.set(pFlag::kDestroyed);
+                    throwableRelic->projectileModel = nullptr;
+                    throwableRelic->projectileHandle.reset();
+                    throwableRelic->projectile = nullptr;
+                }
+            }
+            spdlog::info("{} type relic {} picked up by {}", (uint8_t)activeRelic->GetType(), activeRelic->weap->GetFullName(), a_actor->GetName());
+        }
+    }
+    void OnEquip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    {
+        if (!a_actor || !Config::SpecialWeapon) return;
+        if (!a_object || !a_object->IsWeapon()) return;
 
         uint8_t relicType = (uint8_t)RelicType::kNone;
 
         if (a_actor->IsPlayer())
             Config::SpecialWeapon->value = relicType;
 
+        BaseActor* activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetActiveActor(a_actor->GetHandle());
+        if (!activeActor || !activeActor->IsValid()) {
+            if (a_actor->IsPlayerRef()){
+                spdlog::warn("weird, {} player is not an active actor!", a_actor->GetName());
+                return;
+            } else {
+                spdlog::debug("{} is not an active actor", a_actor->GetName());
+                activeActor = nullptr;
+            }
+        }
+
+        RelicWeapon* activeRelic = nullptr;
+
         auto rObject = a_actor->GetEquippedObject(false);
         auto lObject = a_actor->GetEquippedObject(true);
         auto rWeapon = rObject ? rObject->As<RE::TESObjectWEAP>() : nullptr;
         auto lWeapon = lObject ? lObject->As<RE::TESObjectWEAP>() : nullptr;
 
-        BaseActor* activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetOrCreateActor(a_actor->GetHandle());
-        if (!activeActor) {
-            spdlog::error("failed to get or initialize {}", a_actor->GetName());
-            return;
-        }
-
-        RelicWeapon* activeRelic = nullptr;
-
-        if (rWeapon) {
-            auto relicID = GetOrCreateEquippedRelicIdentity(a_actor).value_or(0x0);
-            if (relicID == 0x0) return;
+        if (rWeapon == a_object) {
+            auto relicID = GetOrCreateEquippedRelicIdentity(a_actor, false).value_or(0x0);
+            if (relicID == 0x0) {
+                spdlog::warn("relic ID is not valid");
+                return;
+            }
 
             auto it = activeRelics.find(relicID);
 
             activeRelic = it != activeRelics.end() && it->second ? it->second.get() : nullptr;
 
-            activeActor->SetRightHandRelic(activeRelic);
-
             if (activeRelic) {
+                if (!activeActor)
+                    activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetOrCreateActiveActor(a_actor->GetHandle());
+                if (!activeActor || !activeActor->IsValid()) {
+                    spdlog::error("failed to get or initialize {}", a_actor->GetName());
+                    return;
+                }
+
                 activeRelic->OnEquip(activeActor);
-                spdlog::debug("relic equipped");
 
                 relicType = (uint8_t)activeRelic->GetType();
+
+                spdlog::info("{} type relic {} equipped by {}", relicType, activeRelic->weap->GetFullName(), a_actor->GetName());
 
                 auto& knownRelics = activeActor->GetKnownRelics();
                 if (std::find(knownRelics.rbegin(), knownRelics.rend(), relicID) == knownRelics.rend()) {
@@ -308,18 +397,83 @@ public:
                 if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
                     if (throwableRelic->projectile) {
                         thrownRelics.erase(throwableRelic->projectile);
+                        auto& projectileRTD = throwableRelic->projectile->GetProjectileRuntimeData();
+                        projectileRTD.flags.set(pFlag::kDestroyed);
+                        throwableRelic->projectileModel = nullptr;
+                        throwableRelic->projectileHandle.reset();
+                        throwableRelic->projectile = nullptr;
                     }
                 }
             }
         }
-        if (lWeapon) {
-            // sadece blades of chaos için
+        else if (lWeapon == a_object) {
+            // todo
+            return;
+        } else {
+            spdlog::warn("weird, a weapon equipped some interesting node.");
+        //    activeActor->OnEquip(nullptr);
+            return;
         }
 
         if (a_actor->IsPlayer())
             Config::SpecialWeapon->value = relicType;
 
-        activeActor->OnEquip(activeRelic);
+        if (activeActor && activeActor->IsValid())
+            activeActor->OnEquip(activeRelic);
+    }
+    void OnUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object, const RE::BGSEquipSlot* a_slotToReplace)
+    {
+        if (!a_actor || !Config::SpecialWeapon) return;
+        if (!a_object || !a_object->IsWeapon()) return;
+
+        uint8_t relicType = (uint8_t)RelicType::kNone;
+
+        if (a_actor->IsPlayer())
+            Config::SpecialWeapon->value = relicType;
+
+        BaseActor* activeActor = a_actor->IsPlayerRef() ? GetOrInitializePlayer() : GetActiveActor(a_actor->GetHandle());
+        if (!activeActor) {
+            spdlog::error("{} is not an active actor", a_actor->GetName());
+            return;
+        }
+
+        RelicWeapon* activeRelic = nullptr;
+
+        auto rObject = a_actor->GetEquippedObject(false);
+        auto lObject = a_actor->GetEquippedObject(true);
+        auto rWeapon = rObject ? rObject->As<RE::TESObjectWEAP>() : nullptr;
+        auto lWeapon = lObject ? lObject->As<RE::TESObjectWEAP>() : nullptr;
+
+        if (rWeapon == a_object) {
+            auto relicID = GetRelicIdentity(a_actor, rWeapon).value_or(0x0);
+            if (relicID == 0x0) {
+                spdlog::warn("OnUnequip: {} is not relic", rWeapon->GetFullName());
+                activeActor->OnEquip(nullptr);
+                return;
+            }
+
+            auto it = activeRelics.find(relicID);
+
+            activeRelic = it != activeRelics.end() && it->second ? it->second.get() : nullptr;
+
+            if (activeRelic) {
+                activeRelic->OnEquip(nullptr);
+
+                relicType = (uint8_t)activeRelic->GetType();
+
+                a_slotToReplace = nullptr;
+
+                spdlog::debug("{} type relic {} unequipped by {}", relicType, activeRelic->weap->GetFullName(), a_actor->GetName());
+            } else {
+                spdlog::warn("weird, {} is not in the active relics list", rWeapon->GetFullName());
+            }
+        } else if (lWeapon == a_object) {
+            // only for blades of chaos
+        } else {
+            spdlog::warn("weird, a weapon unequipped some interesting node.");
+        }
+
+        activeActor->OnEquip(nullptr);
     }
     bool OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
     {
@@ -334,6 +488,12 @@ public:
         if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
             it->second->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
         }
+    }
+    bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
+    {
+        if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
+            return it->second->GetKillOnCollision(a_this, a_result);
+        } return a_result;
     }
 
     void OnMenuOpenCloseEvent(const bool a_opening)
@@ -441,7 +601,7 @@ private:
 
             BaseActor* baseActor = actor->IsPlayerRef()
                 ? GetOrInitializePlayer()
-                : GetOrCreateActor(actor->GetHandle());
+                : GetOrCreateActiveActor(actor->GetHandle());
 
             if (!baseActor) {
                 unresolved = true;
@@ -493,8 +653,11 @@ private:
             baseActor->SetLastLeftHandRelic(resolveOptional(saved.lastLeftHandRelic));
 
             baseActor->OnEquip(baseActor->GetRightHandRelic());
-            if (baseActor->GetRightHandRelic())
+            if (baseActor->GetRightHandRelic()) {
                 baseActor->GetRightHandRelic()->OnEquip(baseActor);
+                if (actor->IsPlayerRef() && Config::SpecialWeapon)
+                    Config::SpecialWeapon->value = (uint8_t)baseActor->GetRightHandRelic()->GetType();
+            }
         }
         return !unresolved;
     }
@@ -587,7 +750,7 @@ private:
 
             BaseActor* baseActor = actor->IsPlayerRef()
                 ? GetOrInitializePlayer()
-                : GetOrCreateActor(actor->GetHandle());
+                : GetOrCreateActiveActor(actor->GetHandle());
 
             if (!baseActor) {
                 unresolved = true;
@@ -897,13 +1060,24 @@ private:
         }
         return player;
     }
-    BaseActor* GetOrCreateActor(RE::ActorHandle a_actorHandle)
+    BaseActor* GetOrCreateActiveActor(RE::ActorHandle a_actorHandle)
     {
         auto [it, inserted] = activeActors.try_emplace(a_actorHandle, nullptr);
         if (inserted) {
             it->second = std::make_unique<Kratos>(a_actorHandle);
+            spdlog::debug("active actor {} created", it->second->GetActor()->GetName());
         }
+        spdlog::debug("active actor {} exists", it->second->GetActor()->GetName());
         return it->second.get();
+    }
+
+    BaseActor* GetActiveActor(RE::ActorHandle a_actorHandle)
+    {
+        if (auto it = activeActors.find(a_actorHandle); it != activeActors.end() && it->second) {
+            spdlog::debug("active actor {} exists", it->second->GetActor()->GetName());
+            return it->second.get();
+        }
+        return nullptr;
     }
 
     RelicManager()

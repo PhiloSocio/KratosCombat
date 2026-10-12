@@ -4,18 +4,18 @@
 
 Caller::Caller()
 {
-    if (parent && parent->IsValid()) {
-        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
-            alterationLevel = callerAVO->GetActorValue(RE::ActorValue::kAlteration);
-        }
-    }
 }
 
 void Caller::CallWeapon()
 {
-    if (parent) {
+    if (parent && parent->IsValid()) {
         if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(_weaponToCall)) {
-            if (weaponToCall->Call(this)) {
+            if (auto wielder = weaponToCall->GetWielder(); wielder && wielder->GetActor() != parent->GetActor()) {
+            //    if (weaponToCall->Call(this, false, 1.618f)) {
+                    weaponToCall->currentReference = wielder->GetActor()->DropObject(weaponToCall->GetWeapon(), nullptr, 1, nullptr, nullptr).get().get();
+                    spdlog::info("weapon forcefully called from {}", wielder->GetActor()->GetName());
+            //    }
+            } else if (weaponToCall->Call(this, false)) {
                 RelicManager::GetSingleton()->OnRelicThrow(weaponToCall->projectile, weaponToCall);
             }
         } else {
@@ -72,6 +72,16 @@ RelicWeapon* Caller::GetCallableRelic()
         spdlog::info("you already have a relic weapon equipped.");
     }
     return _weaponToCall;
+}
+
+void Caller::OnAttach(BaseActor* a_actor)
+{
+    ActorCapability::OnAttach(a_actor);
+    if (parent && parent->IsValid()) {
+        if (auto callerAVO = parent->GetActor() ? parent->GetActor()->AsActorValueOwner() : nullptr) {
+            alterationLevel = callerAVO->GetActorValue(RE::ActorValue::kAlteration);
+        }
+    }
 }
 
 void Caller::HandleAction(const ActionType a_action)

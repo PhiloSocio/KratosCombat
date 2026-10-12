@@ -91,13 +91,10 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             player->ThrowWeapon(RotationType::kSpinLateral, ThrowType::kHomingThrow);
             break;
         case "LeviChargeStart"_h:
-        //    player->ChargeWeaponStart();
+            player->StartWeaponCharging();
             break;
         case "LeviChargeEnd"_h:
-        //    player->ChargeWeaponEnd();
-    //        if (auto manager = Kratos::GetSingleton(); manager && manager->IsCanCharge(PlayerCharacter::GetSingleton()))
-    //            if (auto levi = LeviathanAxe::GetSingleton())
-    //                levi->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, -1);
+            player->StopWeaponCharging();
             break;
         case "MjolnirChargeStart"_h:
         //    player->ChargeWeaponStart();

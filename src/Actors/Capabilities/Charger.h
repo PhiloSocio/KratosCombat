@@ -9,11 +9,14 @@ public:
     Charger();
     virtual ~Charger() = default;
 
+    void OnAttach(BaseActor* a_actor) override;
+
     void HandleAction(const ActionType a_action) override;
 
     [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kCharger; }
 
     void StartWeaponCharging();
+    void StopWeaponCharging();
 
     bool IsCanCharge(const RelicType a_relic) const;
 
