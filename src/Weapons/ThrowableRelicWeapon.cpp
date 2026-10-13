@@ -261,7 +261,7 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     }
     rotationType = a_rotationType;
 
-    auto weaponDamage = static_cast<float>(weap->attackDamage);
+    auto weaponDamage = (float)weap->attackDamage;
     if (throwerActor->IsPlayerRef()) {
         const auto difficulty = RE::PlayerCharacter::GetSingleton()->GetGameStatsData().difficulty;
         weaponDamage *= PlayerAttackDamageMultByDifficulty(difficulty);
@@ -303,15 +303,17 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
 
     if (!PreThrow()) return false;
 
+    soundData.PlayThrowingSounds(rHandBone);
+
     RE::ProjectileHandle pHandle;
     if (auto pHandlePtr = RE::Projectile::Launch(&pHandle, lData); pHandlePtr && pHandlePtr->get().get()) {
         projectileHandle = *pHandlePtr;
         launchTime = AsyncUtil::GameTime::GetEngineTime();
         projectile = pHandlePtr->get().get();
         auto& rtData = projectile->GetProjectileRuntimeData();
-    //    spdlog::info("throw speed: {} force: {} weaponDamage: {} difficulty: {}", ThrowableWeaponDummyProjectile->data.speed, impulse / 1000.f, weaponDamage, difficulty);
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
         rtData.weaponDamage *= thrower->IsThrowing(ThrowType::kPowerThrow) ? 1.5f : 1.f;
+        throwableDamage = rtData.weaponDamage;
 
         _rotationBlended = false;
         _transformInitiated = false;
@@ -403,7 +405,10 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     } else {
         spdlog::error("can't create the projectile for the weapon! try with other weapons, then reinstall the mod if you can't throw any weapon.");
     }
-    if (result) PostThrow();
+    if (result) {
+        PostThrow();
+        spdlog::info("{} throwed by {}, raw damage is: {}", weap->GetFullName(), throwerActor->GetName(), throwableDamage);
+    }
 
     return result;
 }
@@ -502,7 +507,7 @@ void ThrowableRelicWeapon::PostImpact(RE::Projectile::ImpactData *a_impactData, 
 bool ThrowableRelicWeapon::GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
 {
     spdlog::debug("is penetrating?: {} default: {}", isPenetrating, a_result);
-    return a_result;//!isPenetrating;
+    return isPenetrating;
 }
 void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
 {
@@ -516,7 +521,7 @@ void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
 bool ThrowableRelicWeapon::InitiateTransform() noexcept
 {
     if (!_transformInitiated) {
-        if (weaponParentNode && throwerParent->GetWeaponBone()) {
+        if (weaponParentNode && throwerParent && throwerParent->GetWeaponBone()) {
             startLocalTranslation = weaponParentNode->local.translate;
             if (weaponParentNode->parent) {
                 startLocalRotation = weaponParentNode->parent->world.rotate.Transpose() * throwerParent->GetWeaponBone()->world.rotate;
@@ -566,14 +571,14 @@ bool ThrowableRelicWeapon::InitiateTrail() noexcept
                     bone->AttachChild(node, false);
                     APIs::precision->AddTrailEffect(
                         node, 
-                        throwerParent->GetActor()->GetParentCell(), 
+                        projectile->GetParentCell(), 
                         trailData.trailOverride, 
                         trailData.transformOverride);
                     if (isCharged) {
                         trailData.trailOverride.meshOverride = Config::TrailModelPathDef;
                         APIs::precision->AddTrailEffect(
                             node, 
-                            throwerParent->GetActor()->GetParentCell(), 
+                            projectile->GetParentCell(), 
                             trailData.trailOverride, 
                             trailData.transformOverride);
                     }
@@ -591,7 +596,7 @@ void ThrowableRelicWeapon::Update()
         if (auto droppedWeaponModel = currentReference->GetCurrent3D()) {
             const auto& desiredParentWorldRotate = replacedProjectileModel->world.rotate;
             const auto& parentWorldRotate = droppedWeaponModel->parent->world.rotate;
-            droppedWeaponModel->local.rotate = desiredParentWorldRotate * parentWorldRotate.Transpose();
+            droppedWeaponModel->local.rotate = parentWorldRotate.Transpose() * desiredParentWorldRotate;
             currentReference->data.location = replacedProjectileModel->world.translate;
             RE::NiUpdateData updateData;
             updateData.flags.set(RE::NiUpdateData::Flag::kNone);
@@ -605,7 +610,7 @@ void ThrowableRelicWeapon::Update()
         trailRemoveUpdate.Done();
     }
 }
-void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile)
+void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float a_delta)
 {
     auto projectileNode = a_projectile->Get3D2();
     if (!projectileNode) {
@@ -634,15 +639,12 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile)
     direction = dir;
     if (projectileLivingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
 
-    if (projectileLivingTime > *g_deltaTime * 2.f && !InitiateTrail()) {}
+    if (projectileLivingTime > a_delta * 2.f && !InitiateTrail()) {}
     if (!InitiateTransform()) {}
 
-   //  this is required instead of using *g_deltaTime because the game calls the GetLinearVelocityArrow function two times per frame
-    const float deltaTime = GetLivingTime() - livingTime;
-
-    static constexpr float drag = 0.00018f;
+    static constexpr float drag = 0.0002f;
     const float speed = velocity.Length();
-    vel -= direction * deltaTime * (drag * speed * speed);
+    vel -= direction * a_delta * (drag * speed * speed);
 
     if (auto projBase = a_projectile->GetProjectileBase()) {
         if (livingTime < Config::NoGravityDurationLeviathan) {
@@ -650,14 +652,14 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile)
         } else if (projBase->data.gravity == gravity) {
             //  do nothing
         } else {
-            projBase->data.gravity += deltaTime * gravity;
+            projBase->data.gravity += a_delta * gravity;
             if (projBase->data.gravity == gravity) {
                 projBase->data.gravity = gravity;
             }
         }
     }
 
-    UpdateRotation(deltaTime, livingTime);
-    UpdateTranslation(deltaTime, livingTime);
+    UpdateRotation(a_delta, livingTime);
+    UpdateTranslation(a_delta, livingTime);
     livingTime = GetLivingTime();
 }

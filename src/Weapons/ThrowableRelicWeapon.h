@@ -110,6 +110,7 @@ public:
     ImpactType impactType = ImpactType::kSharp;
     RE::ImpactResult impactResult = RE::ImpactResult::kBounce;
 
+    float throwableDamage   = 0.f;
     float yAngle            = 0.35f;
     float launchTime        = 0.f;
     float livingTime        = 0.f;
@@ -152,7 +153,7 @@ public:
     void FadeTrail();
     void RemoveTrail();
 
-    virtual void UpdateProjectile(RE::Projectile* a_projectile);
+    virtual void UpdateProjectile(RE::Projectile* a_projectile, float a_delta);
     virtual bool PreThrow() {return true;};
     virtual void PostThrow() {};
     virtual void OnTrailDelete() {};

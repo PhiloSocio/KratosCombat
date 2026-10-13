@@ -12,36 +12,21 @@ LeviathanAxe::~LeviathanAxe()
 LeviathanAxe::LeviathanAxe(RE::TESBoundObject* a_object)
     : SmartRelicWeapon(a_object)
 {
+    Initialize();
 }
 
 bool LeviathanAxe::Initialize()
 {
     bool found = true;
     auto dataHandler    = RE::TESDataHandler::GetSingleton();
-    LeviProjBaseL       = dataHandler->LookupForm<RE::BGSProjectile>   (0x815, Config::KratosCombatESP);
-    LeviProjBaseH       = dataHandler->LookupForm<RE::BGSProjectile>   (0x816, Config::KratosCombatESP);
-    LeviProjBaseA       = dataHandler->LookupForm<RE::BGSProjectile>   (0x822, Config::KratosCombatESP);
-    SpellLeviProjL      = dataHandler->LookupForm<RE::SpellItem>       (0x811, Config::KratosCombatESP);
-    SpellLeviProjH      = dataHandler->LookupForm<RE::SpellItem>       (0x813, Config::KratosCombatESP);
-    SpellCatchLevi      = dataHandler->LookupForm<RE::SpellItem>       (0x81D, Config::KratosCombatESP);
-    SpellLeviProjA      = dataHandler->LookupForm<RE::SpellItem>       (0x823, Config::KratosCombatESP);
-    EnchCharge          = dataHandler->LookupForm<RE::EnchantmentItem> (0x84B, Config::KratosCombatESP);    // +30 frost damage, ff, touch
-    if (LeviProjBaseL && LeviProjBaseH && LeviProjBaseA)
-            spdlog::debug("Leviathan Axe projectiles are {}, {} and {}", LeviProjBaseL->GetName(), LeviProjBaseH->GetName(), LeviProjBaseA->GetName());
-    else     {spdlog::error("Can't find Leviathan Axe projectiles"); found = false;}
-    if (SpellLeviProjL && SpellLeviProjH)   
-            spdlog::debug("Leviathan Axe throwing spells are {} and {}", SpellLeviProjL->GetName(), SpellLeviProjH->GetName());
-    else     {spdlog::error("Can't find Leviathan Axe projectile spells"); found = false;}
-    if (SpellLeviProjA)
-            spdlog::debug("Leviathan Axe calling spell is {}", SpellLeviProjA->GetName());
-    else     {spdlog::error("Can't find Leviathan Axe calling spell"); found = false;}
-    if (SpellCatchLevi) {
-            EffCatchLevi = SpellCatchLevi->effects[0]->baseEffect;
-            spdlog::debug("Leviathan Axe catching spell is {}", SpellCatchLevi->GetName()); EffCatchLevi = SpellCatchLevi->effects[0]->baseEffect;}
-    else     {spdlog::error("Can't find Leviathan Axe catching spell"); found = false;}
-    if (EnchCharge) {           
-            spdlog::debug("Default Leviathan Axe charging enchantment is {}", EnchCharge->GetName());}
-    else     {spdlog::error("Can't find default Leviathan Axe enchantment spell"); found = false;}
+    defaultEnch         = dataHandler->LookupForm<RE::EnchantmentItem> (0x84B, Config::KratosCombatESP);    // +30 frost damage, ff, touch
+    if (defaultEnch) {
+            spdlog::debug("Default Leviathan Axe charging enchantment is {}", defaultEnch->GetName());
+    } else {
+        spdlog::error("Can't find default Leviathan Axe enchantment spell"); found = false;
+    }
+
+    ThrowableWeaponDummyProjectile->data.gravity = 3.21f;
 
     return found;
 }
@@ -84,7 +69,7 @@ void LeviathanAxe::OnMenuOpenCloseEvent(const bool a_opening)
 }
 bool LeviathanAxe::PreThrow()
 {
-    ThrowableWeaponDummyProjectile->data.speed = Config::ThrowSpeed;
+    ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
     return true;
 }
 void LeviathanAxe::PostThrow()
@@ -98,25 +83,10 @@ void LeviathanAxe::PostThrow()
     if (!projectile) {spdlog::error("LeviathanAxe::Throw - projectile is null"); return;}
     auto& projectileRTD = projectile->GetProjectileRuntimeData();
 
-    {   //  calculate damage
-        auto& projectileDamage = projectileRTD.weaponDamage;
-        float throwChargeDamageMult = std::sqrtf(throwingChargeDuration + 1.f);
-        if (throwChargeDamageMult > 2.f) throwChargeDamageMult = 2.f;
-        projectileDamage *= throwChargeDamageMult;
-
-        if (ThrowableWeaponDummyProjectile) {
-        //  //  ThrowableWeaponDummyProjectile->defaultWeaponSource = weap;
-            auto& pbData = ThrowableWeaponDummyProjectile->data;
-            pbData.speed = !isPenetrating ? Config::ThrowSpeed * std::clamp(throwChargeDamageMult / 2.f, 1.f, 1.25f) : pbData.speed * 0.7f;
-            pbData.force = projectileDamage;
-            pbData.gravity = 3.21f;
-        } else spdlog::warn("not found Levi throwing effect!");
-
-        if (!isPenetrating) {
-            soundData.PlayThrowingSounds(rHandBone);
-
+    {
+        {
             gravity = 3.21f;
-            gravity /= (std::powf(throwingChargeDuration + 1.f, 3.f));
+            gravity /= std::max(std::powf(throwingChargeDuration + 1.f, 3.f), 0.01f);
             gravity = std::max(gravity, 0.5f);
         }
 
@@ -129,33 +99,16 @@ void LeviathanAxe::PostThrow()
         _isLastThrowCharged = enchantItem != nullptr;
 
         if (isPenetrating) return;
-/*
-        if (Config::IsAdvancedThrowingInstalled) {
-            ResetCharge(enchMag, defaultEnchMag, true);
-            throwerParent->SetSkipEquipAnim(true);
-            ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, true, true, throwerParent->GetSkipEquipAnim(), true);
-            ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
-            spdlog::debug("Leviathan unequipped after throwing");
-        } else {
-    //        WeaponIdentify::isLeviathanAxe = false;
-    //        WeaponIdentify::isRelic = false;
-        //    Config::SpecialWeapon->value = (uint8_t)Kratos::Relic::kNone;
-        //    throwerActor->SetGraphVariableInt("iRelicWeapon", (uint8_t)Config::SpecialWeapon->value);
-            throwerParent->SetSkipEquipAnim(true);
-            throwerParent->SetUnequipWhenAnimEnds(true);
-        }
-*/
+
         throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
 
         isAxeCalled = false;
         isAxeThrowed = true;
         SetThrowState(ThrowState::kThrown);
-            spdlog::info("Leviathan Axe throwed, raw damage is: {}", projectileDamage);
         if (stuckedBone)   stuckedBone    = nullptr;
         if (stuckedActor)  stuckedActor   = nullptr;
         lastHitActors.clear();
         lastHitForms.clear();
-        if (throwerActor->HasSpell(SpellCatchLevi)) throwerActor->RemoveSpell(SpellCatchLevi);
     }
 }
 
@@ -169,13 +122,16 @@ void LeviathanAxe::Catch(const bool a_justDestroy)
 }
 void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
 {
-    if (!GetWielder() || !GetWielder()->IsValid()) return;
+    if (!GetWielder() || !GetWielder()->IsValid()) {
+        spdlog::debug("charger is invalid");
+        return;
+    }
 
     auto assets     = Assets::GetSingleton();
     auto AnArchos   = GetWielder()->GetActor();
     const auto rHandBone = wielder->GetRHandBone();
 
-    if (a_stage != -1u) {
+    if (a_stage != 0u) {
         if (auto handEffect = assets->VFXeffects.handFrost; handEffect)
             AnArchos->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone, false);
         if (auto soundEffect = assets->soundEffects.chargeLevi; soundEffect)
@@ -212,8 +168,8 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
 #ifdef EXPERIMENTAL_CHARGE_LEVI
         } else {
             spdlog::debug("levi not has any enchantment, levi is enchanting...");
-            if (EnchCharge) {
-                ench = EnchCharge;
+            if (defaultEnch) {
+                ench = defaultEnch;
                 enchEffect  = ench ? ench->effects[0] : nullptr;
                 enchBase     = enchEffect ? enchEffect->baseEffect : nullptr;
                 if (enchBase) {
@@ -250,7 +206,7 @@ void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, c
 {
     auto assets = Assets::GetSingleton();
     if (a_justReset) {
-        if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), weap) == EnchCharge) {
+        if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), weap) == defaultEnch) {
             ObjectUtil::Enchantment::DisEnchantInventoryWeapon(RE::PlayerCharacter::GetSingleton(), weap);
             _isCharged = false;
         }
@@ -258,7 +214,7 @@ void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, c
         if (chargeHitCount <= 0) {
             if (a_magnitude) *a_magnitude = a_defMagnitude;
             else {
-                if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), weap) == EnchCharge)
+                if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), weap) == defaultEnch)
                     ObjectUtil::Enchantment::DisEnchantInventoryWeapon(RE::PlayerCharacter::GetSingleton(), weap);
             }
             _isCharged = false;

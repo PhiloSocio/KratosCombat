@@ -12,78 +12,24 @@ using tStateM = Mjolnir::ThrowState;
 
 using namespace Util;
 
-static std::mutex ThrowCallMutex;
 static double lastUpdate(0.0000);
 
-/* //very good instance for projectile movement controlling from master ersh's true directional movement, 
-void ProjectileHook::ProjectileAimSupport(RE::Projectile* a_this)
-    {
-        auto projectileNode = a_this->Get3D2();
-
-        // player only, 0x100000 == player
-        auto& shooter = a_this->GetProjectileRuntimeData().shooter;
-        auto& desiredTarget = a_this->GetProjectileRuntimeData().desiredTarget;
-        if (projectileNode && shooter.native_handle() == 0x100000) {
-                if (!desiredTarget.get()) {
-                    auto target = directionalMovementHandler->GetTarget();
-                    auto targetPoint = directionalMovementHandler->GetTargetPoint();
-                    if (!target || !targetPoint) {
-                        return;
-                    }
-                    desiredTarget = target;
-                    directionalMovementHandler->AddProjectileTarget(a_this->GetHandle(), targetPoint);
-                
-                if (aimType == TargetLockProjectileAimType::kHoming) {
-                    // homing
-                    auto targetPoint = directionalMovementHandler->GetProjectileTargetPoint(a_this->GetHandle());
-                    if (targetPoint) {
-                        RE::NiPoint3 handPos = targetPoint->world.translate;
-                        auto& linearVelocity = a_this->GetProjectileRuntimeData().linearVelocity;
-                        float speed = linearVelocity.Length();
-                        //if (speed < 1500.f) {
-                        //  return _GetLinearVelocity(a_this, a_outVelocity);
-                        //}
-                        RE::NiPoint3 direction = (handPos - leviPos);
-                        // normalize direction
-                        direction.Unitize();
-                        // rotate
-                        leviAngle.x = asin(direction.z);
-                        leviAngle.z = atan2(direction.x, direction.y);
-                        if (leviAngle.z < 0.0) {
-                            leviAngle.z += PI;
-                        }
-                        if (direction.x < 0.0) {
-                            leviAngle.z += PI;
-                        }
-                        SetRotationMatrix(projectileNode->local.rotate, -direction.x, direction.y, direction.z);
-                        linearVelocity = direction * speed;
-                    
-                    }
-                }
-            }
-        }
-    }
-*/
+void ProjectileHook::UpdateArrow(RE::ArrowProjectile* a_this, float a_delta)
+{
+    _UpdateArrow(a_this, a_delta);
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->UpdateRelic(a_this, a_delta);
+#endif
+}
 void ProjectileHook::GetLinearVelocityArrow(RE::ArrowProjectile* a_this, RE::NiPoint3& a_outVelocity)
 {
     _GetLinearVelocityArrow(a_this, a_outVelocity);
 
-    //  -this is required because this function is calling two times in one frame- but caused very weird bugs in combat state.
-//    if (AsyncUtil::GameTime::GetEngineTime() - lastUpdate < (*g_deltaTimeRealTime / 10.f)) {
-    //    spdlog::trace("duplication cancelled");
-//        return;
-//    } else {
-//        lastUpdate = AsyncUtil::GameTime::GetEngineTime();
-    //    spdlog::trace("delta t = {}, {}", *g_deltaTimeRealTime, *g_engineTime);
-        if (ThrowCallMutex.try_lock()) {
 #ifdef KRATOS_COMBAT_3
-            RelicManager::GetSingleton()->UpdateRelic(a_this);
+    //    RelicManager::GetSingleton()->UpdateRelic(a_this);
 #else
-            LeviAndDraupnir(a_this);
+        LeviAndDraupnir(a_this);
 #endif
-            ThrowCallMutex.unlock();
-        }
-//    }
 }
 
 #ifndef KRATOS_COMBAT_3

@@ -16,6 +16,7 @@ public:
     RelicIdentity        relicIdentity  = 0u;
     RE::TESObjectWEAP*   weap           = nullptr;
     RE::EnchantmentItem* ench           = nullptr;
+    RE::EnchantmentItem* defaultEnch    = nullptr;
     RE::AlchemyItem*     poison         = nullptr;
     RE::ExtraHotkey*     favoriteData   = nullptr;
     float*               enchMag        = nullptr;

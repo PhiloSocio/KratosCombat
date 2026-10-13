@@ -14,14 +14,16 @@ public:
 
         _GetCollisionMissile        = MissileProjectileVtbl.write_vfunc(0xBE, GetCollisionMissile);
         _GetMissileImpactData       = MissileProjectileVtbl.write_vfunc(0xBD, GetMissileImpactData);
+        _UpdateArrow                = ArrowProjectileVtbl.write_vfunc(0xAB, UpdateArrow);
         _GetLinearVelocityArrow     = ArrowProjectileVtbl.write_vfunc(0x86, GetLinearVelocityArrow);
         _GetCollisionArrow          = ArrowProjectileVtbl.write_vfunc(0xBE, GetCollisionArrow);
-        _GetKillOnCollisionArrow    = ArrowProjectileVtbl.write_vfunc(0xB8, GetKillOnCollisionArrow);
+    //    _GetKillOnCollisionArrow    = ArrowProjectileVtbl.write_vfunc(0xB8, GetKillOnCollisionArrow);
         _GetArrowImpactData         = ArrowProjectileVtbl.write_vfunc(0xBD, GetArrowImpactData);
 
         spdlog::info("ProjectileHook done, long live Ersh and Fenix!");
     }
 private:
+    static void UpdateArrow(RE::ArrowProjectile* a_this, float a_delta);
     static void GetLinearVelocityArrow(RE::ArrowProjectile* a_this, RE::NiPoint3& a_outVelocity);
     static void GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
     static void GetCollisionMissile(RE::MissileProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
@@ -33,6 +35,7 @@ private:
     static inline bool LeviAndDraupnirHit(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
     static inline void LeviAndDraupnirImpactData(RE::Projectile::ImpactData* impactData, RE::MissileProjectile *proj, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable);
 
+    static inline REL::Relocation<decltype(UpdateArrow)>                _UpdateArrow;
     static inline REL::Relocation<decltype(GetLinearVelocityArrow)>     _GetLinearVelocityArrow;
     static inline REL::Relocation<decltype(GetCollisionArrow)>          _GetCollisionArrow;
     static inline REL::Relocation<decltype(GetCollisionMissile)>        _GetCollisionMissile;

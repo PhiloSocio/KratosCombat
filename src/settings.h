@@ -14,6 +14,7 @@ public:
     static inline bool BuffRageWhenDamaged          = false;
     //Axe-Mace throw
     static inline float ThrowSpeed                  = 3700.f;       //  cm/s
+    static inline float LeviThrowSpeedMult          = 1.5f;
     static inline float ThrowRotationSpeed          = 1260.f;       //  deg/s
     static inline float ThrowRotationSpeedM         = 1260.f;       //  deg/s
     static inline float RotationBlendDuration       = 0.169f;

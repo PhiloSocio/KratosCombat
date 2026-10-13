@@ -186,6 +186,8 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
         SetState(RelicWeaponState::Type::kArriving);
         spdlog::info("{} is arriving to {}...", weap->GetFullName(), callerActor->GetDisplayFullName());
     }
+    thrower = nullptr;
+    throwerParent = nullptr;
     return true;
 }
 void SmartRelicWeapon::Catch(const bool a_justDestroy)
@@ -250,6 +252,8 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
         }
         trailRemoveUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
     }
+    caller = nullptr;
+    callerActor = nullptr;
 }
 
 bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) 
@@ -474,11 +478,11 @@ void SmartRelicWeapon::Update()
         Call(caller, false);
     }
 }
-void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile) 
+void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float a_delta) 
 {
-    ThrowableRelicWeapon::UpdateProjectile(a_projectile);
+    ThrowableRelicWeapon::UpdateProjectile(a_projectile, a_delta);
     if (currentState) {
-        auto status = currentState->Update(*g_deltaTime);
+        auto status = currentState->Update(a_delta);
         if (status > RelicWeaponState::Status::kRunning) {
             currentState->Exit();
             currentState.reset();

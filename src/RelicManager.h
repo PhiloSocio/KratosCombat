@@ -510,11 +510,11 @@ public:
     }
 
     Kratos* GetPlayer() const {return player;}
-    void UpdateRelic(RE::Projectile* a_this)
+    void UpdateRelic(RE::Projectile* a_this, float a_delta)
     {
         if (a_this) {
             if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
-                it->second->UpdateProjectile(a_this);
+                it->second->UpdateProjectile(a_this, a_delta);
             }
         }
     }

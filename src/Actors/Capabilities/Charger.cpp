@@ -15,7 +15,7 @@ void Charger::StartWeaponCharging() {
 }
 void Charger::StopWeaponCharging() {
     if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic /*&& IsCanCharge(rHandRelic->type)*/) {
-        rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, -1u, -1u);
+        rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 0u, -1u);
     } else {
         spdlog::info("the weapon is not chargeable");
     }
