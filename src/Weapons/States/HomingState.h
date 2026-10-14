@@ -25,6 +25,7 @@ protected:
     float waveFrequency = 20.f;
 
     float startingTime = 0.f;
+    float livingTimeInterval = 0.f;
 
     void RemoveInvalidTargets();
 

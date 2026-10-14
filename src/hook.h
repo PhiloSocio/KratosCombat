@@ -19,11 +19,13 @@ public:
         _GetCollisionArrow          = ArrowProjectileVtbl.write_vfunc(0xBE, GetCollisionArrow);
     //    _GetKillOnCollisionArrow    = ArrowProjectileVtbl.write_vfunc(0xB8, GetKillOnCollisionArrow);
         _GetArrowImpactData         = ArrowProjectileVtbl.write_vfunc(0xBD, GetArrowImpactData);
+        _OnArrowKill                = ArrowProjectileVtbl.write_vfunc(0xA8, OnArrowKill);
 
         spdlog::info("ProjectileHook done, long live Ersh and Fenix!");
     }
 private:
     static void UpdateArrow(RE::ArrowProjectile* a_this, float a_delta);
+    static void OnArrowKill(RE::ArrowProjectile* a_this);
     static void GetLinearVelocityArrow(RE::ArrowProjectile* a_this, RE::NiPoint3& a_outVelocity);
     static void GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
     static void GetCollisionMissile(RE::MissileProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
@@ -36,6 +38,7 @@ private:
     static inline void LeviAndDraupnirImpactData(RE::Projectile::ImpactData* impactData, RE::MissileProjectile *proj, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable);
 
     static inline REL::Relocation<decltype(UpdateArrow)>                _UpdateArrow;
+    static inline REL::Relocation<decltype(OnArrowKill)>                _OnArrowKill;
     static inline REL::Relocation<decltype(GetLinearVelocityArrow)>     _GetLinearVelocityArrow;
     static inline REL::Relocation<decltype(GetCollisionArrow)>          _GetCollisionArrow;
     static inline REL::Relocation<decltype(GetCollisionMissile)>        _GetCollisionMissile;

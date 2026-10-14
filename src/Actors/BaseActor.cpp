@@ -1,4 +1,5 @@
 #include "BaseActor.h"
+#include "settings.h"
 #include "util.h"
 #include "Weapons/RelicWeapon.h"
 #include "Capabilities/Thrower.h"
@@ -70,6 +71,61 @@ void BaseActor::OnEquip(RelicWeapon* a_relic)
         } else {
             SetBarehanded(true);
         }
+    }
+}
+
+void BaseActor::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
+{
+    if (a_target == GetActor()) {
+        if (IsInRage()) {
+            if (auto rager = GetCapabilityAs<Rager>()) {
+                if (rager->GetLastTriggeredRageType() == RageType::kFury) {
+                    RestoreRage(-std::max(a_this.totalDamage, 0.f), true);
+                    a_this.totalDamage = 0.f;
+                } else if (rager->GetLastTriggeredRageType() == RageType::kValor) {
+                    rager->GrantValorBuff();
+                    a_this.totalDamage = 0.f;
+                }
+            }
+        } else if (Config::BuffRageWhenDamaged) {
+            RestoreRage(Config::RageBuffRate->value, true);
+        }
+    } else if (auto agressor = a_this.aggressor.get().get(); agressor && agressor == GetActor() && !a_target->IsDead()) {
+        if (IsInRage()) {
+            if (!(a_this.flags & RE::HitData::Flag::kBash))
+                a_this.totalDamage = a_this.totalDamage + a_this.totalDamage * (Config::BarehandedDamageMult - 1.f);
+
+            if (agressor->AsActorValueOwner())
+                agressor->AsActorValueOwner()->RestoreActorValue(RE::ActorValue::kHealth, a_this.totalDamage);
+        } else if (IsBarehanded()) {
+            if (!(a_this.flags & RE::HitData::Flag::kBash))
+                a_this.totalDamage = a_this.totalDamage + a_this.totalDamage * (Config::BarehandedDamageMult - 1.f);
+
+            RestoreRage(2.f * std::min(std::max(a_this.totalDamage, 0.f), Config::RageBuffRate->value), true);
+        } else {
+            RestoreRage(std::min(std::max(a_this.totalDamage, 0.f), Config::RageBuffRate->value), true);
+        }
+    }
+}
+void BaseActor::BeforeDamage(RE::Projectile* a_projectile, const bool a_isVictim)
+{
+    auto& rtData = a_projectile->GetProjectileRuntimeData();
+    if (a_isVictim) {
+        if (IsInRage()) {
+            if (auto rager = GetCapabilityAs<Rager>()) {
+                if (rager->GetLastTriggeredRageType() == RageType::kFury) {
+                    RestoreRage(-std::max(rtData.weaponDamage, 0.f), true);
+                    rtData.weaponDamage = 0.f;
+                } else if (rager->GetLastTriggeredRageType() == RageType::kValor) {
+                    rager->GrantValorBuff();
+                    rtData.weaponDamage = 0.f;
+                }
+            }
+        } else if (Config::BuffRageWhenDamaged) {
+            RestoreRage(Config::RageBuffRate->value, true);
+        }
+    } else {
+        RestoreRage(std::min(std::max(rtData.weaponDamage * 0.5f, 0.f), Config::RageBuffRate->value * 0.5f), true);
     }
 }
 

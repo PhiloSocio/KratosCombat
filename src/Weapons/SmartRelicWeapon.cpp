@@ -79,6 +79,8 @@ void SmartRelicWeapon::SetState(std::unique_ptr<RelicWeaponState> a_state)
 
     if (currentState) {
         currentState->Enter();
+        if (projState != ProjectileState::kTransition)
+            projState = ProjectileState::kHoming;
     }
 }
 
@@ -131,18 +133,26 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
         return true;
     }
 
-    auto rHandBone = callerParent->GetRHandBone();
+    auto& rHandBone = callerParent->GetRHandBone();
     if (!isPenetrating) {
-        soundData.PlayCallingHandSounds(rHandBone);
+        soundData.PlayCallingHandSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
     }
 
     if (!projectile || projectile->GetProjectileRuntimeData().flags.all(RE::Projectile::Flags::kProcessedImpacts)) {
         if (projectile) {
-            if (!isPenetrating) position = projectile->data.location;
-            auto& projectileRTD = projectile->GetProjectileRuntimeData();
-            auto& pFlags = projectileRTD.flags;
-            if (!(pFlags & pFlag::kDestroyed)) {
-                pFlags |= pFlag::kDestroyed;
+            if (projState != ProjectileState::kTransition && projState >= ProjectileState::kStucked) {
+                Projectile::Manager::GetSingleton()->wobble.emplace_back(GetWorldTransform().rotate, projectileHandle, 0.f);
+                delayedCallUpdate.RegisterForUpdate(0.3f, true);
+                projState = ProjectileState::kTransition;
+                SetState(RelicWeaponState::Type::kArriving);
+                spdlog::debug("{} is woobling to leave where it is stucked", weap->GetFullName());
+                return false;
+            } else {
+                auto& projectileRTD = projectile->GetProjectileRuntimeData();
+                auto& pFlags = projectileRTD.flags;
+                if (!(pFlags & pFlag::kDestroyed)) {
+                    pFlags |= pFlag::kDestroyed;
+                }
             }
         }
 
@@ -169,7 +179,13 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
             projectile = pHandlePtr->get().get();
         //    currentReference->Disable();
 
-            SetState(RelicWeaponState::Type::kArriving);
+            if (IsArriving()) {
+                if (projState == ProjectileState::kTransition) {
+                    projState = ProjectileState::kNone;
+                }
+            } else {
+                SetState(RelicWeaponState::Type::kArriving);
+            }
             spdlog::info("{} is arriving to {}...", weap->GetFullName(), callerActor->GetDisplayFullName());
 
             projectileModel = nullptr;
@@ -200,7 +216,6 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
 
         auto& projectileRTD = projectile->GetProjectileRuntimeData();
         projectileRTD.flags |= pFlag::kDestroyed;
-        projectile = nullptr;
         projectileModel = nullptr;
         if (a_justDestroy) return;
     }
@@ -212,14 +227,14 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
         SetThrowState(ThrowState::kArrived);
 
         auto assets = Assets::GetSingleton();
-        auto rHandBone = callerParent->GetRHandBone();
+        auto& rHandBone = callerParent->GetRHandBone();
         if (auto handEffect = assets->VFXeffects.handFrost; handEffect) 
             callerActor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone);
 
         soundData.FadeArrivingNearSounds(469);
         soundData.FadeArrivingLoopSounds(469);
         soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
-        soundData.PlayCatchingSounds(rHandBone);
+        soundData.PlayCatchingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
 
         if (weap && currentReference) {
             callerParent->SetSkipEquipAnim(true);
@@ -302,52 +317,39 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 
                             callerParent->RestoreRage(Config::RageBuffRate->value * 0.25f, true);
                         }
-
-                        if (isArriving || isHoming) {
-                        //    RE::InventoryEntryData weaponIED;
-                        //    weaponIED.object = weap;
-                        //    RE::HitData hitData;
-                        //    hitData.aggressor = shooter;
-                        //    hitData.target = victim;
-                        //    hitData.hitPosition = RE::NiPoint3(point.contact.position.quad.m128_f32[0], point.contact.position.quad.m128_f32[1], point.contact.position.quad.m128_f32[2]);
-                        //    hitData.hitDirection = direction;
-                        //    hitData.weapon = weap;
-                        //    hitData.totalDamage = damage;
-                        //    hitData.stagger = 1.5f;
-                        //    hitData.pushBack = rtData.power;
-                        //    hitData.sourceRef = projectile->GetHandle();
-                    //        if (weapIED) {
-                    //            auto hitData = RE::HitData::Create(shooter, victim, weapIED.get(), false);
-                    //            if (hitData) {
-                    //                spdlog::warn("{} hit to {} while arriving", hitData->weapon->GetFullName(), hitData->target.get()->GetName());
-                    //                hitData->hitPosition = RE::NiPoint3(point.contact.position.quad.m128_f32[0], point.contact.position.quad.m128_f32[1], point.contact.position.quad.m128_f32[2]);
-                    //                hitData->hitDirection = direction;
-                    //            //    ObjectUtil::Actor::ProcessHit(victim, hitData);
-                    //                ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
-                    //            }
-                    //        }
-                        //    RE::TESHavokUtilities::AddExplosionImpulse(projectile->GetCurrent3D(), point.contact.position, rtData.power, hitData);
-
+                    }
+                }
+                if (!isSameTarget) {
+                    if (isArriving) {
+                        auto arrivingState = GetCurrentState() ? dynamic_cast<ArrivingState*>(GetCurrentState()) : nullptr;
+                        if (victim && arrivingState) {
+                            if (arrivingState && victim == arrivingState->GetNextTarget())  arrivingState->GetTargets().erase(arrivingState->GetTargets().begin());
                             ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
-                            return true;
                         }
+                        spdlog::debug("{} is hit to {} ({:8x}) and passed through while arriving", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
+                    } else if (isHoming) {
+                        auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
+                        if (victim) {
+                            if (homingState && victim == homingState->GetNextTarget()) homingState->GetTargets().erase(homingState->GetTargets().begin());
+                            ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
+                        }
+                        spdlog::debug("{} is hit to {} ({:8x}) and passed through while homing", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
                     }
                 }
             } else {spdlog::warn("WEIRD, target or levi is not exists");}
-            if (isSameTarget || (!isTargetActor && (isArriving || isHoming))) {
+
+            if (isSameTarget || isArriving || isHoming) {
                 return true;
-            } else if (!isPenetrating) {
-                trailRemoveUpdate.RegisterForUpdate(0.f, false);
-                if (projectileModel) {
-                    auto controllers = projectileModel->GetControllers();
-                    if (controllers) {
-                        auto manager = controllers->AsNiControllerManager();
-                        if (manager) {
-                            auto endSequence = manager->GetSequenceByName("mEnd");
-                            if (endSequence && shooter) shooter->PlayAnimation(manager, endSequence, endSequence);
-                        }
-                    }
-                }
+            } else if (weaponParentNode) {
+            //    auto surfaceNormal = Algebra::MatrixToVector3(point.contact.separatingNormal); surfaceNormal.Unitize();
+                auto& localRotate = weaponParentNode->local.rotate;
+            //    const auto dot = direction.Dot(surfaceNormal);
+            //    const auto localTarget = direction - dot * surfaceNormal;
+                RE::NiPoint3 angles; localRotate.ToEulerAnglesXYZ(angles);
+            //    spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
+                angles.z = Config::HitRotationZ;//std::atan2(localTarget.x, localTarget.y) + Config::HitRotationZ;
+                localRotate.SetEulerAnglesXYZ(angles);
+            //    spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
             }
         }
 
@@ -360,105 +362,98 @@ void SmartRelicWeapon::PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_ta
 {}
 void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) 
 {
-    if (projectile && a_impactData) {
-        auto missileProjectile = projectile->As<RE::MissileProjectile>();
-        const bool isTargetActor = a_target ? a_target->formType == RE::FormType::ActorCharacter : false;
-        const auto victim = isTargetActor ? a_target->As<RE::Actor>() : nullptr;
-        auto& rtData = missileProjectile->GetProjectileRuntimeData();
-        auto& missileRTD = missileProjectile->GetMissileRuntimeData();
-    //    auto shooter = rtData.shooter ? rtData.shooter.get()->As<RE::Actor>() : nullptr;
+    const bool isTargetActor = a_target ? a_target->formType == RE::FormType::ActorCharacter : false;
+    const auto victim = isTargetActor ? a_target->As<RE::Actor>() : nullptr;
+    auto& rtData = projectile->GetProjectileRuntimeData();
+//    auto shooter = rtData.shooter ? rtData.shooter.get()->As<RE::Actor>() : nullptr;
 
-    //    currentReference->Enable(false);
-    //    std::jthread thread([=](){
-    //        RE::NiAVObject* droppedWeaponModel = nullptr;
-    //        while (droppedWeaponModel == nullptr || droppedWeaponModel->parent == nullptr) droppedWeaponModel = currentReference->GetCurrent3D();
-    //        if (droppedWeaponModel && replacedProjectileModel && droppedWeaponModel->parent) {
-    //            placeWeaponUpdate.RegisterForUpdate(0.f, true);
-    //        }
-    //    });
-    //    thread.detach();
+//    currentReference->Enable(false);
+//    std::jthread thread([=](){
+//        RE::NiAVObject* droppedWeaponModel = nullptr;
+//        while (droppedWeaponModel == nullptr || droppedWeaponModel->parent == nullptr) droppedWeaponModel = currentReference->GetCurrent3D();
+//        if (droppedWeaponModel && replacedProjectileModel && droppedWeaponModel->parent) {
+//            placeWeaponUpdate.RegisterForUpdate(0.f, true);
+//        }
+//    });
+//    thread.detach();
 //        placeWeaponUpdate.RegisterForUpdate(*g_deltaTime, true);
 
-    //    if (favoriteData)
-    //        currentReference->extraList.Add(favoriteData);
-                //    currentReference->Set3D(replacedProjectileModel.get());
-        const bool isHoming = IsHoming();
-        const bool isArriving = IsArriving();
-        {
-            bool skipIt = false;
-            bool stopSounds = true;
+//    if (favoriteData)
+//        currentReference->extraList.Add(favoriteData);
+            //    currentReference->Set3D(replacedProjectileModel.get());
+    const bool isHoming = IsHoming();
+    const bool isArriving = IsArriving();
 
-            if (isTargetActor)  {lastHitActors.insert(lastHitActors.begin(), victim->GetHandle()); if (lastHitActors.size() > 4) lastHitActors.pop_back();}
-            else if (a_target)  {lastHitForms.insert(lastHitForms.begin(), a_target); if (lastHitForms.size() > 4) lastHitForms.pop_back();}
-            else skipIt = true; //  the target is not an actor or a form, probably the ground or an inpenetrable thing.
+    bool skipIt = false;
+    bool stopSounds = true;
 
-            if (isArriving) {
-                spdlog::debug("{} impacted to {} while arriving", projectile->GetName(), a_target ? a_target->GetName() : "NULL");
-                auto arrivingState = GetCurrentState() ? dynamic_cast<ArrivingState*>(GetCurrentState()) : nullptr;
-                if (arrivingState && victim && victim == arrivingState->GetNextTarget())  arrivingState->GetTargets().erase(arrivingState->GetTargets().begin());
-            //    for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
-            //    missileRTD.impactResult = RE::ImpactResult::kBounce;
-            //    a_impactData->impactResult = RE::ImpactResult::kBounce;
-            //    projectile = nullptr;
-            //    isPenetrating = true;
-            //    Call(caller, false);
-                stopSounds = false;
-            } else if (isHoming) {
-                auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
-                if (isTargetActor && victim == homingState->GetNextTarget()) homingState->GetTargets().erase(homingState->GetTargets().begin());
-                for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kDestroy;
-                a_impactData->impactResult = RE::ImpactResult::kDestroy;
-                missileRTD.impactResult = RE::ImpactResult::kDestroy;
-                projState = ProjectileState::kNone;
-                auto pRot = MathUtil::Algebra::VectorToPitchYaw(direction);
-                Throw(thrower, RotationType::kSpinLateral, pRot, position);
-                stopSounds = false;
-                spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projectile->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
-            } else if (isPenetrating && skipIt) {
-                for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kNone;
-                a_impactData->impactResult = RE::ImpactResult::kNone;
-                missileRTD.impactResult = RE::ImpactResult::kNone;
-                projState = ProjectileState::kHavok;
-                isPenetrating = false;
-            } else if (isPenetrating) {
-                for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kNone;
-                a_impactData->impactResult = RE::ImpactResult::kNone;
-                missileRTD.impactResult = RE::ImpactResult::kNone;
-                projState = ProjectileState::kNone;
-            //    auto pRot = MathUtil::Algebra::VectorToPitchYaw(direction);
-            //    Throw(thrower, RotationType::kSpinLateral, pRot, position);
-                stopSounds = false;
-                spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projectile->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
-            } else if (impactResult == RE::ImpactResult::kStick) {  //  let it trying to stick if it can
-                //
-            } else if (isTargetActor) { //  don't let it stick to actors but let it do whatever it wants.
-                for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
-                a_impactData->impactResult = RE::ImpactResult::kBounce;
-                missileRTD.impactResult = RE::ImpactResult::kBounce;
-                projState = ProjectileState::kHavok;
-            }
+    if (isTargetActor)  {lastHitActors.insert(lastHitActors.begin(), victim->GetHandle()); if (lastHitActors.size() > 4) lastHitActors.pop_back();}
+    else if (a_target)  {lastHitForms.insert(lastHitForms.begin(), a_target); if (lastHitForms.size() > 4) lastHitForms.pop_back();}
+    else skipIt = true; //  the target is not an actor or a form, probably the ground or an inpenetrable thing.
+/*
+    if (isArriving) {
+        spdlog::debug("{} impacted to {} while arriving", projectile->GetName(), a_target ? a_target->GetName() : "NULL");
+        auto arrivingState = GetCurrentState() ? dynamic_cast<ArrivingState*>(GetCurrentState()) : nullptr;
+        if (arrivingState && victim && victim == arrivingState->GetNextTarget())  arrivingState->GetTargets().erase(arrivingState->GetTargets().begin());
+    //    for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
+    //    a_impactData->impactResult = RE::ImpactResult::kBounce;
+    //    isPenetrating = true;
+    //    Call(caller, false);
+        stopSounds = false;
+    } else if (isHoming) {
+        auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
+        if (isTargetActor && victim == homingState->GetNextTarget()) homingState->GetTargets().erase(homingState->GetTargets().begin());
+        for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kDestroy;
+        a_impactData->impactResult = RE::ImpactResult::kDestroy;
+        auto pRot = MathUtil::Algebra::VectorToPitchYaw(direction);
+        Throw(thrower, RotationType::kSpinLateral, pRot, position);
+        stopSounds = false;
+        spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projectile->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
+    } else 
+*/
+    if (isPenetrating && skipIt) {
+        for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
+        a_impactData->impactResult = RE::ImpactResult::kBounce;
+        isPenetrating = false;
+    } else if (isPenetrating) {
+        for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
+        a_impactData->impactResult = RE::ImpactResult::kBounce;
+        stopSounds = false;
+        spdlog::debug("{} is hit to {} ({:8x}) and passed through!", projectile->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
+    } else if (a_impactData->impactResult == RE::ImpactResult::kStick) {  //  let it trying to stick if it can
+        //
+    } else if (isTargetActor) { //  don't let it stick to actors but let it do whatever it wants.
+        for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
+        a_impactData->impactResult = RE::ImpactResult::kBounce;
+    }
 
-            missileRTD.impactResult = a_impactData->impactResult;
+    const bool itWillStick = a_impactData->impactResult == RE::ImpactResult::kStick;
+    const bool itWillBounce = a_impactData->impactResult == RE::ImpactResult::kBounce;
+    if (itWillStick) {
+//        if (isTargetActor && rtData.weaponDamage > (victim->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth) / 10.f)/**/) {
+//            ObjectUtil::Actor::PushActorAway(victim, projectile->data.force, rtData.linearVelocity);
+//        }
+        stuckedActor.reset(victim);
+        stuckedBone.reset(a_impactData->damageRootNode);
+        for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kStick;
+        spdlog::debug("{} is sticked to {}!", projectile->GetName(), stuckedBone ? stuckedBone->name : "NULL");
+    } else if (itWillBounce) {
+        for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kBounce;
+        spdlog::debug("{} is bounced from {}!", projectile->GetName(), a_impactData->damageRootNode ? a_impactData->damageRootNode->name : "NULL");
+    } else {
+        a_impactData->impactResult = RE::ImpactResult::kBounce;
+    }
 
-            const bool itWillStick = a_impactData->impactResult == RE::ImpactResult::kStick;
-            const bool itWillBounce = a_impactData->impactResult == RE::ImpactResult::kBounce;
-            if (itWillStick) {
-        //        if (isTargetActor && rtData.weaponDamage > (victim->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth) / 10.f)/**/) {
-        //            ObjectUtil::Actor::PushActorAway(victim, projectile->data.force, rtData.linearVelocity);
-        //        }
-                stuckedActor.reset(victim);
-                stuckedBone.reset(a_impactData->damageRootNode);
-                for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kStick;
-                projState = ProjectileState::kStucked;
-                spdlog::debug("{} is sticked to {}!", projectile->GetName(), stuckedBone ? stuckedBone->name : "NULL");
-            } else if (itWillBounce) {
-                for (auto& impact : rtData.impacts) impact->impactResult = RE::ImpactResult::kNone;
-                projState = ProjectileState::kHavok;
-                spdlog::debug("{} is bounced from {}!", projectile->GetName(), a_impactData->damageRootNode ? a_impactData->damageRootNode->name : "NULL");
-            }
-            if (stopSounds)
-                GetSoundManager().FadeThrowingLoopSounds(369);
-        }
+    if (stopSounds)
+        GetSoundManager().FadeThrowingLoopSounds(369);
+
+    switch (a_impactData->impactResult) {
+    case RE::ImpactResult::kBounce:  projState = ProjectileState::kHavok;   break;
+    case RE::ImpactResult::kStick:   projState = ProjectileState::kStucked; break;
+    case RE::ImpactResult::kDestroy: projState = ProjectileState::kNone;    break;
+    case RE::ImpactResult::kImpale:  projState = ProjectileState::kNone;    break;
+    case RE::ImpactResult::kNone:    projState = ProjectileState::kNone;    break;
+    default: ProjectileState::kNone; break;
     }
 }
 void SmartRelicWeapon::OnTrailDelete()
@@ -475,7 +470,7 @@ void SmartRelicWeapon::Update()
 {
     ThrowableRelicWeapon::Update();
     if (delayedCallUpdate.IsTimeToUpdate()) {
-        Call(caller, false);
+        caller->CallWeapon(this);
     }
 }
 void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float a_delta) 

@@ -248,9 +248,9 @@ public:
                         if (auto rRelic = it->second ? it->second.get() : nullptr) {
                             if (auto thrownWeapon = rRelic ? dynamic_cast<ThrowableRelicWeapon*>(rRelic) : nullptr) {
                                 if (thrownWeapon->projectile) {
+                                    thrownRelics.erase(thrownWeapon->projectile);
                                     auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
                                     projectileRTD.flags.set(pFlag::kDestroyed);
-                                    thrownRelics.erase(thrownWeapon->projectile);
                                     thrownWeapon->projectileModel = nullptr;
                                     thrownWeapon->projectileHandle.reset();
                                     thrownWeapon->projectile = nullptr;
@@ -273,12 +273,14 @@ public:
                         return;
                     }
                     if (auto thrownWeapon = it->second ? dynamic_cast<ThrowableRelicWeapon*>(it->second.get()) : nullptr) {
-                        thrownRelics.erase(thrownWeapon->projectile);
-                        auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
-                        projectileRTD.flags.set(pFlag::kDestroyed);
-                        thrownWeapon->projectileModel = nullptr;
-                        thrownWeapon->projectileHandle.reset();
-                        thrownWeapon->projectile = nullptr;
+                        if (thrownWeapon->projectile) {
+                            thrownRelics.erase(thrownWeapon->projectile);
+                            auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
+                            projectileRTD.flags.set(pFlag::kDestroyed);
+                            thrownWeapon->projectileModel = nullptr;
+                            thrownWeapon->projectileHandle.reset();
+                            thrownWeapon->projectile = nullptr;
+                        }
                     }
 
                     activeRelics.erase(it);
@@ -324,14 +326,14 @@ public:
             }
             activeRelic->OnEquip(activeActor);
 
-            if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
-                if (throwableRelic->projectile) {
-                    thrownRelics.erase(throwableRelic->projectile);
-                    auto& projectileRTD = throwableRelic->projectile->GetProjectileRuntimeData();
+            if (auto thrownWeapon = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
+                if (thrownWeapon->projectile) {
+                    thrownRelics.erase(thrownWeapon->projectile);
+                    auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
                     projectileRTD.flags.set(pFlag::kDestroyed);
-                    throwableRelic->projectileModel = nullptr;
-                    throwableRelic->projectileHandle.reset();
-                    throwableRelic->projectile = nullptr;
+                    thrownWeapon->projectileModel = nullptr;
+                    thrownWeapon->projectileHandle.reset();
+                    thrownWeapon->projectile = nullptr;
                 }
             }
             spdlog::info("{} type relic {} picked up by {}", (uint8_t)activeRelic->GetType(), activeRelic->weap->GetFullName(), a_actor->GetName());
@@ -394,14 +396,14 @@ public:
                 if (std::find(knownRelics.rbegin(), knownRelics.rend(), relicID) == knownRelics.rend()) {
                     knownRelics.emplace_back(relicID);
                 }
-                if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
-                    if (throwableRelic->projectile) {
-                        thrownRelics.erase(throwableRelic->projectile);
-                        auto& projectileRTD = throwableRelic->projectile->GetProjectileRuntimeData();
+                if (auto thrownWeapon = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
+                    if (thrownWeapon->projectile) {
+                        thrownRelics.erase(thrownWeapon->projectile);
+                        auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
                         projectileRTD.flags.set(pFlag::kDestroyed);
-                        throwableRelic->projectileModel = nullptr;
-                        throwableRelic->projectileHandle.reset();
-                        throwableRelic->projectile = nullptr;
+                        thrownWeapon->projectileModel = nullptr;
+                        thrownWeapon->projectileHandle.reset();
+                        thrownWeapon->projectile = nullptr;
                     }
                 }
             }
@@ -489,11 +491,54 @@ public:
             it->second->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
         }
     }
+    void OnArrowKill(RE::ArrowProjectile* a_this)
+    {
+        if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
+            if (it->second->projectile) {
+                thrownRelics.erase(it);
+                it->second->projectileModel = nullptr;
+                it->second->projectileHandle.reset();
+                it->second->projectile = nullptr;
+            }
+        }
+    }
     bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
     {
         if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
             return it->second->GetKillOnCollision(a_this, a_result);
         } return a_result;
+    }
+
+    void BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
+    {
+        if (a_target) {
+            if (auto it = activeActors.find(a_target->GetHandle()); it != activeActors.end() && it->second) {
+                it->second->BeforeDamage(a_target, a_this);
+            }
+        }
+    }
+    void BeforeDamage(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
+    {
+        if (a_this && a_AllCdPointCollector) {
+            for (auto& point : a_AllCdPointCollector->hits) {
+            //    const auto proj     = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
+                const auto target   = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
+
+                if (target && target->formType == RE::FormType::ActorCharacter) {
+                    if (const auto victim = target->As<RE::Actor>()) {
+                        if (auto it = activeActors.find(victim->GetHandle()); it != activeActors.end() && it->second) {
+                            it->second->BeforeDamage(a_this, true);
+                        }
+                    }
+                    auto shooter = a_this->GetProjectileRuntimeData().shooter.get();
+                    if (const auto aggressor = shooter ? shooter->As<RE::Actor>() : nullptr) {
+                        if (auto it = activeActors.find(aggressor->GetHandle()); it != activeActors.end() && it->second) {
+                            it->second->BeforeDamage(a_this, false);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     void OnMenuOpenCloseEvent(const bool a_opening)
@@ -514,13 +559,17 @@ public:
     {
         if (a_this) {
             if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
-                it->second->UpdateProjectile(a_this, a_delta);
+                if (it->second->projectile == a_this) {
+                    if (it->second->projState < ProjectileState::kStucked)
+                        it->second->UpdateProjectile(a_this, a_delta);
+                } else {
+                    spdlog::error("{} is not the projectile of {}", a_this->GetName(), it->second->weap->GetName());
+                }
             }
         }
     }
     void UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta)
     {
-
         if (GetOrInitializePlayer()) {
             player->Update(a_delta);
         }

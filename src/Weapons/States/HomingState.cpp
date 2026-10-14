@@ -114,19 +114,25 @@ Status HomingState::Update(float a_delta)
     auto& projectileRTD = proj->GetProjectileRuntimeData();
     auto& vel = projectileRTD.linearVelocity;
     auto& angles = proj->data.angle;
-    const float livingTime = projectileRTD.livingTime;
+    const float livingTime = projectileRTD.livingTime - livingTimeInterval;
     const float hLivingTime = GetLivingTime();
 
     auto hTarget = GetNextTarget(weapon.position);
     if (hLivingTime > 1.2f && livingTime > 0.2f && hTarget) {
+        const auto& targetBone = hTarget->GetNodeByName("NPC Spine2 [Spn2]");
         auto targetPos = hTarget->GetPosition() + (hTarget->GetBoundMax() + hTarget->GetBoundMin()) * 0.75f;
-        auto targetDir = (targetPos - weapon.position);
-        float height = weapon.position.z - hTarget->GetPosition().z;
-        targetDir.Unitize();
+        if (targetBone) targetPos = targetBone->world.translate;
+
         const float targetSpeed = speed * (livingTime < 1.2f ? livingTime : 1.2f);
+        auto targetDir = (targetPos - weapon.position);
+        targetDir.Unitize();
         vel = MathUtil::Angle::BlendVectors(weapon.direction, targetDir, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
+
+        float height = weapon.position.z - hTarget->GetPosition().z;
         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
+
+        livingTimeInterval = livingTime;
     } else {
         if (hLivingTime > 2.69f && livingTime > 0.3f && targets.empty()) {
             return Status::kCompleted;

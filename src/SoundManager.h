@@ -61,6 +61,8 @@ public:
     RE::BSSoundHandle ArrivingNearSH;
     RE::BSSoundHandle CatchSH;
 
+    void Update();
+
     void StopAllSounds();
     void PauseAllSounds();
     void ContinueAllSounds();
@@ -68,14 +70,14 @@ public:
     void PauseAllLoopingSounds();
     void ContinueAllLoopingSounds();
 
-    void PlayChargingLoopSounds(RE::NiAVObject* a_source);
-    void PlayThrowingSounds(RE::NiAVObject* a_source);
-    void PlayThrowingLoopSounds(RE::NiAVObject* a_source);
-    void PlayCallingHandSounds(RE::NiAVObject* a_source);
-    void PlayArrivingStartSounds(RE::NiAVObject* a_source);
-    void PlayArrivingLoopSounds(RE::NiAVObject* a_source);
-    void PlayArrivingNearSounds(RE::NiAVObject* a_source);
-    void PlayCatchingSounds(RE::NiAVObject* a_source);
+    void PlayChargingLoopSounds(RE::NiAVObject** a_source);
+    void PlayThrowingSounds(RE::NiAVObject** a_source);
+    void PlayThrowingLoopSounds(RE::NiAVObject** a_source);
+    void PlayCallingHandSounds(RE::NiAVObject** a_source);
+    void PlayArrivingStartSounds(RE::NiAVObject** a_source);
+    void PlayArrivingLoopSounds(RE::NiAVObject** a_source);
+    void PlayArrivingNearSounds(RE::NiAVObject** a_source);
+    void PlayCatchingSounds(RE::NiAVObject** a_source);
 
     void FadeChargingLoopSounds(const uint16_t a_durationMS = 1000u);
     void FadeThrowingLoopSounds(const uint16_t a_durationMS = 1000u);

@@ -21,6 +21,13 @@ void ProjectileHook::UpdateArrow(RE::ArrowProjectile* a_this, float a_delta)
     RelicManager::GetSingleton()->UpdateRelic(a_this, a_delta);
 #endif
 }
+void ProjectileHook::OnArrowKill(RE::ArrowProjectile* a_this)
+{
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->OnArrowKill(a_this);
+#endif
+    return _OnArrowKill(a_this);
+}
 void ProjectileHook::GetLinearVelocityArrow(RE::ArrowProjectile* a_this, RE::NiPoint3& a_outVelocity)
 {
     _GetLinearVelocityArrow(a_this, a_outVelocity);
@@ -1050,6 +1057,7 @@ void AttackHook::OnMeleeHit(RE::Actor* a_target, RE::HitData& a_this)
 inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
 {
 #ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->BeforeDamage(a_target, a_this);
 #else
     if (a_target && a_this.aggressor.get().get()) {
         if (auto kratos = Kratos::GetSingleton()) {
@@ -1087,6 +1095,7 @@ inline void AttackHook::BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
 inline void AttackHook::BeforeDamage(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
 #ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->BeforeDamage(a_this, a_AllCdPointCollector);
 #else
     if (a_this && a_AllCdPointCollector) {
         auto& rtData = a_this->GetProjectileRuntimeData();

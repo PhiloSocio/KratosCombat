@@ -15,6 +15,8 @@ public:
     using RelicIdentity = std::uint64_t;
 
     void OnEquip(RelicWeapon* a_relic);
+    void BeforeDamage(RE::Actor* a_target, RE::HitData& a_this);
+    void BeforeDamage(RE::Projectile* a_projectile, const bool a_isVictim);
 
     virtual void Update(float a_delta);
     virtual void DoAction(const ActionType a_action);  // Dispatcher: BaseActor owns the action flow

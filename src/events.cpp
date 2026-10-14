@@ -2,6 +2,7 @@
 #include "util.h"
 
 #ifdef KRATOS_COMBAT_3
+    #include "Assets.h"
     #include "RelicManager.h"
 #else
     #include "MainKratosCombat.h"
@@ -250,6 +251,9 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "attackStop"_h:
         case "IdleStop"_h:
         case "CastOKStop"_h:
+            if (Config::IsAdvancedThrowingInstalled) {
+                player->StopChargingThrow();
+            }
         //    player->OnCombatReadyStateStart();
 //            if (auto manager = Kratos::GetSingleton(); manager && manager->IsInRage())
 //                manager->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*manager->values.rageDamageAmount * 0.25f, false);

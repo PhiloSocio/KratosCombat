@@ -39,16 +39,22 @@ void Thrower::StartChargingThrow() noexcept
     if (!parent->IsValid()) return;
     _chargeDuration = 0.f;
     _isCharging = true;
-    auto rHandBone = parent->GetRHandBone();
-    auto rHandRelic = parent->GetRightHandRelic() ? dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic()) : nullptr;
-    if (auto assets = Assets::GetSingleton(); assets && rHandBone && rHandRelic) {
-        rHandRelic->GetSoundManager().PlayChargingLoopSounds(rHandBone);
+    auto& rHandBone = parent->GetRHandBone();
+    cachedRelic = parent->GetRightHandRelic() ? dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic()) : nullptr;
+    if (auto assets = Assets::GetSingleton(); assets && rHandBone && cachedRelic) {
+        cachedRelic->GetSoundManager().PlayChargingLoopSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
         parent->GetActor()->ApplyArtObject(assets->VFXeffects.handFrostBright, 5.f, nullptr, false, false, rHandBone);
     }
 }
 void Thrower::StopChargingThrow() noexcept
 {
-    _isCharging = false;
+    if (_isCharging) {
+        if (cachedRelic) {
+            cachedRelic->GetSoundManager().StopChargingLoopSounds(*g_deltaTime * 1000.f);
+            cachedRelic = nullptr;
+        }
+        _isCharging = false;
+    }
 }
 
 float Thrower::GetImpulsePower(const float a_mass) noexcept
@@ -66,14 +72,16 @@ float Thrower::GetChargeMultiplier() const noexcept
 
 void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
 {
-    if (auto throwableRelic = dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic())) {
-        if(const bool success = throwableRelic->Throw(this, a_rotationType); success) {
+    if (auto thrownWeapon = dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic())) {
+        if(const bool success = thrownWeapon->Throw(this, a_rotationType); success) {
+            StopChargingThrow();
+            lastThrownRelic = thrownWeapon;
             if (a_throwType == ThrowType::kHomingThrow) {
-                if (auto smartRelicWeapon = dynamic_cast<SmartRelicWeapon*>(throwableRelic); smartRelicWeapon) {
+                if (auto smartRelicWeapon = dynamic_cast<SmartRelicWeapon*>(thrownWeapon); smartRelicWeapon) {
                     smartRelicWeapon->SetState(RelicWeaponState::Type::kHoming);
                 }
             }
-            RelicManager::GetSingleton()->OnRelicThrow(throwableRelic->projectile, throwableRelic);
+            RelicManager::GetSingleton()->OnRelicThrow(thrownWeapon->projectile, thrownWeapon);
         } else {
             spdlog::error("throw failed");
         }

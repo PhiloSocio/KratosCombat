@@ -16,6 +16,9 @@ void RelicWeapon::OnEquip(BaseActor* a_actor) {
         lastWielder = a_actor;
         isEquipped = true;
         currentReference = nullptr;
+
+        if (const auto& weaponBone = wielder->GetWeaponBone())
+            length = weaponBone->worldBound.radius;
     } else {
         wielder = nullptr;
         isEquipped = false;

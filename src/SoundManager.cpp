@@ -1,5 +1,12 @@
 #include "SoundManager.h"
 
+void SoundManager::Update()
+{
+    if (chargingLoopStopUpdate.IsTimeToUpdate()) {StopChargingLoopSounds();}
+    if (throwingLoopStopUpdate.IsTimeToUpdate()) {StopThrowingLoopSounds();}
+    if (arrivingLoopStopUpdate.IsTimeToUpdate()) {StopArrivingLoopSounds();}
+}
+
 void SoundManager::StopAllSounds()
 {
     if (ChargingLoop0SH.IsPlaying()) ChargingLoop0SH.Stop();
@@ -64,9 +71,9 @@ void SoundManager::PauseAllLoopingSounds()
 }
 void SoundManager::ContinueAllLoopingSounds()
 {
-    if (GetState(SoundName::kChargingLoop) == State::kPaused && source) {PlayChargingLoopSounds(*source);}
-    if (GetState(SoundName::kThrowingLoop) == State::kPaused && source) {PlayThrowingLoopSounds(*source);}// soundState[SoundName::kThrowingLoop] = State::kPlaying; spdlog::debug("ThrowingLoop sounds continuing...");}
-    if (GetState(SoundName::kArrivingLoop) == State::kPaused && source) {PlayArrivingLoopSounds(*source);}// soundState[SoundName::kArrivingLoop] = State::kPlaying; spdlog::debug("ArrivingLoop sounds continuing...");}
+    if (GetState(SoundName::kChargingLoop) == State::kPaused && source) {PlayChargingLoopSounds(source);}
+    if (GetState(SoundName::kThrowingLoop) == State::kPaused && source) {PlayThrowingLoopSounds(source);}// soundState[SoundName::kThrowingLoop] = State::kPlaying; spdlog::debug("ThrowingLoop sounds continuing...");}
+    if (GetState(SoundName::kArrivingLoop) == State::kPaused && source) {PlayArrivingLoopSounds(source);}// soundState[SoundName::kArrivingLoop] = State::kPlaying; spdlog::debug("ArrivingLoop sounds continuing...");}
 }
 
 void SoundManager::FadeAllSounds(const uint16_t a_durationMS)
@@ -80,33 +87,33 @@ void SoundManager::FadeAllSounds(const uint16_t a_durationMS)
     if (CatchSH.IsPlaying()) CatchSH.FadeOutAndRelease(a_durationMS);
 }
 
-void SoundManager::PlayChargingLoopSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayChargingLoopSounds(RE::NiAVObject** a_source)
 {
-    source = &a_source;
+    source = a_source;
     if (IsSoundValid(SoundName::kChargingLoop)) {
         if (auto soundEffect = soundDefinition.chargingLoop0; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ChargingLoop0SH, a_source, 0.5f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ChargingLoop0SH, *a_source, 0.5f);
             soundState[SoundName::kChargingLoop] = State::kTriggered;
         }
     } else {
         spdlog::debug("updating the following node of the charging loop sounds.");
-        if (ThrowingLoop0SH.IsPlaying()) {
-            ThrowingLoop0SH.SetObjectToFollow(a_source);
-            ThrowingLoop0SH.Play();
+        if (ChargingLoop0SH.IsPlaying()) {
+            ChargingLoop0SH.SetObjectToFollow(*a_source);
+            ChargingLoop0SH.Play();
         }
     }
 }
-void SoundManager::PlayThrowingSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayThrowingSounds(RE::NiAVObject** a_source)
 {
 //    if (auto soundEffect = soundDefinition.throwingStart; soundEffect)
 //        ThrowingStartSH = ObjectUtil::Sound::PlaySound(soundEffect, a_source, 5.f);
 }
-void SoundManager::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayThrowingLoopSounds(RE::NiAVObject** a_source)
 {
-    source = &a_source;
+    source = a_source;
     if (IsSoundValid(SoundName::kThrowingLoop)) {
         if (auto soundEffect = soundDefinition.throwingLoop0; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, a_source, 0.5f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ThrowingLoop0SH, *a_source, 0.5f);
             soundState[SoundName::kThrowingLoop] = State::kTriggered;
         }
     //    if (auto soundEffect = soundDefinition.throwingLoop1; soundEffect) {
@@ -116,7 +123,7 @@ void SoundManager::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
     } else {
         spdlog::debug("updating the following node of the throwing loop sounds.");
         if (ThrowingLoop0SH.IsPlaying()) {
-            ThrowingLoop0SH.SetObjectToFollow(a_source);
+            ThrowingLoop0SH.SetObjectToFollow(*a_source);
             ThrowingLoop0SH.Play();
         }// if (ThrowingLoop1SH.IsPlaying()) {
     //        ThrowingLoop1SH.SetObjectToFollow(a_source);
@@ -124,44 +131,44 @@ void SoundManager::PlayThrowingLoopSounds(RE::NiAVObject* a_source)
     //    }
     }
 }
-void SoundManager::PlayCallingHandSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayCallingHandSounds(RE::NiAVObject** a_source)
 {
     if (auto soundEffect = soundDefinition.callStart; soundEffect)
-        ObjectUtil::Sound::PlaySound(soundEffect, CallStartSH, a_source, 5.f);
+        ObjectUtil::Sound::PlaySound(soundEffect, CallStartSH, *a_source, 5.f);
 }
-void SoundManager::PlayArrivingStartSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayArrivingStartSounds(RE::NiAVObject** a_source)
 {
     if (auto soundEffect = soundDefinition.arrivingStart; soundEffect && IsSoundValid(SoundName::kArrivingStart)) {
-        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingStartSH, a_source, 5.f);
+        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingStartSH, *a_source, 5.f);
         soundState[SoundName::kArrivingStart] = State::kTriggered;
     } else {
         if (ArrivingStartSH.IsPlaying())
-            ArrivingStartSH.SetObjectToFollow(a_source);
+            ArrivingStartSH.SetObjectToFollow(*a_source);
     }
 }
-void SoundManager::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayArrivingLoopSounds(RE::NiAVObject** a_source)
 {
-    source = &a_source;
+    source = a_source;
     if (IsSoundValid(SoundName::kArrivingLoop)) {
         if (auto soundEffect = soundDefinition.arrivingLoop0; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, a_source, 0.5f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop0SH, *a_source, 0.5f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
         if (auto soundEffect = soundDefinition.arrivingLoop1; soundEffect) {
-            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, a_source, 0.5f);
+            ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop1SH, *a_source, 0.5f);
             soundState[SoundName::kArrivingLoop] = State::kTriggered;
         }
     //    if (auto soundEffect = soundDefinition.arrivingLoop2; soundEffect) {
-    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, a_source, 0.5f);
+    //        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingLoop2SH, *a_source, 0.5f);
     //        soundState[SoundName::kArrivingLoop] = State::kTriggered;
     //    }
     } else {
         spdlog::debug("updating the following node of the arriving loop sounds.");
         if (ArrivingLoop0SH.IsPlaying()) {
-            ArrivingLoop0SH.SetObjectToFollow(a_source);
+            ArrivingLoop0SH.SetObjectToFollow(*a_source);
             ArrivingLoop0SH.Play();
         } if (ArrivingLoop1SH.IsPlaying()) {
-            ArrivingLoop1SH.SetObjectToFollow(a_source);
+            ArrivingLoop1SH.SetObjectToFollow(*a_source);
             ArrivingLoop1SH.Play();
         }// if (ArrivingLoop2SH.IsPlaying()) {
     //        ArrivingLoop2SH.SetObjectToFollow(a_source);
@@ -169,20 +176,20 @@ void SoundManager::PlayArrivingLoopSounds(RE::NiAVObject* a_source)
     //    }
     }
 }
-void SoundManager::PlayArrivingNearSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayArrivingNearSounds(RE::NiAVObject** a_source)
 {
     if (auto soundEffect = soundDefinition.arrivingNear; soundEffect && IsSoundValid(SoundName::kArrivingNear) ) {
-        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingNearSH, a_source, 5.f);
+        ObjectUtil::Sound::PlaySound(soundEffect, ArrivingNearSH, *a_source, 5.f);
         soundState[SoundName::kArrivingNear] = State::kTriggered;
     } else {
         if (ArrivingNearSH.IsPlaying())
-            ArrivingNearSH.SetObjectToFollow(a_source);
+            ArrivingNearSH.SetObjectToFollow(*a_source);
     }
 }
-void SoundManager::PlayCatchingSounds(RE::NiAVObject* a_source)
+void SoundManager::PlayCatchingSounds(RE::NiAVObject** a_source)
 {
     if (auto soundEffect = soundDefinition.catching; soundEffect)
-        ObjectUtil::Sound::PlaySound(soundEffect, CatchSH, a_source, 5.f);
+        ObjectUtil::Sound::PlaySound(soundEffect, CatchSH, *a_source, 5.f);
 }
 
 void SoundManager::FadeChargingLoopSounds(const uint16_t a_durationMS)

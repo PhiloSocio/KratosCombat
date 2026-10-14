@@ -43,9 +43,10 @@ public:
     enum class ProjectileState : std::uint8_t {
         kNone,
         kLaunched,
+        kHoming,
+        kTransition,
         kStucked,
-        kHavok,
-        kHoming
+        kHavok
     };
     enum class TrailColor : std::uint32_t {
         kWhite,
@@ -131,7 +132,7 @@ public:
     [[nodiscard]] RE::BGSProjectile* CreateBaseProjectile(const char* a_editorID, const char* a_name);
     [[nodiscard]] RE::TESAmmo* CreateBaseAmmo(RE::BGSProjectile* a_baseProjectile, const char* a_editorID, const char* a_name);
 
-    [[nodiscard]] SoundManager GetSoundManager() const {return soundData;}
+    [[nodiscard]] SoundManager& GetSoundManager() {return soundData;}
     [[nodiscard]] bool IsCharged(const bool a_forLastThrow = false) const {return RelicWeapon::IsCharged() ? true : (a_forLastThrow ? _isLastThrowCharged : false);}
 
     [[nodiscard]] Thrower* GetThrower() {return thrower;}

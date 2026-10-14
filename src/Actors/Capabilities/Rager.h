@@ -17,6 +17,8 @@ public:
     void StartRage(const bool a_justAnim = false);
     void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);
 
+    void GrantValorBuff() {_gettingHittedInValor = true;}
+
     float CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult = 1.f);
     void RestoreRage(const float a_value, const bool a_justRestore);
 
@@ -25,6 +27,7 @@ public:
     [[nodiscard]] bool IsWantFinishRage() const {return _isWantFinishRage;}
 
     [[nodiscard]] RageType GetRageType() const { return rageType; }
+    [[nodiscard]] RageType GetLastTriggeredRageType() const { return lastTriggeredRage; }
     [[nodiscard]] float GetRageAmount() const { return rage; }
     [[nodiscard]] float GetRageLimit() const { return rageLimit; }
     [[nodiscard]] float GetBuffAmount() const { return rageBuffAmount; }

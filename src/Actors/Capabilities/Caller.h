@@ -5,6 +5,7 @@
 
 class BaseActor;
 class RelicWeapon;
+class SmartRelicWeapon;
 
 class Caller : public ActorCapability
 {
@@ -19,7 +20,7 @@ public:
     [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kCaller; }
 
     RelicWeapon* GetCallableRelic();
-    void CallWeapon();
+    void CallWeapon(SmartRelicWeapon* a_weaponToCall = nullptr);
 
 protected:
     float alterationLevel = 0.f;

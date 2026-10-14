@@ -179,7 +179,7 @@ void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_
     if (!_translationBlended && weaponParentNode) {
         auto& localTranslation = weaponParentNode->local.translate;
         if (!_translationBlended && a_livingTime < std::max(Config::RotationBlendDuration, a_delta)) {
-            const float t = std::clamp(a_livingTime / Config::RotationBlendDuration, 0.f, 1.f);
+            const float t = std::clamp(a_livingTime * 2.f / Config::RotationBlendDuration, 0.f, 1.f);
             const auto& startLocalTranslationC = startLocalTranslation;
             localTranslation = Algebra::BlendVectors(startLocalTranslationC, targetLocalTranslation, t);
 
@@ -246,9 +246,9 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
         return result;
     }
 
-    auto rHandBone = throwerParent->GetRHandBone();
-    auto weaponBone = throwerParent->GetWeaponBone();
-    auto animObjectRBone = throwerParent->GetAnimObjectRBone();
+    auto& rHandBone = throwerParent->GetRHandBone();
+    auto& weaponBone = throwerParent->GetWeaponBone();
+    auto& animObjectRBone = throwerParent->GetAnimObjectRBone();
     if (!rHandBone ||
         !weaponBone ||
         !animObjectRBone ||
@@ -299,23 +299,26 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     ThrowableWeaponDummyProjectile->data.force = impulse / 1000.f;   // [N.s]
 
     targetLocalRotation = RotationAngle(a_rotationType);
-    targetLocalTranslation = TranslationOffset(a_rotationType, ThrowableWeaponDummyProjectile->data.collisionRadius, 0.8f);
+    targetLocalTranslation = TranslationOffset(a_rotationType, length + 10.f, Config::HitRotationZcos);
 
     if (!PreThrow()) return false;
 
-    soundData.PlayThrowingSounds(rHandBone);
+    soundData.PlayThrowingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
 
     RE::ProjectileHandle pHandle;
     if (auto pHandlePtr = RE::Projectile::Launch(&pHandle, lData); pHandlePtr && pHandlePtr->get().get()) {
         projectileHandle = *pHandlePtr;
         launchTime = AsyncUtil::GameTime::GetEngineTime();
         projectile = pHandlePtr->get().get();
+        projState = ProjectileState::kLaunched;
+
         auto& rtData = projectile->GetProjectileRuntimeData();
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
         rtData.weaponDamage *= thrower->IsThrowing(ThrowType::kPowerThrow) ? 1.5f : 1.f;
         throwableDamage = rtData.weaponDamage;
 
         _rotationBlended = false;
+        _translationBlended = false;
         _transformInitiated = false;
         _collisionInitiated = false;
 
@@ -425,10 +428,9 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
             auto& projectileRTD = projectile->GetProjectileRuntimeData();
             projectileRTD.flags.set(pFlag::kDestroyed);
             projectileModel = nullptr;
-            projectileHandle.reset();
-            projectile = nullptr;
         }
         SetThrowState(ThrowState::kThrowable);
+        projState = ProjectileState::kNone;
         auto weapIEDnew = ObjectUtil::Actor::GetInventoryEntryDataForBoundObject(wielder->GetActor(), weap);
         if (weapIEDnew && weapIEDnew->object) {
             weapIED = std::make_unique<RE::InventoryEntryData>(*weapIEDnew);
@@ -457,27 +459,22 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
     } else {
         wielder = nullptr;
         isEquipped = false;
-        SetThrowState(ThrowState::kNone);
+        if (GetThrowState() == ThrowState::kThrowable)
+            SetThrowState(ThrowState::kNone);
     }
 }
-/*
-bool ThrowableRelicWeapon::OnHit(RE::hkpAllCdPointCollector *a_AllCdPointCollector)
-{
-    const auto projBase = ThrowableWeaponDummyProjectile;
-    if (projBase && projectile) {}
-    return true;
-}
-*/
 void ThrowableRelicWeapon::PostImpact(RE::Projectile::ImpactData *a_impactData, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable)
 {
     RemoveTrail();
 //    InitiateMapMarker();
 
+    if (!a_target) return;
+
     auto missileProjectile = projectile ? projectile->As<RE::ArrowProjectile>() : nullptr;
     if (!missileProjectile) return;
+
     if (a_target->GetFormType() == RE::FormType::ActorCharacter) {
         a_impactData->impactResult = RE::ImpactResult::kBounce;
-        missileProjectile->GetMissileRuntimeData().impactResult = RE::ImpactResult::kBounce;
     //    if (impactType == ImpactType::kSharp) {
     //        spdlog::info("penetration depth: {}", a_collidable->allowedPenetrationDepth);
     //        if (auto victim = a_target->As<RE::Actor>(); victim) {
@@ -500,13 +497,25 @@ void ThrowableRelicWeapon::PostImpact(RE::Projectile::ImpactData *a_impactData, 
     } else {
         if (impactType == ImpactType::kBlunt) {
             a_impactData->impactResult = RE::ImpactResult::kBounce;
-            missileProjectile->GetMissileRuntimeData().impactResult = RE::ImpactResult::kBounce;
         }
+        if (a_impactData->impactResult < RE::ImpactResult::kStick) {
+            a_impactData->impactResult = RE::ImpactResult::kBounce;
+        }
+    }
+    switch (a_impactData->impactResult) {
+    case RE::ImpactResult::kBounce:  projState = ProjectileState::kHavok;   break;
+    case RE::ImpactResult::kStick:   projState = ProjectileState::kStucked; break;
+    case RE::ImpactResult::kDestroy: projState = ProjectileState::kNone;    break;
+    case RE::ImpactResult::kImpale:  projState = ProjectileState::kNone;    break;
+    case RE::ImpactResult::kNone:    projState = ProjectileState::kNone;    break;
+    default: ProjectileState::kNone; break;
     }
 }
 bool ThrowableRelicWeapon::GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
 {
     spdlog::debug("is penetrating?: {} default: {}", isPenetrating, a_result);
+    auto& flags = projectile->GetProjectileRuntimeData().flags;
+    flags = isPenetrating ? flags.reset(pFlag::kDestroyAfterHit) : flags.set(pFlag::kDestroyAfterHit);
     return isPenetrating;
 }
 void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
@@ -521,14 +530,16 @@ void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
 bool ThrowableRelicWeapon::InitiateTransform() noexcept
 {
     if (!_transformInitiated) {
-        if (weaponParentNode && throwerParent && throwerParent->GetWeaponBone()) {
+        if (weaponParentNode && weaponParentNode->parent && throwerParent && throwerParent->GetWeaponBone()) {
+            RE::NiUpdateData updateData;
+            updateData.flags.set(RE::NiUpdateData::Flag::kNone);
+            updateData.time = 0.f;
+            weaponParentNode->Update(updateData);
             startLocalTranslation = weaponParentNode->local.translate;
-            if (weaponParentNode->parent) {
-                startLocalRotation = weaponParentNode->parent->world.rotate.Transpose() * throwerParent->GetWeaponBone()->world.rotate;
-            } else {
-                startLocalRotation = throwerParent->GetWeaponBone()->world.rotate;
-            }
+            startLocalRotation = weaponParentNode->parent->world.rotate.Transpose() * throwerParent->GetWeaponBone()->world.rotate;
+
             weaponParentNode->local.rotate = startLocalRotation;
+            weaponParentNode->Update(updateData);
             _transformInitiated = true;
         }
     } return _transformInitiated;
@@ -543,8 +554,16 @@ void ThrowableRelicWeapon::InitiateModel() noexcept
             replacedProjectileModel = std::move(weaponModelSterilizedCopy);
 
             if (weaponParentNode && replacedProjectileModel) {
+                RE::NiUpdateData updateData;
+                updateData.flags.set(RE::NiUpdateData::Flag::kNone);
+                updateData.time = 0.f;
+                replacedProjectileModel->Update(updateData);
+
                 weaponParentNode->local = RE::NiTransform();
                 weaponParentNode->AttachChild(replacedProjectileModel.get(), false);
+
+                weaponParentNode->Update(updateData);
+
                 _modelInitiated = true;
                 spdlog::debug("projectileModel changed!");
             } else spdlog::warn("animated node or weapon model null");
@@ -590,6 +609,7 @@ bool ThrowableRelicWeapon::InitiateTrail() noexcept
 }
 void ThrowableRelicWeapon::Update()
 {
+    soundData.Update();
     if (placeWeaponUpdate.IsTimeToUpdate()) {
         currentReference->Update3DPosition(true);
         currentReference->SetMotionType(RE::hkpMotion::MotionType::kKeyframed);
@@ -620,7 +640,7 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
     if (projectileModel != projectileNode) {
         projectileModel = projectileNode->AsNode();
         if (GetThrowState() == ThrowState::kThrown) {
-            soundData.PlayThrowingLoopSounds(projectileNode);
+            soundData.PlayThrowingLoopSounds(reinterpret_cast<RE::NiAVObject**>(&projectileModel));
         }
         launchTime = AsyncUtil::GameTime::GetEngineTime();
         livingTime = 0.f;
@@ -637,9 +657,15 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
     angles = angle;
     velocity = vel;
     direction = dir;
-    if (projectileLivingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
+    livingTime = GetLivingTime();
 
+    if (projState == ProjectileState::kTransition) return;
+
+    if (projectileLivingTime > 0.3f && GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
     if (projectileLivingTime > a_delta * 2.f && !InitiateTrail()) {}
+
+    if (GetThrowState() == ThrowState::kArriving) return;
+
     if (!InitiateTransform()) {}
 
     static constexpr float drag = 0.0002f;
@@ -661,5 +687,4 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
 
     UpdateRotation(a_delta, livingTime);
     UpdateTranslation(a_delta, livingTime);
-    livingTime = GetLivingTime();
 }

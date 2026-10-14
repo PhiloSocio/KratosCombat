@@ -1,6 +1,10 @@
 #include "Leviathan.h"
+#include "util.h"
+#include "Assets.h"
+#include "settings.h"
 #include "RelicManager.h"
 #include "Actors/Capabilities/Caller.h"
+#include "SmartRelicWeapon.h"
 
 using namespace Util;
 
@@ -27,6 +31,22 @@ bool LeviathanAxe::Initialize()
     }
 
     ThrowableWeaponDummyProjectile->data.gravity = 3.21f;
+
+    const auto assets = Assets::GetSingleton();
+    soundData = 
+        SoundDefinition{
+            .chargingLoop0 = assets->soundEffects.chargeLeviLoop,
+            .throwingStart = assets->soundEffects.throwLevi,
+            .throwingLoop0 = assets->soundEffects.throwingLeviLoop0,
+            .throwingLoop1 = assets->soundEffects.throwingLeviLoop1,
+            .callStart     = assets->soundEffects.callLevi,
+            .arrivingStart = assets->soundEffects.arrivingLeviStart,
+            .arrivingLoop0 = assets->soundEffects.arrivingLeviLoop0,
+            .arrivingLoop1 = assets->soundEffects.arrivingLeviLoop1,
+            .arrivingLoop2 = assets->soundEffects.arrivingLeviLoop2,
+            .arrivingNear  = assets->soundEffects.arrivingLeviNear,
+            .catching      = assets->soundEffects.catchLevi
+        };
 
     return found;
 }

@@ -37,6 +37,7 @@ private:
     float _chargeImpulseDuration = 0.f;
 
 protected:
+    ThrowableRelicWeapon* cachedRelic = nullptr;
     ThrowableRelicWeapon* lastThrownRelic = nullptr;
 
     float archeryLevel = 80.f;

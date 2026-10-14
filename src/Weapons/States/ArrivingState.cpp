@@ -68,10 +68,10 @@ void ArrivingState::InitializeRoute()
 void ArrivingState::InitiateTransform()
 {
     if (!_transformInitiated) {
-        if (weapon.weaponParentNode && weapon.replacedProjectileModel) {
+        if (weapon.weaponParentNode && weapon.weaponParentNode->parent && weapon.replacedProjectileModel) {
             auto& replacedPMParent = weapon.weaponParentNode;
             auto& localRotation = replacedPMParent->local.rotate;
-            const auto& desiredParentWorldRotate = weapon.transformPW.rotate;
+            const auto& desiredParentWorldRotate = weapon.GetWorldTransform().rotate;
             const auto& parentWorldRotate = replacedPMParent->parent->world.rotate;
             localRotation = parentWorldRotate.Transpose() * desiredParentWorldRotate;
             startRotation = localRotation;
@@ -149,14 +149,17 @@ void ArrivingState::UpdateArrivingDirection(const bool a_initial)
             }
 
             if (!a_initial) {
-                float previousAngle; callerActor->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle); previousAngle *= TWO_PI;
+                float previousAngle = 0.f; if (callerActor->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle)) previousAngle *= TWO_PI;
+                if (previousAngle == 0.f) {
+                    spdlog::error("weird, could not get graph variable value!");
+                    return;
+                }
                 const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
                 constexpr float smoothTime = 0.369f;
                 const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
                 float smoothedArrivingRelativeAngle = previousAngle;
                 smoothedArrivingRelativeAngle += delta * alpha;
                 arrivingRelativeAngleZ = smoothedArrivingRelativeAngle;
-                
             }
             arrivingRelativeAngleZ /= TWO_PI;
         }
@@ -165,18 +168,19 @@ void ArrivingState::UpdateArrivingDirection(const bool a_initial)
 }
 void ArrivingState::UpdateArrivingRoute()
 {
-    RE::NiMatrix3 handRot   = callerHandBone->world.rotate;
-    const float alphaHandRot = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
+    const auto& handRot         = callerHandBone->world.rotate;
+    const auto& previousHandRot = callerHandBone->previousWorld.rotate;
+    const float alphaHandRot    = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
     RE::NiMatrix3 smoothedHandRot = 
         MathUtil::Algebra::QuaternionToMatrix(MathUtil::Algebra::Slerp(
-            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->previousWorld.rotate),
-            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->world.rotate), alphaHandRot));
-    RE::NiPoint3 palmDir    = smoothedHandRot * RE::NiPoint3(backVec3);
-    RE::NiPoint3 handForward= smoothedHandRot * RE::NiPoint3(upVec3);
+            MathUtil::Algebra::MatrixToQuaternion(previousHandRot),
+            MathUtil::Algebra::MatrixToQuaternion(handRot), alphaHandRot));
+    RE::NiPoint3 palmDir     = smoothedHandRot * RE::NiPoint3(backVec3);
+    RE::NiPoint3 handForward = smoothedHandRot * RE::NiPoint3(upVec3);
     palmDir.Unitize();
     handForward.Unitize();
 
-    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.25f);
+    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.27f);
 
     RE::NiPoint3 handVelocity = (callerHandBone->world.translate - callerHandBone->previousWorld.translate) / *g_deltaTimeRealTime;
     const float predictionTime = std::clamp(*g_deltaTimeRealTime, 0.0f, 0.1f);
@@ -210,8 +214,8 @@ void ArrivingState::UpdateArrivingRoute()
     const float targetDistance = closestSample.distanceFromStart + lookAheadDistance;
 
     int targetIndex = arrivingRouteClosestIndex;
-    while (targetIndex + 1 <
-        static_cast<int>(arrivingRoute.samples.size()) &&
+    while (
+        targetIndex + 1 < (int)arrivingRoute.samples.size() &&
         arrivingRoute.samples[targetIndex].distanceFromStart < targetDistance)
     {
         targetIndex++;
@@ -234,7 +238,8 @@ void ArrivingState::Enter()
         startingTime = AsyncUtil::GameTime::GetEngineTime();
         const bool doBlend = 
             weapon.projState == ProjectileState::kNone ||
-            weapon.projState == ProjectileState::kLaunched;
+            weapon.projState == ProjectileState::kLaunched ||
+            weapon.projState == ProjectileState::kHoming;
         smoothedDesiredVelocity = doBlend ? weapon.velocity : linearArrivingDir * speed;
     }
 }
@@ -254,6 +259,17 @@ Status ArrivingState::Update(const float a_delta)
 
     auto proj = weapon.projectile;
     if (!proj) return Status::kCancelled;
+
+    if (weapon.projState == ProjectileState::kTransition) {
+        UpdateArrivingDirection();
+        return Status::kRunning;
+    } else if (weapon.projState == ProjectileState::kNone) {
+        weapon.projState = ProjectileState::kHoming;
+        InitializeCallerData();
+        UpdateTargets();
+        InitializeRoute();
+    }
+
     auto& rtData = proj->GetProjectileRuntimeData();
     auto& vel = rtData.linearVelocity;
 
@@ -272,8 +288,8 @@ Status ArrivingState::Update(const float a_delta)
         weapon.SetThrowState(ThrowState::kArriving);
 
         if (!isCatchable) {
-            weapon.GetSoundManager().PlayArrivingStartSounds(model);
-            weapon.GetSoundManager().PlayArrivingLoopSounds(model);
+            weapon.GetSoundManager().PlayArrivingStartSounds(reinterpret_cast<RE::NiAVObject**>(&weapon.projectileModel));
+            weapon.GetSoundManager().PlayArrivingLoopSounds(reinterpret_cast<RE::NiAVObject**>(&weapon.projectileModel));
         }
     }
     if (isCatchable) {
@@ -311,7 +327,7 @@ Status ArrivingState::Update(const float a_delta)
         weapon.GetSoundManager().FadeArrivingLoopSounds(fadeDuration);
         weapon.GetSoundManager().FadeCallingHandSounds(fadeDuration);
     } else if (isNear) {
-        weapon.GetSoundManager().PlayArrivingNearSounds(model);
+        weapon.GetSoundManager().PlayArrivingNearSounds(reinterpret_cast<RE::NiAVObject**>(&weapon.projectileModel));
     }
 //    spdlog::debug(
 //        "AFTER ACCEL speed={:.1f}, accel={:.1f}, L={:.1f}, T={:.3f}",

@@ -1910,7 +1910,11 @@ void LeviathanAxe::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
             }
 
             if (!a_initial) {
-                float previousAngle; caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle); previousAngle *= TWO_PI;
+                float previousAngle = 0.f; if (caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle)) previousAngle *= TWO_PI;
+                if (previousAngle == 0.f) {
+                    spdlog::error("weird, could not get graph variable value!");
+                    return;
+                }
                 const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
                 constexpr float smoothTime = 0.369f;
                 const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
@@ -3628,7 +3632,11 @@ void Mjolnir::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
             }
 
             if (!a_initial) {
-                float previousAngle; caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle); previousAngle *= TWO_PI;
+                float previousAngle = 0.f; if (caller->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle)) previousAngle *= TWO_PI;
+                if (previousAngle == 0.f) {
+                    spdlog::error("weird, could not get graph variable value!");
+                    return;
+                }
                 const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
                 constexpr float smoothTime = 0.369f;
                 const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
