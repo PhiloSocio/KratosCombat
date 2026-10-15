@@ -10,6 +10,8 @@ class SmartRelicWeapon;
 class Caller : public ActorCapability
 {
 public:
+    inline static constexpr auto kType = ActorType::kCaller;
+
     Caller();
     virtual ~Caller() = default;
 
@@ -17,7 +19,7 @@ public:
 
     void HandleAction(const ActionType a_action) override;
 
-    [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kCaller; }
+    [[nodiscard]] ActorType GetType() const override { return ActorType::kCaller; }
 
     RelicWeapon* GetCallableRelic();
     void CallWeapon(SmartRelicWeapon* a_weaponToCall = nullptr);

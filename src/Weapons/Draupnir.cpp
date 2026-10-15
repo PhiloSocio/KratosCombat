@@ -1,4 +1,5 @@
 #include "Draupnir.h"
+#include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
 
 bool Draupnir::Initialize()

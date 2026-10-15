@@ -3,31 +3,36 @@
 #include "events.h"
 #include "Assets.h"
 #include "hook.h"
+#include "DebugUtil.h"
 
 #ifdef KRATOS_COMBAT_3
-    #include "RelicManager.h"
 
-    static constexpr std::uint32_t kSerializationUniqueID = 'KRTS';
+#include "RelicManager.h"
 
-    void OnSerializationSave(SKSE::SerializationInterface* a_intfc)
-    {
-        spdlog::info("Serialization: save");
-        RelicManager::GetSingleton()->OnSaveGame(a_intfc);
-    }
+static constexpr std::uint32_t kSerializationUniqueID = 'KRTS';
 
-    void OnSerializationLoad(SKSE::SerializationInterface* a_intfc)
-    {
-        spdlog::info("Serialization: load");
-        RelicManager::GetSingleton()->OnPostLoadGame(a_intfc);
-    }
+void OnSerializationSave(SKSE::SerializationInterface* a_intfc)
+{
+    spdlog::info("Serialization: save");
+    RelicManager::GetSingleton()->OnSaveGame(a_intfc);
+}
 
-    void OnSerializationRevert(SKSE::SerializationInterface* a_intfc)
-    {
-        spdlog::info("Serialization: revert");
-        RelicManager::GetSingleton()->OnRevert();
-    }
+void OnSerializationLoad(SKSE::SerializationInterface* a_intfc)
+{
+    spdlog::info("Serialization: load");
+    RelicManager::GetSingleton()->OnPostLoadGame(a_intfc);
+}
+
+void OnSerializationRevert(SKSE::SerializationInterface* a_intfc)
+{
+    spdlog::info("Serialization: revert");
+    RelicManager::GetSingleton()->OnRevert();
+}
+
 #else
-    #include "MainKratosCombat.h"
+
+#include "MainKratosCombat.h"
+
 #endif
 
 inline bool UpdateConfig() 
@@ -55,6 +60,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
     switch (a_msg->type) {
     case SKSE::MessagingInterface::kDataLoaded:
+        DebugRenderer::Install();
         Papyrus::Register();
         if (UpdateConfig() && Assets::GetSingleton()->Initialize())
             InstallHooks();

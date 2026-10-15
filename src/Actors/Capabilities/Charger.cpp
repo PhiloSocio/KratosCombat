@@ -1,5 +1,6 @@
 #include "Charger.h"
 #include "Settings.h"
+#include "Actors/BaseActor.h"
 #include "Weapons/RelicWeapon.h"
 
 Charger::Charger()

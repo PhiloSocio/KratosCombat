@@ -1,5 +1,6 @@
 #include "ArrivingState.h"
 #include "Weapons/SmartRelicWeapon.h"
+#include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Caller.h"
 
 ArrivingState::ArrivingState(SmartRelicWeapon& a_weapon, const RE::NiPoint3& a_startPosition, RE::NiAVObject** a_targetBone)

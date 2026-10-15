@@ -6,13 +6,15 @@
 class Rager : public ActorCapability
 {
 public:
+    inline static constexpr auto kType = ActorType::kRager;
+
     Rager();
     virtual ~Rager() = default;
 
     void Update(float a_delta) override;
     void HandleAction(const ActionType a_action) override;
 
-    [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kRager; }
+    [[nodiscard]] ActorType GetType() const override { return ActorType::kRager; }
 
     void StartRage(const bool a_justAnim = false);
     void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);

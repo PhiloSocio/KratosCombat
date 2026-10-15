@@ -11,7 +11,7 @@ void Caller::CallWeapon(SmartRelicWeapon* a_weaponToCall)
     if (parent && parent->IsValid()) {
         if (a_weaponToCall && a_weaponToCall->Call(this, false)) {
             RelicManager::GetSingleton()->OnRelicThrow(a_weaponToCall->projectile, a_weaponToCall);
-        } else if (auto weaponToCall = dynamic_cast<SmartRelicWeapon*>(_weaponToCall)) {
+        } else if (auto weaponToCall = _weaponToCall ? _weaponToCall->As<SmartRelicWeapon>() : nullptr) {
             if (auto wielder = weaponToCall->GetWielder(); wielder && wielder->GetActor() != parent->GetActor()) {
             //    if (weaponToCall->Call(this, false, 1.618f)) {
             //        weaponToCall->currentReference = wielder->GetActor()->DropObject(weaponToCall->GetWeapon(), nullptr, 1, nullptr, nullptr).get().get();

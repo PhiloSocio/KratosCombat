@@ -1,4 +1,5 @@
 #include "HomingState.h"
+#include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
 #include "Util.h"
 

@@ -8,6 +8,8 @@ class ThrowableRelicWeapon;
 class Thrower : public ActorCapability
 {
 public:
+    inline static constexpr auto kType = ActorType::kThrower;
+
     Thrower();
     virtual ~Thrower() = default;
 
@@ -15,7 +17,7 @@ public:
 
     void HandleAction(const ActionType a_action) override;
 
-    [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kThrower; }
+    [[nodiscard]] ActorType GetType() const override { return ActorType::kThrower; }
 
     void ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType);
 

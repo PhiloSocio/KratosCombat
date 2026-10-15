@@ -40,7 +40,7 @@ void Thrower::StartChargingThrow() noexcept
     _chargeDuration = 0.f;
     _isCharging = true;
     auto& rHandBone = parent->GetRHandBone();
-    cachedRelic = parent->GetRightHandRelic() ? dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic()) : nullptr;
+    cachedRelic = parent->GetRightHandRelic() ? parent->GetRightHandRelic()->As<ThrowableRelicWeapon>() : nullptr;
     if (auto assets = Assets::GetSingleton(); assets && rHandBone && cachedRelic) {
         cachedRelic->GetSoundManager().PlayChargingLoopSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
         parent->GetActor()->ApplyArtObject(assets->VFXeffects.handFrostBright, 5.f, nullptr, false, false, rHandBone);
@@ -50,7 +50,7 @@ void Thrower::StopChargingThrow() noexcept
 {
     if (_isCharging) {
         if (cachedRelic) {
-            cachedRelic->GetSoundManager().StopChargingLoopSounds(*g_deltaTime * 1000.f);
+            cachedRelic->GetSoundManager().StopChargingLoopSounds(*g_deltaTimeRealTime * 1200.f);
             cachedRelic = nullptr;
         }
         _isCharging = false;
@@ -72,12 +72,13 @@ float Thrower::GetChargeMultiplier() const noexcept
 
 void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_throwType)
 {
-    if (auto thrownWeapon = dynamic_cast<ThrowableRelicWeapon*>(parent->GetRightHandRelic())) {
+    auto rRelic = parent->GetRightHandRelic();
+    if (auto thrownWeapon = rRelic ? rRelic->As<ThrowableRelicWeapon>() : nullptr) {
         if(const bool success = thrownWeapon->Throw(this, a_rotationType); success) {
             StopChargingThrow();
             lastThrownRelic = thrownWeapon;
             if (a_throwType == ThrowType::kHomingThrow) {
-                if (auto smartRelicWeapon = dynamic_cast<SmartRelicWeapon*>(thrownWeapon); smartRelicWeapon) {
+                if (auto smartRelicWeapon = thrownWeapon->As<SmartRelicWeapon>(); smartRelicWeapon) {
                     smartRelicWeapon->SetState(RelicWeaponState::Type::kHoming);
                 }
             }

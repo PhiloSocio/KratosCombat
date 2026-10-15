@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Types.h"
-#include "Actors/BaseActor.h"
 
 using RelicIdentity = std::uint64_t;
 
@@ -53,6 +52,19 @@ public:
     [[nodiscard]] BaseActor* GetWielder() const {return wielder;}
     [[nodiscard]] BaseActor* GetLastWielder() const {return lastWielder;}
     [[nodiscard]] bool IsEquipped() const {return isEquipped;}
+
+    template <typename T>
+    [[nodiscard]] T* As() noexcept
+    {
+        return const_cast<T*>(static_cast<const RelicWeapon*>(this)->As<T>());
+    }
+    template <typename T>
+    [[nodiscard]] const T* As() const noexcept
+    {
+        static_assert(std::is_base_of_v<RelicWeapon, T>);
+        static_assert(requires { T::kRequiredAbility; });
+        return HasAbility(T::kRequiredAbility) ? static_cast<const T*>(this) : nullptr;
+    }
 
     RE::SpellItem* SpellChargeCD    = nullptr;
     RE::EnchantmentItem* EnchCharge = nullptr;

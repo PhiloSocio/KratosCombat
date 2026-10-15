@@ -8,16 +8,18 @@ class Caller;
 class SmartRelicWeapon : public ThrowableRelicWeapon
 {
 public:
+    static constexpr RelicAbility kRequiredAbility = RelicAbility::kSmart;
+
     ~SmartRelicWeapon() override = default;
     explicit SmartRelicWeapon(RE::TESBoundObject* a_object);
 
     Caller* caller = nullptr;
     BaseActor* callerParent = nullptr;
 
-    std::vector<RE::ActorHandle>    lastHitActors;
-    std::vector<RE::TESObjectREFR*> lastHitForms;
+    std::vector<RE::ActorHandle>     lastHitActors;
+    std::vector<RE::ObjectRefHandle> lastHitForms;
     RE::NiPointer<RE::NiNode> stuckedBone;
-    RE::NiPointer<RE::Actor> stuckedActor;
+    RE::ActorHandle           stuckedActor;
 
     bool Initialize() override;
     void Update() override;

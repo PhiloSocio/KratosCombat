@@ -1,10 +1,10 @@
 #include "Leviathan.h"
-#include "util.h"
+#include "SmartRelicWeapon.h"
+#include "Actors/Capabilities/Caller.h"
+#include "RelicManager.h"
 #include "Assets.h"
 #include "settings.h"
-#include "RelicManager.h"
-#include "Actors/Capabilities/Caller.h"
-#include "SmartRelicWeapon.h"
+#include "util.h"
 
 using namespace Util;
 
@@ -125,8 +125,8 @@ void LeviathanAxe::PostThrow()
         isAxeCalled = false;
         isAxeThrowed = true;
         SetThrowState(ThrowState::kThrown);
-        if (stuckedBone)   stuckedBone    = nullptr;
-        if (stuckedActor)  stuckedActor   = nullptr;
+        if (stuckedBone)   stuckedBone.reset();
+        if (stuckedActor)  stuckedActor.reset();
         lastHitActors.clear();
         lastHitForms.clear();
     }

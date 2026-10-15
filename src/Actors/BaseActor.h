@@ -24,12 +24,23 @@ public:
     void AddCapability(ActorCapabilityPtr a_capability);
     [[nodiscard]] ActorCapability* GetCapability(ActorType a_type);
     [[nodiscard]] const std::vector<ActorCapabilityPtr>& GetCapabilities() const { return actorCapabilities; }
+
     template <typename T>
-    [[nodiscard]] T* GetCapabilityAs()
+    [[nodiscard]] T* GetCapabilityAs() noexcept
     {
         for (auto& cap : actorCapabilities) {
-            if (auto casted = dynamic_cast<T*>(cap.get())) {
-                return casted;
+            if (auto ret = cap ? cap->As<T>() : nullptr) {
+                return ret;
+            }
+        }
+        return nullptr;
+    }
+    template <typename T>
+    [[nodiscard]] const T* GetCapabilityAs() const noexcept
+    {
+        for (const auto& cap : actorCapabilities) {
+            if (auto ret = cap ? cap->As<T>() : nullptr) {
+                return ret;
             }
         }
         return nullptr;

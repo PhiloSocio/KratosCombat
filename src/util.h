@@ -634,14 +634,39 @@ namespace MathUtil
 
     struct Algebra
     {
-        [[nodiscard]] inline static NiPoint3 MatrixToVector3(const RE::hkVector4& a_matrix) {
+        [[nodiscard]] inline static RE::NiTransform hkTransformToNiTransform(const RE::hkTransform& a_hkTransform) noexcept
+        {
+            RE::NiTransform result{};
+
+            result.rotate.entry[0][0] = a_hkTransform.rotation.col0.quad.m128_f32[0];
+            result.rotate.entry[1][0] = a_hkTransform.rotation.col0.quad.m128_f32[1];
+            result.rotate.entry[2][0] = a_hkTransform.rotation.col0.quad.m128_f32[2];
+
+            result.rotate.entry[0][1] = a_hkTransform.rotation.col1.quad.m128_f32[0];
+            result.rotate.entry[1][1] = a_hkTransform.rotation.col1.quad.m128_f32[1];
+            result.rotate.entry[2][1] = a_hkTransform.rotation.col1.quad.m128_f32[2];
+
+            result.rotate.entry[0][2] = a_hkTransform.rotation.col2.quad.m128_f32[0];
+            result.rotate.entry[1][2] = a_hkTransform.rotation.col2.quad.m128_f32[1];
+            result.rotate.entry[2][2] = a_hkTransform.rotation.col2.quad.m128_f32[2];
+
+            result.translate.x = a_hkTransform.translation.quad.m128_f32[0];
+            result.translate.y = a_hkTransform.translation.quad.m128_f32[1];
+            result.translate.z = a_hkTransform.translation.quad.m128_f32[2];
+
+            result.scale = 1.0f;
+
+            return result;
+        }
+        [[nodiscard]] inline static RE::NiPoint3 MatrixToVector3(const RE::hkVector4& a_matrix)
+        {
             return RE::NiPoint3(
                     a_matrix.quad.m128_f32[0],
                     a_matrix.quad.m128_f32[1],
                     a_matrix.quad.m128_f32[2]
                 );
         }
-        [[nodiscard]] inline static NiPoint3 BlendVectors(const NiPoint3& a, const NiPoint3& b, float a_to_b_ratio, const bool a_normalize = false)
+        [[nodiscard]] inline static RE::NiPoint3 BlendVectors(const RE::NiPoint3& a, const RE::NiPoint3& b, float a_to_b_ratio, const bool a_normalize = false)
         {
             a_to_b_ratio = std::clamp(a_to_b_ratio, 0.0f, 1.0f);
 
@@ -705,7 +730,8 @@ namespace MathUtil
 
             return m;
         }
-        [[nodiscard]] inline static RE::NiQuaternion MatrixToQuaternion(const RE::NiMatrix3& m) {
+        [[nodiscard]] inline static RE::NiQuaternion MatrixToQuaternion(const RE::NiMatrix3& m)
+        {
             RE::NiQuaternion q;
             float trace = m.entry[0][0] + m.entry[1][1] + m.entry[2][2];
 
@@ -780,7 +806,8 @@ namespace MathUtil
                 a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w                  // z
             };
         }
-        [[nodiscard]] inline static RE::NiQuaternion Slerp(const RE::NiQuaternion& a, const RE::NiQuaternion& b, const float t) {
+        [[nodiscard]] inline static RE::NiQuaternion Slerp(const RE::NiQuaternion& a, const RE::NiQuaternion& b, const float t)
+        {
             float dot = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z;
             RE::NiQuaternion qb = b;
             if (dot < 0.0f) {
@@ -816,7 +843,8 @@ namespace MathUtil
             return result;
         }
 
-        [[nodiscard]] inline static float ParabolicClamp(const float t, const float minVal, const float maxVal) {
+        [[nodiscard]] inline static float ParabolicClamp(const float t, const float minVal, const float maxVal)
+        {
             float factor = 4.0f * t * (1.0f - t); // t = 0 and t = 1 min, t = 0.5 max
             return minVal + (maxVal - minVal) * factor;
         }
@@ -1176,63 +1204,67 @@ namespace ObjectUtil
     {
         struct Collision
         {
-            
-            [[nodiscard]] static RE::bhkRigidBody* GetRigidBody(RE::NiAVObject* a_object)
+            [[nodiscard]] static RE::bhkRigidBody* GetRigidBody(const RE::NiAVObject* a_object)
             {
-                auto collisionObject = a_object->GetCollisionObject();
-                if (collisionObject) {
+                if (!a_object) return nullptr;
+
+                if (auto collisionObject = a_object->GetCollisionObject()) {
                     return collisionObject->GetRigidBody();
                 }
                 return nullptr;
             }
+            static void ReplaceRigidBody(const RE::NiAVObject* a_object, const RE::bhkRigidBody* a_rigidBody)
+            {
+                if (auto rigidBody = GetRigidBody(a_object); rigidBody && a_rigidBody) {
+                    *rigidBody = *a_rigidBody;
+                }
+            }
+            static void RemoveCollisionObject(RE::NiAVObject* a_object)
+            {
+                if (a_object) {
+                    DisableCollision(a_object);
+                    a_object->collisionObject.reset();
+                }
+            }
+            static void DisableCollision(RE::NiAVObject* a_object)
+            {
+                if (a_object) {
+                    a_object->RemoveExtraData("BSX");
+                    a_object->RemoveExtraData("BSXFlags");
+                    if (a_object->GetCollisionObject())
+                        a_object->GetCollisionObject()->flags.reset(RE::bhkCollisionObject::Flag::kActive);
+                }
+            }
+            static void ReplaceCollisionObject(RE::NiAVObject* a_object, RE::NiPointer<RE::NiCollisionObject>& a_collisionObject)
+            {
+                if (a_object) {
+                    if (a_object->GetCollisionObject())
+                        a_object->collisionObject = a_collisionObject;
+                }
+            }
             static bool ToggleMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
             {
                 constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flags::kNoCollision);
-                        if (root && world) {
-                            
-                                RE::BSWriteLockGuard locker(world->worldLock);
+                if (root && world) {
+                    
+                        RE::BSWriteLockGuard locker(world->worldLock);
 
-                                RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
-                                    if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
-                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo.filter;
-                                        if (!collisionState) {
-                                            filter |= no_collision_flag;
-                                        } else {
-                                            filter &= ~no_collision_flag;
-                                        }
-                                    }
-                                    return RE::BSVisit::BSVisitControl::kContinue;
-                                });
-                        }
-                        else 
-                        {
-                            return false;
-                        }
-                return true;
-            }
-            static bool RemoveMeshCollision(RE::NiAVObject* root,RE::bhkWorld* world, bool collisionState)
-            {
-                constexpr auto no_collision_flag = static_cast<std::uint32_t>(RE::CFilter::Flags::kNoCollision);
-                        if (root && world) {
-                            
-                                RE::BSWriteLockGuard locker(world->worldLock);
-
-                                RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
-                                    if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
-                                        auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo.filter;
-                                        if (!collisionState) {
-                                            filter |= no_collision_flag;
-                                        } else {
-                                            filter &= ~no_collision_flag;
-                                        }
-                                    }
-                                    return RE::BSVisit::BSVisitControl::kContinue;
-                                });
-                        }
-                        else 
-                        {
-                            return false;
-                        }
+                        RE::BSVisit::TraverseScenegraphCollision(root, [&](RE::bhkNiCollisionObject* a_col) -> RE::BSVisit::BSVisitControl {
+                            if (auto hkpBody = a_col->body ? static_cast<RE::hkpWorldObject*>(a_col->body->referencedObject.get()) : nullptr; hkpBody) {
+                                auto& filter = hkpBody->collidable.broadPhaseHandle.collisionFilterInfo.filter;
+                                if (!collisionState) {
+                                    filter |= no_collision_flag;
+                                } else {
+                                    filter &= ~no_collision_flag;
+                                }
+                            }
+                            return RE::BSVisit::BSVisitControl::kContinue;
+                        });
+                }
+                else 
+                {
+                    return false;
+                }
                 return true;
             }
         };
@@ -1264,16 +1296,42 @@ namespace ObjectUtil
             node->local = invParent * world;
         }
 
-        [[nodiscard]] inline static RE::hkpRigidBody* GetHKPRigidBody(RE::NiAVObject* a_object)
+        [[nodiscard]] inline static RE::bhkRigidBody* GetBHKRigidBody(const RE::NiAVObject* a_object, const bool a_checkParents = false)
+        {
+            if (!a_object)
+                return nullptr;
+
+            RE::bhkRigidBody* rigidBody = nullptr;
+            if (!a_checkParents) {
+                if (!a_object->collisionObject)
+                    return rigidBody;
+
+                auto collisionObject = skyrim_cast<RE::bhkCollisionObject*>(a_object->collisionObject.get());
+
+                if (!collisionObject)
+                    return rigidBody;
+
+                rigidBody = collisionObject->GetRigidBody();
+            } else {
+                for (const RE::NiAVObject* current = a_object; current; current = current->parent) {
+                    if (rigidBody = GetBHKRigidBody(current, false))
+                        break;
+                    else
+                        continue;
+                }
+            }
+            return rigidBody;
+        }
+        [[nodiscard]] inline static RE::hkpRigidBody* GetHKPRigidBody(const RE::NiAVObject* a_object)
         {
             if (!a_object)
                 return {};
 
-            for (RE::NiAVObject* current = a_object; current; current = current->parent) {
+            for (const RE::NiAVObject* current = a_object; current; current = current->parent) {
                 if (!current->collisionObject)
                     continue;
 
-                auto* collisionObject = Collision::GetRigidBody(current);
+                auto collisionObject = Collision::GetRigidBody(current);
 
                 if (!collisionObject)
                     continue;
@@ -1324,69 +1382,19 @@ namespace ObjectUtil
 
             return false;
         }
-        [[nodiscard]] inline static RE::NiTransform GetHavokBHKRigidBodyWorldTransform(RE::NiAVObject* a_object)
+        [[nodiscard]] inline static RE::NiTransform GetHavokBHKRigidBodyWorldTransform(const RE::NiAVObject* a_object, const bool a_checkParents = false)
         {
-            if (!a_object)
+            auto rigidBody = GetBHKRigidBody(a_object, a_checkParents);
+
+            if (!rigidBody)
                 return {};
 
-            for (RE::NiAVObject* current = a_object; current; current = current->parent) {
-                if (!current->collisionObject)
-                    continue;
+            RE::hkTransform hkTransform;
+            rigidBody->GetTransform(hkTransform);
 
-                auto* collisionObject =
-                    skyrim_cast<RE::bhkCollisionObject*>(current->collisionObject.get());
-
-                if (!collisionObject)
-                    continue;
-
-                auto* rigidBody = collisionObject->GetRigidBody();
-
-                if (!rigidBody)
-                    continue;
-
-                RE::hkTransform hkTransform;
-                rigidBody->GetTransform(hkTransform);
-
-                RE::NiTransform result{};
-
-                result.rotate.entry[0][0] =
-                    hkTransform.rotation.col0.quad.m128_f32[0];
-                result.rotate.entry[1][0] =
-                    hkTransform.rotation.col0.quad.m128_f32[1];
-                result.rotate.entry[2][0] =
-                    hkTransform.rotation.col0.quad.m128_f32[2];
-
-                result.rotate.entry[0][1] =
-                    hkTransform.rotation.col1.quad.m128_f32[0];
-                result.rotate.entry[1][1] =
-                    hkTransform.rotation.col1.quad.m128_f32[1];
-                result.rotate.entry[2][1] =
-                    hkTransform.rotation.col1.quad.m128_f32[2];
-
-                result.rotate.entry[0][2] =
-                    hkTransform.rotation.col2.quad.m128_f32[0];
-                result.rotate.entry[1][2] =
-                    hkTransform.rotation.col2.quad.m128_f32[1];
-                result.rotate.entry[2][2] =
-                    hkTransform.rotation.col2.quad.m128_f32[2];
-
-                result.translate.x =
-                    hkTransform.translation.quad.m128_f32[0];
-
-                result.translate.y =
-                    hkTransform.translation.quad.m128_f32[1];
-
-                result.translate.z =
-                    hkTransform.translation.quad.m128_f32[2];
-
-                result.scale = 1.0f;
-
-                return result;
-            }
-
-            return {};
+            return MathUtil::Algebra::hkTransformToNiTransform(hkTransform);
         }
-        [[nodiscard]] inline static RE::NiTransform GetHavokHKPRigidBodyWorldTransform(RE::NiAVObject* a_object)
+        [[nodiscard]] inline static RE::NiTransform GetHavokHKPRigidBodyWorldTransform(const RE::NiAVObject* a_object)
         {
             if (auto* rigidBody = GetHKPRigidBody(a_object); rigidBody) {
                 RE::NiTransform niTransform;
@@ -1965,8 +1973,8 @@ namespace ObjectUtil
                 auto audioManager = RE::BSAudioManager::GetSingleton();
                 if (audioManager)
                     audioManager->GetSoundHandle(handle, a_sound->soundDescriptor);
-                handle.SetObjectToFollow(a_source);
-                handle.SetVolume(a_volume);
+                    handle.SetObjectToFollow(a_source);
+                    handle.SetVolume(a_volume);
                 if (a_fadeInDuration != 0u)
                     handle.FadeInPlay(a_fadeInDuration);
                 else

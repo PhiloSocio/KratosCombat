@@ -1,4 +1,5 @@
 #include "RelicWeapon.h"
+#include "Actors/BaseActor.h"
 
 RelicWeapon::~RelicWeapon()
 {

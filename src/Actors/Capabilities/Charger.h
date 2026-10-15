@@ -6,6 +6,8 @@
 class Charger : public ActorCapability
 {
 public:
+    inline static constexpr auto kType = ActorType::kCharger;
+
     Charger();
     virtual ~Charger() = default;
 
@@ -13,7 +15,7 @@ public:
 
     void HandleAction(const ActionType a_action) override;
 
-    [[nodiscard]] ActorType GetCapabilityType() const override { return ActorType::kCharger; }
+    [[nodiscard]] ActorType GetType() const override { return ActorType::kCharger; }
 
     void StartWeaponCharging();
     void StopWeaponCharging();

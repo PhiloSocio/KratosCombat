@@ -157,7 +157,7 @@ void BaseActor::AddCapability(ActorCapabilityPtr a_capability)
 ActorCapability* BaseActor::GetCapability(ActorType a_type)
 {
     for (auto& cap : actorCapabilities) {
-        if (cap && cap->GetCapabilityType() == a_type) {
+        if (cap && cap->GetType() == a_type) {
             return cap.get();
         }
     }

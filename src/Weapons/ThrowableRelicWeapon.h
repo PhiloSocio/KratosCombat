@@ -9,6 +9,8 @@ class Thrower;
 class ThrowableRelicWeapon : public RelicWeapon
 {
 public:
+    static constexpr RelicAbility kRequiredAbility = RelicAbility::kThrowable;
+
     ~ThrowableRelicWeapon() override = default;
     explicit ThrowableRelicWeapon(RE::TESBoundObject* a_object);
 
@@ -24,9 +26,24 @@ public:
     static constexpr RE::NiPoint3 TranslationOffset(RotationType a_type, const float a_length, const float a_cosZ = Config::HitRotationZcos) noexcept
     {
         switch (a_type) {
-        case RotationType::kNone:         return RE::NiPoint3(0.f, -a_length, 0.f);
-        case RotationType::kSpinLateral:  return RE::NiPoint3(0.f, -a_length * a_cosZ, 0.f);
-        case RotationType::kSpinVertical: return RE::NiPoint3(0.f, -a_length * a_cosZ, 0.f);
+        case RotationType::kNone:
+            return RE::NiPoint3(
+                0.f,
+                -a_length,
+                0.f
+            );
+        case RotationType::kSpinLateral:
+            return RE::NiPoint3(
+                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ),
+                -a_length * a_cosZ,
+                0.f
+            );
+        case RotationType::kSpinVertical: 
+            return RE::NiPoint3(
+                0.f,
+                -a_length * a_cosZ,
+                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ)
+            );
         }
         return RE::NiPoint3(0.f, 20.f, 0.f);
     }
@@ -82,7 +99,7 @@ public:
 
     RE::ProjectileHandle    projectileHandle;
     RE::Projectile*         projectile = nullptr;
-    RE::NiNode*             projectileModel = nullptr;
+    RE::BSFadeNode*         projectileModel = nullptr;
     RE::NiNode*             weaponParentNode = nullptr;
     RE::NiPointer<RE::NiNode>   weaponModelCopy;
     RE::NiPointer<RE::NiNode>   weaponModelSterilizedCopy;

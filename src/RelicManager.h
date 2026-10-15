@@ -246,7 +246,7 @@ public:
                 if (mcmSelectedRelic == RelicType::kNone) {
                     if (it != activeRelics.end()) {
                         if (auto rRelic = it->second ? it->second.get() : nullptr) {
-                            if (auto thrownWeapon = rRelic ? dynamic_cast<ThrowableRelicWeapon*>(rRelic) : nullptr) {
+                            if (auto thrownWeapon = rRelic ? rRelic->As<ThrowableRelicWeapon>() : nullptr) {
                                 if (thrownWeapon->projectile) {
                                     thrownRelics.erase(thrownWeapon->projectile);
                                     auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
@@ -272,7 +272,7 @@ public:
                         spdlog::info("{} is already registered by type {}", rWeapon->GetFullName(), (uint8_t)mcmSelectedRelic);
                         return;
                     }
-                    if (auto thrownWeapon = it->second ? dynamic_cast<ThrowableRelicWeapon*>(it->second.get()) : nullptr) {
+                    if (auto thrownWeapon = it->second ? it->second.get()->As<ThrowableRelicWeapon>() : nullptr) {
                         if (thrownWeapon->projectile) {
                             thrownRelics.erase(thrownWeapon->projectile);
                             auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
@@ -326,7 +326,7 @@ public:
             }
             activeRelic->OnEquip(activeActor);
 
-            if (auto thrownWeapon = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
+            if (auto thrownWeapon = activeRelic->As<ThrowableRelicWeapon>()) {
                 if (thrownWeapon->projectile) {
                     thrownRelics.erase(thrownWeapon->projectile);
                     auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
@@ -396,7 +396,7 @@ public:
                 if (std::find(knownRelics.rbegin(), knownRelics.rend(), relicID) == knownRelics.rend()) {
                     knownRelics.emplace_back(relicID);
                 }
-                if (auto thrownWeapon = dynamic_cast<ThrowableRelicWeapon*>(activeRelic)) {
+                if (auto thrownWeapon = activeRelic->As<ThrowableRelicWeapon>()) {
                     if (thrownWeapon->projectile) {
                         thrownRelics.erase(thrownWeapon->projectile);
                         auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
