@@ -5,7 +5,6 @@ class HomingState : public ThrowableWeaponState
 {
 public:
     ~HomingState() override = default;
-
     HomingState(
         SmartRelicWeapon& a_weapon,
         uint8_t a_hitCount = 2u,
@@ -33,16 +32,15 @@ private:
     void InitializeTargets();
 
 public:
-    float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - startingTime;}
-    //  give an origin point if you want to get nearest target
-    RE::Actor* GetNextTarget(RE::NiPoint3 a_origin = RE::NiPoint3());
 
     void Enter() override;
     Status Update(float a_delta) override;
     void Exit() override;
 
     [[nodiscard]] Type GetType() const override { return Type::kHoming; };
+    [[nodiscard]] float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - startingTime;}
     [[nodiscard]] std::vector<RE::ActorHandle>& GetTargets() { return targets; };
+    [[nodiscard]] RE::Actor* GetNextTarget(RE::NiPoint3 a_origin = RE::NiPoint3());
 
     void UpdateRotation() {};
     void UpdateHomingDirection(float a_delta) {};

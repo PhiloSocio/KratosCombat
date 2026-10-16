@@ -285,7 +285,7 @@ void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_
     if (weaponParentNode) {
         auto& localTranslation = weaponParentNode->local.translate;
         if (!_translationBlended && a_livingTime < std::max(Config::RotationBlendDuration * 2.f, a_delta)) {
-            const float t = std::clamp(a_livingTime / Config::RotationBlendDuration * 2.f, 0.f, 1.f);
+            const float t = std::clamp(a_livingTime / Config::RotationBlendDuration / 2.f, 0.f, 1.f);
             const auto& startLocalTranslationC = startLocalTranslation;
             localTranslation = Algebra::BlendVectors(startLocalTranslationC, targetLocalTranslation, t);
 
@@ -406,15 +406,16 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     RE::NiPoint3 throwerVelocity; throwerActor->GetLinearVelocity(throwerVelocity);
     RE::NiPoint3 throwVelocity = throwerVelocity + throwDir * impulse / weap->weight;
 
+    length = weaponBone->worldBound.radius;
+    targetLocalRotation = RotationAngle(a_rotationType);
+    targetLocalTranslation = TranslationOffset(a_rotationType, length, Config::HitRotationZcos);
+
 //    ThrowableWeaponDummyProjectile->model = projectileModelPath;
-//    ThrowableWeaponDummyProjectile->data.collisionRadius = 10.f;
+    ThrowableWeaponDummyProjectile->data.collisionRadius = length * 0.36f;
 //    ThrowableWeaponDummyProjectile->data.light = light;
     ThrowableWeaponDummyProjectile->data.speed = throwVelocity.Length();
     ThrowableWeaponDummyProjectile->data.force = impulse / 1000.f;   // [N.s]
 
-    targetLocalRotation = RotationAngle(a_rotationType);
-    targetLocalTranslation = TranslationOffset(a_rotationType, length + 10.f, Config::HitRotationZcos);
-    spdlog::debug("length: {}", length);
 
     if (!PreThrow()) return false;
 

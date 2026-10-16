@@ -90,7 +90,15 @@ public:
     void StopThrowingLoopSounds(const uint16_t a_delayMS = 0u);
     void StopArrivingLoopSounds(const uint16_t a_delayMS = 0u);
 
-    [[nodiscard]] RE::BSSoundHandle GetSoundHandle(const SoundName a_soundName) const {
+    void UpdateSoundState(const SoundName a_soundName)
+    {
+        const auto soundHandle = GetSoundHandle(a_soundName);
+        if (soundHandle.IsPlaying()) soundState[a_soundName] = State::kPlaying;
+        spdlog::debug("sound state {}", soundHandle.state.underlying());
+    }
+
+    [[nodiscard]] RE::BSSoundHandle GetSoundHandle(const SoundName a_soundName) const
+    {
         RE::BSSoundHandle ret;
         switch (a_soundName) {
         case SoundName::kCallStart:
@@ -109,12 +117,10 @@ public:
             return ThrowingLoop0SH;
         } return ret;
     }
-    void UpdateSoundState(const SoundName a_soundName) {
-        const auto soundHandle = GetSoundHandle(a_soundName);
-        if (soundHandle.IsPlaying()) soundState[a_soundName] = State::kPlaying;
-        spdlog::debug("sound state {}", soundHandle.state.underlying());
-    }
-    [[nodiscard]] bool IsTriggered(const SoundName a_soundName) const {
+    [[nodiscard]] State GetState(const SoundName a_soundName) { return soundState[a_soundName]; }
+
+    [[nodiscard]] bool IsTriggered(const SoundName a_soundName) const
+    {
         bool ret = false;
         if (auto it = soundState.find(a_soundName); it != soundState.end()) {
             const auto soundHandle = GetSoundHandle(a_soundName);
@@ -122,10 +128,8 @@ public:
             ret = isTriggered;
         } return ret;
     }
-    [[nodiscard]] State GetState(const SoundName a_soundName) {
-        return soundState[a_soundName];
-    }
-    [[nodiscard]] bool IsSoundValid(const SoundName a_soundName)  {
+    [[nodiscard]] bool IsSoundValid(const SoundName a_soundName)
+    {
         switch (GetState(a_soundName)) {
         case State::kNone:
             return !IsTriggered(a_soundName);
@@ -143,5 +147,5 @@ public:
     }
 
     SoundManager(SoundDefinition a_soundDefinition) 
-    : soundDefinition(a_soundDefinition) {};
+        : soundDefinition(a_soundDefinition) {};
 };

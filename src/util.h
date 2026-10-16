@@ -163,15 +163,25 @@ namespace AsyncUtil
 
         inline void ProcessDelayedTasks() {
             float currentTime = GameTime::GetEngineTime();
+            std::vector<std::function<void()>> tasksToRun;
 
-            WriteLocker locker(_taskQueueLock); 
+            {
+                WriteLocker locker(_taskQueueLock);
+                for (auto it = _taskQueue.begin(); it != _taskQueue.end(); ) {
+                    if (currentTime >= it->first) {
+                        tasksToRun.push_back(std::move(it->second));
+                        it = _taskQueue.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
 
-            for (auto it = _taskQueue.begin(); it != _taskQueue.end(); ) {
-                if (currentTime >= it->first) {
-                    it->second(); 
-                    it = _taskQueue.erase(it);
-                } else {
-                    it++;
+            for (auto& task : tasksToRun) {
+                try {
+                    task();
+                } catch (const std::exception& e) {
+                    spdlog::error("Task execution failed: {}", e.what());
                 }
             }
         }
@@ -2025,10 +2035,12 @@ namespace ObjectUtil
             RE::BSSoundHandle handle;
             if (a_sound && a_source) {
                 auto audioManager = RE::BSAudioManager::GetSingleton();
-                if (audioManager)
+                if (audioManager) {
                     audioManager->GetSoundHandle(handle, a_sound->soundDescriptor);
                     handle.SetObjectToFollow(a_source);
                     handle.SetVolume(a_volume);
+                }
+
                 if (a_fadeInDuration != 0u)
                     handle.FadeInPlay(a_fadeInDuration);
                 else
@@ -2039,11 +2051,15 @@ namespace ObjectUtil
         static void PlaySound(RE::BGSSoundDescriptorForm* a_sound, RE::BSSoundHandle& a_handle, RE::NiAVObject* a_source, const float a_volume = 1.f, const uint16_t a_fadeInDuration = 0)
         {
             if (a_sound && a_source) {
+                if (a_handle.IsValid() && a_handle.IsPlaying()) a_handle.Stop();
+
                 auto audioManager = RE::BSAudioManager::GetSingleton();
-                if (audioManager)
+                if (audioManager) {
                     audioManager->GetSoundHandle(a_handle, a_sound->soundDescriptor);
-                a_handle.SetObjectToFollow(a_source);
-                a_handle.SetVolume(a_volume);
+                    a_handle.SetObjectToFollow(a_source);
+                    a_handle.SetVolume(a_volume);
+                }
+
                 if (a_fadeInDuration != 0u)
                     a_handle.FadeInPlay(a_fadeInDuration);
                 else

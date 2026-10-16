@@ -60,16 +60,7 @@ void LeviathanAxe::SetState(RelicWeaponState::Type a_type)
     switch (a_type)
     {
     case RelicWeaponState::Type::kArriving:
-        {
-            auto previous = dynamic_cast<LeviathanArrivingState*>(currentState.get());
-            RE::NiPoint3 startPoint; GetPosition(startPoint);
-            if (isPenetrating && previous) {
-                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*previous, startPoint));
-            } else {
-                SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this, startPoint, &callerParent->GetRHandBone()));
-                spdlog::debug("Levi call is started");
-            }
-        }
+        SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this));
         break;
     case RelicWeaponState::Type::kHoming:
         SmartRelicWeapon::SetState(std::make_unique<LeviathanHomingState>(*this));
@@ -122,8 +113,6 @@ void LeviathanAxe::PostThrow()
 
         throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
 
-        isAxeCalled = false;
-        isAxeThrowed = true;
         SetThrowState(ThrowState::kThrown);
         if (stuckedBone)   stuckedBone.reset();
         if (stuckedActor)  stuckedActor.reset();

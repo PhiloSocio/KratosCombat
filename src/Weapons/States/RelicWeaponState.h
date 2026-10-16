@@ -3,15 +3,13 @@
 class RelicWeaponState
 {
 public:
-    enum class Type
-    {
+    enum class Type : std::uint8_t {
         kNone,
         kArriving,
         kHoming
     };
 
-    enum class Status
-    {
+    enum class Status : std::uint8_t {
         kRunning,
         kCompleted,
         kCancelled

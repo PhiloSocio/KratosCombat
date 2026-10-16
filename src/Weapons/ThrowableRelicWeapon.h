@@ -18,8 +18,8 @@ public:
     {
         switch (a_type) {
         case RotationType::kNone:         return RE::NiMatrix3();
-        case RotationType::kSpinLateral:  return RE::NiMatrix3(0.f, PI8, PI2);
-        case RotationType::kSpinVertical: return RE::NiMatrix3(0.f, PI2 - PI32, PI2);
+        case RotationType::kSpinLateral:  return RE::NiMatrix3(0.f, PI8,        PI2 + PI8);
+        case RotationType::kSpinVertical: return RE::NiMatrix3(0.f, PI2 - PI32, PI2 + PI8);
         }
         return RE::NiMatrix3();
     }
@@ -29,20 +29,20 @@ public:
         case RotationType::kNone:
             return RE::NiPoint3(
                 0.f,
-                -a_length,
+                -a_length + 10,
                 0.f
             );
         case RotationType::kSpinLateral:
             return RE::NiPoint3(
-                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ),
-                -a_length * a_cosZ,
+                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ) * 0.69f,
+                -a_length * a_cosZ + 10.f,
                 0.f
             );
         case RotationType::kSpinVertical: 
             return RE::NiPoint3(
                 0.f,
-                -a_length * a_cosZ,
-                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ)
+                -a_length * a_cosZ + 10.f,
+                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ) * 0.69f
             );
         }
         return RE::NiPoint3(0.f, 20.f, 0.f);
@@ -125,7 +125,6 @@ public:
 
     ProjectileState projState = ProjectileState::kNone;
     ImpactType impactType = ImpactType::kSharp;
-    RE::ImpactResult impactResult = RE::ImpactResult::kBounce;
 
     float throwableDamage   = 0.f;
     float yAngle            = 0.35f;
@@ -212,8 +211,8 @@ protected:
     bool _translationBlended = false;
     bool _isLastThrowCharged = false;
 
-    PRECISION_API::TrailOverride _trailOverride;
-    PRECISION_API::CollisionDefinition collisionDefinition;
+//    PRECISION_API::TrailOverride _trailOverride;
+//    PRECISION_API::CollisionDefinition collisionDefinition;
 };
 
 using ProjectileState = ThrowableRelicWeapon::ProjectileState;

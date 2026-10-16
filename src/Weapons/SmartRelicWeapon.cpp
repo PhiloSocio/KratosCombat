@@ -212,6 +212,8 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
         SetState(RelicWeaponState::Type::kArriving);
         spdlog::info("{} is arriving to {}...", weap->GetFullName(), callerActor->GetDisplayFullName());
     }
+    targetLocalTranslation = RE::NiPoint3();
+    _translationBlended = false;
     thrower = nullptr;
     throwerParent = nullptr;
     return true;

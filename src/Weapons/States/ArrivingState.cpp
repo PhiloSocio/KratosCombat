@@ -3,23 +3,22 @@
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Caller.h"
 
-ArrivingState::ArrivingState(SmartRelicWeapon& a_weapon, const RE::NiPoint3& a_startPosition, RE::NiAVObject** a_targetBone)
-    : ThrowableWeaponState(a_weapon),
-        callerHandBoneSource(a_targetBone),
-        startPosition(a_startPosition),
-        _justContinue(false)
+ArrivingState::ArrivingState(SmartRelicWeapon& a_weapon) : ThrowableWeaponState(a_weapon)
 {
 }
-ArrivingState::ArrivingState(const ArrivingState& a_previous, const RE::NiPoint3& a_startPosition)
-    : ThrowableWeaponState(a_previous.weapon),
-        callerHandBoneSource(a_previous.callerHandBoneSource),
-        startPosition(a_startPosition),
-        startingTime(a_previous.startingTime),
-        callerBreastBone(a_previous.callerBreastBone),
-        arrivingRoute(a_previous.arrivingRoute),
-        arrivingRouteClosestIndex(a_previous.arrivingRouteClosestIndex),
-        _justContinue(true)
+
+bool ArrivingState::IsInCallingAnimation()
 {
+    if (callerActor) {
+        callerActor->GetGraphVariableBool("bIsInCallingAnimation", isInCallingAnimation);
+    } return isInCallingAnimation;
+}
+RE::Actor* ArrivingState::GetNextTarget(std::optional<RE::NiPoint3> a_origin)
+{
+    if (a_origin) {
+        UpdateTargets(a_origin);
+    }
+    return !targets.empty() ? targets.front().get().get() : nullptr;
 }
 
 void ArrivingState::InitializeCallerData()
@@ -37,8 +36,12 @@ void ArrivingState::InitializeCallerData()
     callerBreastBone.reset(callerActor->GetNodeByName("NPC Spine2 [Spn2]"));
 
     callerWeaponBoneSource = &weapon.GetCaller()->GetParent()->GetWeaponBone();
-    callerWeaponBone = GetCallerWeaponBone();
-    callerHandBone = GetCallerHandBone();
+    if (callerWeaponBoneSource)
+        callerWeaponBone = *callerWeaponBoneSource;
+
+    callerHandBoneSource = &weapon.GetCaller()->GetParent()->GetRHandBone();
+    if (callerHandBone)
+        callerHandBone = *callerHandBoneSource;
 
     const auto callerHandPosition =
         callerHandBone
@@ -214,7 +217,7 @@ void ArrivingState::UpdateArrivingRoute()
     const float lookAheadDistance = std::clamp(std::abs(speed) * 0.15f, 50.f, 200.f);
     const float targetDistance = closestSample.distanceFromStart + lookAheadDistance;
 
-    int targetIndex = arrivingRouteClosestIndex;
+    uint16_t targetIndex = arrivingRouteClosestIndex;
     while (
         targetIndex + 1 < (int)arrivingRoute.samples.size() &&
         arrivingRoute.samples[targetIndex].distanceFromStart < targetDistance)
@@ -225,24 +228,60 @@ void ArrivingState::UpdateArrivingRoute()
     bezierDir = arrivingRoute.samples[targetIndex].point - position;
     bezierDir.Unitize();
 }
+void ArrivingState::UpdateTargets(std::optional<RE::NiPoint3> a_origin)
+{
+    targets = ObjectUtil::Actor::GetNearCombatTargetHandles<std::vector<RE::ActorHandle>>(callerActor, linearDistance, true);
+    CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
+}
+void ArrivingState::CheckTargets(const RE::NiPoint3& a_origin)
+{
+    if (!targets.empty()) {
+
+        const auto lastHits = weapon.GetLastHitActors().Snapshot();
+
+        std::erase_if(targets, [this, a_origin, &lastHits](const RE::ActorHandle actorHandle) {
+            bool result = false;
+            auto actor = actorHandle.get().get();
+            if (!actor || actor->IsDead() || std::find(lastHits.begin(), lastHits.end(), actorHandle) != lastHits.end()) {
+                result = true;
+            } else {
+                auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;
+                auto targetDir = targetPos - a_origin;
+                targetDir.Unitize();
+                float distance = actor->GetPosition().GetDistance(a_origin);
+                result = distance > linearDistance
+                    || currentDir.Dot(targetDir) < std::cos(PI8)
+                    || currentDir.Dot(linearArrivingDir) < std::cos(PI8);
+            }
+            return result;
+        });
+        std::sort(targets.begin(), targets.end(), 
+            [&](const auto& a, const auto& b) {
+                auto aRaw = a.get().get();
+                auto bRaw = b.get().get();
+                return aRaw->GetPosition().GetDistance(a_origin) < 
+                    bRaw->GetPosition().GetDistance(a_origin);
+            }
+        );
+    };
+}
 
 void ArrivingState::Enter()
 {
     weapon.isPenetrating = true;
+    weapon.GetPosition(startPosition);
     InitializeCallerData();
     UpdateTargets();
-    UpdateArrivingDirection(!_justContinue);
+    UpdateArrivingDirection(true);
     InitializeRoute();
     smoothedDesiredVelocity = weapon.velocity;
 
-    if (!_justContinue) {
-        startingTime = AsyncUtil::GameTime::GetEngineTime();
-        const bool doBlend = 
-            weapon.projState == ProjectileState::kNone ||
-            weapon.projState == ProjectileState::kLaunched ||
-            weapon.projState == ProjectileState::kHoming;
-        smoothedDesiredVelocity = doBlend ? weapon.velocity : linearArrivingDir * speed;
-    }
+    startingTime = AsyncUtil::GameTime::GetEngineTime();
+    const bool doBlend = 
+        weapon.projState == ProjectileState::kNone ||
+        weapon.projState == ProjectileState::kLaunched ||
+        weapon.projState == ProjectileState::kHoming;
+    smoothedDesiredVelocity = doBlend ? weapon.velocity : linearArrivingDir * speed;
 }
 Status ArrivingState::Update(const float a_delta)
 {

@@ -105,6 +105,7 @@ void HomingState::Enter()
 {
     startingTime = AsyncUtil::GameTime::GetEngineTime();
     weapon.isPenetrating = true;
+    weapon.targetLocalRotation = weapon.targetLocalRotation * RE::NiMatrix3(PI4 - PI, 0.f, 0.f);
     InitializeTargets();
 }
 Status HomingState::Update(float a_delta)
@@ -119,7 +120,7 @@ Status HomingState::Update(float a_delta)
     const float hLivingTime = GetLivingTime();
 
     auto hTarget = GetNextTarget(weapon.position);
-    if (hLivingTime > 1.2f && livingTime > 0.2f && hTarget) {
+    if (hLivingTime > 1.2f && livingTime > 0.69f && hTarget) {
         const auto& targetBone = hTarget->GetNodeByName("NPC Spine2 [Spn2]");
         auto targetPos = hTarget->GetPosition() + (hTarget->GetBoundMax() + hTarget->GetBoundMin()) * 0.75f;
         if (targetBone) targetPos = targetBone->world.translate;
@@ -131,7 +132,7 @@ Status HomingState::Update(float a_delta)
 
         float height = weapon.position.z - hTarget->GetPosition().z;
         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
-        if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
+        if (vel.z < 0.f) vel.z *= dampFactor;
 
         livingTimeInterval = livingTime;
     } else {
@@ -139,7 +140,6 @@ Status HomingState::Update(float a_delta)
             return Status::kCompleted;
         }
 
-        // waving effect
         float waveSin = waveAmplitude * cos(waveFrequency * hLivingTime);
         float waveCos = waveAmplitude * sin(waveFrequency * hLivingTime);
 
@@ -177,6 +177,7 @@ void HomingState::Exit()
 {
     if (auto throwerParent = weapon.GetThrower()->GetParent(); isBoomerang && throwerParent) {
         weapon.isPenetrating = false;
+        weapon.targetLocalRotation = weapon.targetLocalRotation * RE::NiMatrix3(PI + PI4, 0.f, 0.f);
         throwerParent->DoAction(ActionType::kWeaponCall);
     }
 }

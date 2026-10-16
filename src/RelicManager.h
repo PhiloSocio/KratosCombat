@@ -6,7 +6,8 @@
 
 using namespace ExtraDataUtil;
 
-class RelicManager {
+class RelicManager
+{
 public:
     static RelicManager* GetSingleton() {
         static RelicManager singleton;
@@ -480,6 +481,8 @@ public:
     }
     bool OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
     {
+        if (!a_AllCdPointCollector || !a_this) return false;
+
         ThrowableRelicWeapon* relic = nullptr;
         {
             ReadLocker lock(thrownRelicsMapLock);
@@ -487,10 +490,12 @@ public:
                 relic = it->second;
             }
         }
-        return relic ? relic->OnHit(a_AllCdPointCollector) : false;
+        return relic && relic->projectile == a_this ? relic->OnHit(a_AllCdPointCollector) : false;
     }
     void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable)
     {
+        if (!a_impactData || !a_this) return;
+
         ThrowableRelicWeapon* relic = nullptr;
         {
             ReadLocker lock(thrownRelicsMapLock);
@@ -498,11 +503,13 @@ public:
                 relic = it->second;
             }
         }
-        if (relic) relic->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
+        if (relic && relic->projectile == a_this) relic->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
     }
     void OnArrowKill(RE::ArrowProjectile* a_this)
     {
-        if (a_this) {
+        if (!a_this) return;
+
+        {
             WriteLocker lock(thrownRelicsMapLock);
 
             if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
@@ -518,6 +525,8 @@ public:
     }
     bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
     {
+        if (!a_this) return a_result;
+
         ThrowableRelicWeapon* relic = nullptr;
         {
             ReadLocker lock(thrownRelicsMapLock);

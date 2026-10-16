@@ -9,17 +9,7 @@ void SoundManager::Update()
 
 void SoundManager::StopAllSounds()
 {
-    if (ChargingLoop0SH.IsPlaying()) ChargingLoop0SH.Stop();
-    if (ThrowingStartSH.IsPlaying()) ThrowingStartSH.Stop();
-    if (ThrowingLoop0SH.IsPlaying()) ThrowingLoop0SH.Stop();
-    if (ThrowingLoop1SH.IsPlaying()) ThrowingLoop1SH.Stop();
-    if (CallStartSH.IsPlaying()) CallStartSH.Stop();
-    if (ArrivingStartSH.IsPlaying()) ArrivingStartSH.Stop();
-    if (ArrivingLoop0SH.IsPlaying()) ArrivingLoop0SH.Stop();
-    if (ArrivingLoop1SH.IsPlaying()) ArrivingLoop1SH.Stop();
-    if (ArrivingLoop2SH.IsPlaying()) ArrivingLoop2SH.Stop();
-    if (ArrivingNearSH.IsPlaying()) ArrivingNearSH.Stop();
-    if (CatchSH.IsPlaying()) CatchSH.Stop();
+    FadeAllSounds(*g_deltaTimeRealTime * 2000.f);
 }
 void SoundManager::PauseAllSounds()
 {

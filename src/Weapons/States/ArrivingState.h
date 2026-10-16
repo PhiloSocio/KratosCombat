@@ -11,22 +11,15 @@ public:
     };
 
     ~ArrivingState() override = default;
-
-    ArrivingState(
-        SmartRelicWeapon& a_weapon,
-        const RE::NiPoint3& a_startPosition,
-        RE::NiAVObject** a_targetBone);
-    ArrivingState(
-        const ArrivingState& a_previous,
-        const RE::NiPoint3& a_startPosition);
+    ArrivingState(SmartRelicWeapon& a_weapon);
 
 protected:
-    RE::ActorHandle callerActorHandle;
-    RE::Actor* callerActor = nullptr;
+    RE::ActorHandle  callerActorHandle;
+    RE::Actor*       callerActor = nullptr;
     RE::NiAVObject** callerHandBoneSource = nullptr;
-    RE::NiAVObject* callerHandBone = nullptr;
+    RE::NiAVObject*  callerHandBone = nullptr;
     RE::NiAVObject** callerWeaponBoneSource = nullptr;
-    RE::NiAVObject* callerWeaponBone = nullptr;
+    RE::NiAVObject*  callerWeaponBone = nullptr;
     RE::NiPointer<RE::NiAVObject> callerBreastBone;
     RE::NiAVObject* model;
     RE::NiMatrix3 startRotation = RE::NiMatrix3();
@@ -41,8 +34,8 @@ protected:
     MathUtil::Algebra::BezierCurve arrivingRoute;
     MathUtil::Algebra::BezierSample closestSample;
     RE::NiPoint3 bezierControlPoints[4];
-    int arrivingRouteClosestIndex = 0;
-    uint16_t routeResolution = 64;
+    uint16_t arrivingRouteClosestIndex = 0u;
+    uint16_t routeResolution = 64u;
     std::vector<RE::ActorHandle> targets;
     bool  isNear = false;
     bool  isAlmostArrived = false;
@@ -62,60 +55,10 @@ protected:
     float arrivingRelativeAngleSnapStrength = Config::ArrivalAngleSnap;
     float speed = 0.f;
 
-private:
-    void InitializeCallerData();
-    void InitializeRoute();
-
 public:
     float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - startingTime;}
     RE::NiAVObject* GetCallerHandBone() const {return callerHandBoneSource ? *callerHandBoneSource : nullptr;}
     RE::NiAVObject* GetCallerWeaponBone() const {return callerWeaponBoneSource ? *callerWeaponBoneSource : nullptr;}
-    void UpdateTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
-        targets = ObjectUtil::Actor::GetNearCombatTargetHandles<std::vector<RE::ActorHandle>>(callerActor, linearDistance, true);
-        CheckTargets(a_origin.has_value() ? *a_origin : startPosition);
-    }
-    void CheckTargets(const RE::NiPoint3& a_origin) {
-        if (!targets.empty()) {
-
-            const auto lastHits = weapon.GetLastHitActors().Snapshot();
-
-            std::erase_if(targets, [this, a_origin, &lastHits](const RE::ActorHandle actorHandle) {
-                bool result = false;
-                auto actor = actorHandle.get().get();
-                if (!actor || actor->IsDead() || std::find(lastHits.begin(), lastHits.end(), actorHandle) != lastHits.end()) {
-                    result = true;
-                } else {
-                    auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;
-                    auto targetDir = targetPos - a_origin;
-                    targetDir.Unitize();
-                    float distance = actor->GetPosition().GetDistance(a_origin);
-                    result = distance > linearDistance
-                        || currentDir.Dot(targetDir) < std::cos(PI8)
-                        || currentDir.Dot(linearArrivingDir) < std::cos(PI8);
-                }
-                return result;
-            });
-            std::sort(targets.begin(), targets.end(), 
-                [&](const auto& a, const auto& b) {
-                    auto aRaw = a.get().get();
-                    auto bRaw = b.get().get();
-                    return aRaw->GetPosition().GetDistance(a_origin) < 
-                        bRaw->GetPosition().GetDistance(a_origin);
-                }
-            );
-        };
-    }
-    RE::Actor* GetNextTarget(std::optional<RE::NiPoint3> a_origin = std::nullopt) {
-        if (a_origin) {
-            UpdateTargets(a_origin);
-        }
-        return !targets.empty() ? targets.front().get().get() : nullptr;
-    }
-    bool IsInCallingAnimation() {
-        if (callerActor) {
-            callerActor->GetGraphVariableBool("bIsInCallingAnimation", isInCallingAnimation);
-        } return isInCallingAnimation;
-    }
 
     void Enter() override;
     Status Update(float a_delta) override;
@@ -123,14 +66,19 @@ public:
 
     [[nodiscard]] Type GetType() const override { return Type::kArriving; };
     [[nodiscard]] std::vector<RE::ActorHandle>& GetTargets() { return targets; };
+    [[nodiscard]] RE::Actor* GetNextTarget(std::optional<RE::NiPoint3> a_origin = std::nullopt);
+    [[nodiscard]] bool IsInCallingAnimation();
 
+    void InitializeCallerData();
+    void InitializeRoute();
     void InitiateTransform();
     void UpdateRotation();
     void UpdateAI(RE::NiPoint3& a_outVel);
     void UpdateArrivingDirection(bool a_initial = false);
     void UpdateArrivingRoute();
+    void UpdateTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt);
+    void CheckTargets(const RE::NiPoint3& a_origin);
 
 private:
-    bool _justContinue = false;
     bool _transformInitiated = false;
 };
