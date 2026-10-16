@@ -84,6 +84,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 #endif
         break;
     case SKSE::MessagingInterface::kPostLoadGame:
+        AsyncUtil::TaskManager::GetSingleton().ClearAllTasks();
         if (!Config::CheckForms()) spdlog::warn("can't get important magic effects! Check the esp files!");
         else if (RegisterEvents()) {
             Papyrus::eventsRegistered = true;
@@ -97,6 +98,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
         }
         break;
     case SKSE::MessagingInterface::kNewGame:
+        AsyncUtil::TaskManager::GetSingleton().ClearAllTasks();
         if (!Config::CheckForms()) spdlog::warn("can't get important magic effects! Check the esp files!");
         else if (RegisterEvents()) {
             Papyrus::eventsRegistered = true;

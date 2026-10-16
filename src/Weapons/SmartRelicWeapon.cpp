@@ -154,6 +154,9 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
                 if (!(pFlags & pFlag::kDestroyed)) {
                     pFlags |= pFlag::kDestroyed;
                 }
+                projectileHandle.reset();
+                projectileModel = nullptr;
+                projectile = nullptr;
             }
         }
 
@@ -223,7 +226,9 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
 
         auto& projectileRTD = projectile->GetProjectileRuntimeData();
         projectileRTD.flags |= pFlag::kDestroyed;
+        projectileHandle.reset();
         projectileModel = nullptr;
+        projectile = nullptr;
         if (a_justDestroy) return;
     }
 
@@ -298,9 +303,9 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
             bool isTargetActor = target ? target->formType == RE::FormType::ActorCharacter : false;
             const auto victim = target ? target->As<RE::Actor>() : nullptr;
             if (target && projectile != target->AsProjectile()) {
-                if (!isTargetActor && !lastHitForms.empty() && std::find(lastHitForms.begin(), lastHitForms.end(), target->GetHandle()) != lastHitForms.end()) isSameTarget = true;
+                if (!isTargetActor && lastHitForms.Contains(target->GetHandle())) isSameTarget = true;
                 else if (victim && shooter && victim != shooter) {
-                    if (!lastHitActors.empty() && std::find(lastHitActors.begin(), lastHitActors.end(), victim->GetHandle()) != lastHitActors.end()) isSameTarget = true;
+                    if (lastHitActors.Contains(victim->GetHandle())) isSameTarget = true;
                     if (isHoming) {
                         auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
                         if (homingState && victim == homingState->GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) {
@@ -394,8 +399,8 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
     bool skipIt = false;
     bool stopSounds = true;
 
-    if (isTargetActor)  {lastHitActors.insert(lastHitActors.begin(), victim->GetHandle()); if (lastHitActors.size() > 4) lastHitActors.pop_back();}
-    else if (a_target)  {lastHitForms.insert(lastHitForms.begin(), a_target->GetHandle()); if (lastHitForms.size() > 4) lastHitForms.pop_back();}
+    if (isTargetActor) lastHitActors.Push(victim->GetHandle());
+    else if (a_target) lastHitForms.Push(a_target->GetHandle());
     else skipIt = true; //  the target is not an actor or a form, probably the ground or an inpenetrable thing.
 
     if (isPenetrating && skipIt) {
@@ -417,16 +422,19 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
     if (itWillStick) {
         if (victim) {
             auto victimAVO = victim->AsActorValueOwner();
-            if (victimAVO && rtData.weaponDamage > (victimAVO->GetActorValue(RE::ActorValue::kHealth) / 100.f)) {
-                ObjectUtil::Actor::PushActorAway(victim, rtData.power, direction);
+            if (victimAVO && rtData.weaponDamage > (victimAVO->GetActorValue(RE::ActorValue::kHealth) / 10.f)) {
+                SKSE::GetTaskInterface()->AddTask([this, victim, &rtData]() {
+                    ObjectUtil::Actor::PushActorAway(victim, rtData.power, direction);
+                });
             }
+            spdlog::debug("victim health: {} damage: {}!", victimAVO->GetActorValue(RE::ActorValue::kHealth), rtData.weaponDamage);
             stuckedActor = victim->GetHandle();
         }
         stuckedBone.reset(a_impactData->damageRootNode);
-        for (auto& impact : rtData.impacts) if (impact) impact->impactResult = RE::ImpactResult::kStick;
+    //    for (auto& impact : rtData.impacts) if (impact) impact->impactResult = RE::ImpactResult::kStick;
         spdlog::debug("{} is sticked to {}!", projectile->GetName(), stuckedBone ? stuckedBone->name : "NULL");
     } else if (itWillBounce) {
-        for (auto& impact : rtData.impacts) if (impact) impact->impactResult = RE::ImpactResult::kBounce;
+    //    for (auto& impact : rtData.impacts) if (impact) impact->impactResult = RE::ImpactResult::kBounce;
         spdlog::debug("{} is bounced from {}!", projectile->GetName(), a_impactData->damageRootNode ? a_impactData->damageRootNode->name : "NULL");
     } else {
         a_impactData->impactResult = RE::ImpactResult::kBounce;

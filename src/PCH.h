@@ -8,16 +8,17 @@
 
 //#include <glm.hpp>
 
-#define RELOCATION_OFFSET(SE, AE) REL::VariantOffset(SE, AE, 0).offset()
+#include <shared_mutex>
 
-using namespace std::literals;
+using Lock = std::shared_mutex;
+using ReadLocker = std::shared_lock<Lock>;
+using WriteLocker = std::unique_lock<Lock>;
 
 	using ProjectileRot = RE::Projectile::ProjectileRot;
 	using EventChecker = RE::BSEventNotifyControl;
 	using rFlag = RE::TESForm::RecordFlags;
 	using pFlag = RE::Projectile::Flags;
     using pbFlag = RE::BGSProjectileData::BGSProjectileFlags;
-
 
 namespace std
 {
@@ -46,3 +47,5 @@ namespace std
 //#define OVERPOWERED
 //#define EXPERIMENTAL_PROJECTILE_HIT_EXPLOSION
 #define KRATOS_COMBAT_3
+
+#define RELOCATION_OFFSET(SE, AE) REL::VariantOffset(SE, AE, 0).offset()

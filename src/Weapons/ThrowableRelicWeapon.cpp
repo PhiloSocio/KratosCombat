@@ -545,7 +545,9 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
         if (projectile) {
             auto& projectileRTD = projectile->GetProjectileRuntimeData();
             projectileRTD.flags.set(pFlag::kDestroyed);
+            projectileHandle.reset();
             projectileModel = nullptr;
+            projectile = nullptr;
         }
         SetThrowState(ThrowState::kThrowable);
         projState = ProjectileState::kNone;

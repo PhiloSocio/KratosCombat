@@ -976,6 +976,7 @@ void ActorEquipManagerHook::UnequipObject(
 
 void PlayerHook::Update(RE::PlayerCharacter* a_this, const float a_delta)
 {
+    AsyncUtil::TaskManager::GetSingleton().ProcessDelayedTasks();
 
 #ifdef KRATOS_COMBAT_3
     RelicManager::GetSingleton()->UpdatePlayer(a_this, a_delta);

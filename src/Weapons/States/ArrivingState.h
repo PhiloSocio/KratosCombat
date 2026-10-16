@@ -76,10 +76,13 @@ public:
     }
     void CheckTargets(const RE::NiPoint3& a_origin) {
         if (!targets.empty()) {
-            std::erase_if(targets, [this, a_origin](const RE::ActorHandle actorHandle) {
+
+            const auto lastHits = weapon.GetLastHitActors().Snapshot();
+
+            std::erase_if(targets, [this, a_origin, &lastHits](const RE::ActorHandle actorHandle) {
                 bool result = false;
                 auto actor = actorHandle.get().get();
-                if (!actor || actor->IsDead() || std::find(weapon.lastHitActors.begin(), weapon.lastHitActors.end(), actorHandle) != weapon.lastHitActors.end()) {
+                if (!actor || actor->IsDead() || std::find(lastHits.begin(), lastHits.end(), actorHandle) != lastHits.end()) {
                     result = true;
                 } else {
                     auto targetPos = actor->GetPosition() + (actor->GetBoundMax() + actor->GetBoundMin()) * 0.75f;

@@ -131,6 +131,7 @@ public:
 
     [[nodiscard]] RelicWeapon* GetActiveRelic(RelicIdentity a_identity)
     {
+        ReadLocker lock(activeRelicsMapLock);
         auto it = activeRelics.find(a_identity);
         return it != activeRelics.end() ? it->second.get() : nullptr;
     }
@@ -479,34 +480,52 @@ public:
     }
     bool OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
     {
-        bool skip = false;
-        if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
-            skip = it->second->OnHit(a_AllCdPointCollector);
+        ThrowableRelicWeapon* relic = nullptr;
+        {
+            ReadLocker lock(thrownRelicsMapLock);
+            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
+                relic = it->second;
+            }
         }
-        return skip;
+        return relic ? relic->OnHit(a_AllCdPointCollector) : false;
     }
     void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable)
     {
-        if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
-            it->second->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
+        ThrowableRelicWeapon* relic = nullptr;
+        {
+            ReadLocker lock(thrownRelicsMapLock);
+            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
+                relic = it->second;
+            }
         }
+        if (relic) relic->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
     }
     void OnArrowKill(RE::ArrowProjectile* a_this)
     {
-        if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
-            if (it->second->projectile) {
+        if (a_this) {
+            WriteLocker lock(thrownRelicsMapLock);
+
+            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
+                auto thrownWeapon = it->second;
+                if (thrownWeapon && thrownWeapon->projectile == a_this) {
+                    thrownWeapon->projectileModel = nullptr;
+                    thrownWeapon->projectileHandle.reset();
+                    thrownWeapon->projectile = nullptr;
+                }
                 thrownRelics.erase(it);
-                it->second->projectileModel = nullptr;
-                it->second->projectileHandle.reset();
-                it->second->projectile = nullptr;
             }
         }
     }
     bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
     {
-        if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
-            return it->second->GetKillOnCollision(a_this, a_result);
-        } return a_result;
+        ThrowableRelicWeapon* relic = nullptr;
+        {
+            ReadLocker lock(thrownRelicsMapLock);
+            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
+                relic = it->second;
+            }
+        }
+        return relic ? relic->GetKillOnCollision(a_this, a_result) : a_result;
     }
 
     void BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
@@ -551,6 +570,8 @@ public:
 
     void OnRelicThrow(RE::Projectile* a_projectile, ThrowableRelicWeapon* a_relic)
     {
+        WriteLocker lock(thrownRelicsMapLock);
+
         thrownRelics.emplace(a_projectile, a_relic);
     }
 
@@ -558,13 +579,18 @@ public:
     void UpdateRelic(RE::Projectile* a_this, float a_delta)
     {
         if (a_this) {
-            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end() && it->second) {
-                if (it->second->projectile == a_this) {
-                    if (it->second->projState < ProjectileState::kStucked)
-                        it->second->UpdateProjectile(a_this, a_delta);
-                } else {
-                    spdlog::error("{} is not the projectile of {}", a_this->GetName(), it->second->weap->GetName());
+            ThrowableRelicWeapon* relic = nullptr;
+            {
+                ReadLocker lock(thrownRelicsMapLock);
+                if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
+                    relic = it->second;
                 }
+            }
+            if (relic && relic->projectile == a_this) {
+                if (relic->projState < ProjectileState::kStucked)
+                    relic->UpdateProjectile(a_this, a_delta);
+            } else if (relic) {
+                spdlog::error("{} is not the projectile of {}", a_this->GetName(), relic->weap->GetName());
             }
         }
     }
@@ -589,6 +615,10 @@ public:
     }
 
 private:
+    Lock activeActorsMapLock;
+    Lock activeRelicsMapLock;
+    Lock thrownRelicsMapLock;
+
     KratosPtr playerPtr;
     Kratos* player = nullptr;
     std::unordered_map<RE::ActorHandle, BaseActorPtr> activeActors;

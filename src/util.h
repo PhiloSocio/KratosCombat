@@ -142,6 +142,49 @@ namespace AsyncUtil
         bool _single;
         bool _done = true;
     };
+
+    using Lock = std::shared_mutex;
+    using ReadLocker = std::shared_lock<Lock>;
+    using WriteLocker = std::unique_lock<Lock>;
+
+    class TaskManager {
+    public:
+        static TaskManager& GetSingleton() {
+            static TaskManager singleton;
+            return singleton;
+        }
+
+        inline void AddDelayedTask(float delaySeconds, std::function<void()> task) {
+            float targetTime = GameTime::GetEngineTime() + delaySeconds;
+
+            WriteLocker locker(_taskQueueLock); 
+            _taskQueue.emplace_back(targetTime, std::move(task));
+        }
+
+        inline void ProcessDelayedTasks() {
+            float currentTime = GameTime::GetEngineTime();
+
+            WriteLocker locker(_taskQueueLock); 
+
+            for (auto it = _taskQueue.begin(); it != _taskQueue.end(); ) {
+                if (currentTime >= it->first) {
+                    it->second(); 
+                    it = _taskQueue.erase(it);
+                } else {
+                    it++;
+                }
+            }
+        }
+
+        inline void ClearAllTasks() {
+            WriteLocker locker(_taskQueueLock);
+            _taskQueue.clear();
+        }
+    private:
+        Lock _taskQueueLock;
+
+        std::vector<std::pair<float, std::function<void()>>> _taskQueue;
+    };
 }
 namespace ExtraDataUtil //  huge thanks to D7ry
 {
@@ -1494,7 +1537,12 @@ namespace ObjectUtil
             return func(a_aggressor, a_target, a_sourceProjectile, a_bLeftHand);
         }
         /*
-        *  Requires my modder utility for this function: https://github.com/PhiloSocio/SkipEquipAnimation
+        *   Requires my modder utility for this function: https://github.com/PhiloSocio/SkipEquipAnimation
+        *   You can reset the graph variables by using ResetEquipAnimationAfter function
+        *   ResetEquipAnimationAfter is a delayed task and has two options.
+        *   I recommend hooking the update function of the game and use AsyncUtil::TaskManager
+        *   Add the AsyncUtil::TaskManager::GetSingleton().ProcessDelayedTasks() function to the update loop.
+        *   Or just use the threaded way, it is solid but other way is way safer.
         */
         static void SkipEquipAnimation(RE::Actor* a_this, const bool a_skip = true, int a_load3dDelayMS = 0, const bool a_skip3DLoading = false)
         {
@@ -1504,15 +1552,21 @@ namespace ObjectUtil
                 a_this->SetGraphVariableBool("Skip3DLoading", a_skip3DLoading);
             }
         }
-        static void ResetEquipAnimationAfter(int a_delayMS, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton())
+        static void ResetEquipAnimationAfter(int a_delayMS, RE::Actor* a_actor = RE::PlayerCharacter::GetSingleton(), const bool a_useThread = true)
         {
             if (a_delayMS == 0) {SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D); return;}
             if (a_delayMS < (int)(*g_deltaTimeRealTime * 2.f * 1000.f)) a_delayMS = (int)(*g_deltaTimeRealTime * 2.f * 1000.f);
-            std::jthread DisableEquipAnim([=]() {
-                std::this_thread::sleep_for(std::chrono::milliseconds(a_delayMS));
-                SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D);
-            });
-            DisableEquipAnim.detach();
+            if (a_useThread) {
+                std::jthread DisableEquipAnim([=]() {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(a_delayMS));
+                    SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D);
+                });
+                DisableEquipAnim.detach();
+            } else {
+                AsyncUtil::TaskManager::GetSingleton().AddDelayedTask(a_delayMS / 1000, [a_actor]() {
+                    SkipEquipAnimation(a_actor, _skipEquipAnim, _load3Ddelay, _skipLoad3D);
+                });
+            }
         }
         static void SendAnimationEvent(RE::Actor* a_this, const RE::BSFixedString a_tag, const RE::BSFixedString a_payload = "")
         {

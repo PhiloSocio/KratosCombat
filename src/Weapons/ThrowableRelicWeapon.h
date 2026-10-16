@@ -48,7 +48,6 @@ public:
         return RE::NiPoint3(0.f, 20.f, 0.f);
     }
 
-
     enum class ThrowState : std::uint8_t {
         kNone,
         kThrowable,

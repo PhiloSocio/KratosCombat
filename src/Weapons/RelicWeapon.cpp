@@ -20,6 +20,8 @@ void RelicWeapon::OnEquip(BaseActor* a_actor) {
 
         if (const auto& weaponBone = wielder->GetWeaponBone())
             length = weaponBone->worldBound.radius;
+
+        spdlog::debug("{} is equipped by {}, weapon length is {}", weap->GetFullName(), wielder->GetActor()->GetName(), length);
     } else {
         wielder = nullptr;
         isEquipped = false;
