@@ -1,4 +1,5 @@
 #include "HomingState.h"
+#include "Weapons/SmartRelicWeapon.h"
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
 #include "Util.h"
@@ -6,178 +7,129 @@
 HomingState::HomingState(
     SmartRelicWeapon& a_weapon,
     uint8_t a_hitCount,
-    bool a_isBoomerang,
-    float a_speed,
-    float a_angularVelocity)
-    : ThrowableWeaponState(a_weapon),
-        hitCount(a_hitCount),
-        isBoomerang(a_isBoomerang),
-        speed(a_speed),
+    bool    a_isBoomerang,
+    float   a_speed,
+    float   a_angularVelocity)
+    : SmartWeaponState(a_weapon), 
+        hitCount(a_hitCount), 
+        isBoomerang(a_isBoomerang), 
         angularVelocity(a_angularVelocity)
 {
+    speed = a_speed;
 }
 
 void HomingState::InitializeTargets()
 {
-    auto thrower = weapon.thrower;
-    auto throwerParent = thrower ? thrower->GetParent() : nullptr;
-    auto throwerActor = throwerParent && throwerParent->IsValid() ? throwerParent->GetActor() : nullptr;
-
+    auto throwerActor = GetControllerActor();
     if (!throwerActor) return;
 
-    const bool orderTargetsFromNearest = true;
-    targets = 
-        ObjectUtil::Actor::GetNearCombatTargetHandles<decltype(targets)>(
-            throwerActor, Config::HProjectileTargetRange, orderTargetsFromNearest);
-    if (targets.empty()) {
-        return;
-    }
+    targets = ObjectUtil::Actor::GetNearCombatTargetHandles<Targets>(throwerActor, Config::HProjectileTargetRange, true);
+    if (targets.empty()) return;
 
-    if (targets.size() == 1u) {
-        hitCount = 4u;
-    } else if (hitCount < 1u) {
-        hitCount = 1u;
-    }
+    if (targets.size() == 1u) hitCount = 4u;
+    else if (hitCount < 1u)   hitCount = 1u;
 
-    spdlog::debug(
-        "homing weapon have {} times {} combat targets",
-        hitCount,
-        targets.size());
+    spdlog::debug("homing weapon have {} times {} combat targets", hitCount, targets.size());
 
-    const size_t originalSize = targets.size();
-
-    targets.resize(originalSize * hitCount);
-
-    for (size_t i = 1; i < hitCount; ++i) {
-        std::copy_n(
-            targets.begin(),
-            originalSize,
-            targets.begin() + (i * originalSize));
-    }
-}
-void HomingState::RemoveInvalidTargets()
-{
-    std::erase_if(targets, [](const RE::ActorHandle actorHandle) {
-        auto actor = actorHandle.get().get();
-        return !actor || actor->IsDead() || actor->IsUnconscious();
-    });
-}
-RE::Actor* HomingState::GetNextTarget(RE::NiPoint3 a_origin)
-{
-    RemoveInvalidTargets();
-//        if (targets.size() > 2u) {
-//            if (a_origin != RE::NiPoint3()) {
-//                std::sort(targets.begin(), targets.end(), 
-//                    [&](const auto& a, const auto& b) {
-//                        return a->GetPosition().GetDistance(a_origin) < 
-//                               b->GetPosition().GetDistance(a_origin);
-//                    }
-//                );
-//            } else {
-//                std::vector<RE::ActorHandle> sortedTargets;
-//                sortedTargets.push_back(targets.front());
-//                targets.erase(targets.begin());
-//                while (!targets.empty()) {
-//                    auto closestIt = std::min_element(targets.begin(), targets.end(), 
-//                        [&](const auto& a, const auto& b) {
-//                            return a->GetPosition().GetDistance(targets.back()->GetPosition()) < 
-//                                   b->GetPosition().GetDistance(targets.back()->GetPosition());
-//                        }
-//                    );
-//                    sortedTargets.push_back(*closestIt);
-//                    targets.erase(closestIt);
-//                }
-//                targets = std::move(sortedTargets);
-//            }
-//
-//            for (size_t i = 0; i < targets.size() - 1; i++) {
-//                if (targets[i] == targets[i + 1]) {
-//                    RE::Actor* duplicate = targets[i];
-//                    targets.erase(targets.begin() + i);
-//                    targets.push_back(duplicate);
-//                }
-//            }
-//        }
-    return !targets.empty() ? targets.front().get().get() : nullptr;
+    const size_t n = targets.size();
+    targets.resize(n * hitCount);
+    for (size_t i = 1; i < hitCount; i++)
+        std::copy_n(targets.begin(), n, targets.begin() + i * n);
 }
 
 void HomingState::Enter()
 {
+    controller  = weapon.GetActiveController();
+    hitInterval = 0.1f;
+    process     = Process::kMain;
+    blendDuration      = 0.69f;
+    minBlendDuration   = 0.1f;
+    transitionDuration = 0.1f;
+
     startingTime = AsyncUtil::GameTime::GetEngineTime();
+
     weapon.isPenetrating = true;
     weapon.targetLocalRotation = weapon.targetLocalRotation * RE::NiMatrix3(PI4 - PI, 0.f, 0.f);
-    InitializeTargets();
-}
-Status HomingState::Update(float a_delta)
-{
-    auto proj = weapon.projectile;
-    if (!proj) return Status::kCancelled;
+    weapon.targetLocalTranslation.x *= -1.f;
 
-    auto& projectileRTD = proj->GetProjectileRuntimeData();
-    auto& vel = projectileRTD.linearVelocity;
-    auto& angles = proj->data.angle;
-    const float livingTime = projectileRTD.livingTime - livingTimeInterval;
-    const float hLivingTime = GetLivingTime();
-
-    auto hTarget = GetNextTarget(weapon.position);
-    if (hLivingTime > 1.2f && livingTime > 0.69f && hTarget) {
-        const auto& targetBone = hTarget->GetNodeByName("NPC Spine2 [Spn2]");
-        auto targetPos = hTarget->GetPosition() + (hTarget->GetBoundMax() + hTarget->GetBoundMin()) * 0.75f;
-        if (targetBone) targetPos = targetBone->world.translate;
-
-        const float targetSpeed = speed * (livingTime < 1.2f ? livingTime : 1.2f);
-        auto targetDir = (targetPos - weapon.position);
-        targetDir.Unitize();
-        vel = MathUtil::Angle::BlendVectors(weapon.direction, targetDir, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
-
-        float height = weapon.position.z - hTarget->GetPosition().z;
-        float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
-        if (vel.z < 0.f) vel.z *= dampFactor;
-
-        livingTimeInterval = livingTime;
-    } else {
-        if (hLivingTime > 2.69f && livingTime > 0.3f && targets.empty()) {
-            return Status::kCompleted;
-        }
-
-        float waveSin = waveAmplitude * cos(waveFrequency * hLivingTime);
-        float waveCos = waveAmplitude * sin(waveFrequency * hLivingTime);
-
-        auto thrower = weapon.thrower;
-        auto throwerParent = thrower ? thrower->GetParent() : nullptr;
-        auto throwerActor = throwerParent && throwerParent->IsValid() ? throwerParent->GetActor() : nullptr;
-        if (!throwerActor) return Status::kCancelled;
-
-        auto targetPos = throwerActor->GetPosition() + (throwerActor->GetBoundMax() + throwerActor->GetBoundMin()) * 0.75f;
-        float distance = targetPos.GetDistance(weapon.position);
-        float height = weapon.position.z - throwerActor->GetPosition().z;
-        auto targetDir = targetPos - weapon.position;
-        targetDir.Unitize();
-        RE::NiPoint3 circularVel;
-        RE::NiPoint3 originVelocity; throwerActor->GetLinearVelocity(originVelocity);
-        circularVel.x = -speed * targetDir.y + originVelocity.x + waveSin;
-        circularVel.y = speed * targetDir.x + originVelocity.y + waveCos;
-        circularVel.z = speed * targetDir.z + originVelocity.z + waveCos;
-
-        circularVel += targetDir * (distance - 100.f) / 0.2f;
-        circularVel.Unitize();
-        const float targetSpeed = speed * (hLivingTime > 0.5f && livingTime < 1.f ? livingTime + 0.2f : 1.f);
-        vel = MathUtil::Angle::BlendVectors(weapon.direction, circularVel, ((livingTime - 0.2f) / 3.f), true) * targetSpeed;
-        float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
-        if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
+    auto baseProjectile = weapon.projectile ? weapon.projectile->GetProjectileBase() : nullptr;
+    if (baseProjectile) {
+        auto& gravity = baseProjectile->data.gravity;
+        defaultGravity = gravity;
+        gravity = 0.f;
     }
 
-    RE::NiPoint3 curvyDir = vel;
-    curvyDir.Unitize();
-    angles.x = asin(curvyDir.z);
-    angles.z = atan2(curvyDir.x, curvyDir.y);
-    return Status::kRunning;
+    InitializeTargets();
 }
 void HomingState::Exit()
 {
-    if (auto throwerParent = weapon.GetThrower()->GetParent(); isBoomerang && throwerParent) {
-        weapon.isPenetrating = false;
-        weapon.targetLocalRotation = weapon.targetLocalRotation * RE::NiMatrix3(PI + PI4, 0.f, 0.f);
-        throwerParent->DoAction(ActionType::kWeaponCall);
+    weapon.isPenetrating = false;
+    weapon.targetLocalRotation    = weapon.targetLocalRotation * RE::NiMatrix3(PI + PI4, 0.f, 0.f);
+    weapon.targetLocalTranslation.x *= -1.f;
+
+    auto baseProjectile = weapon.projectile ? weapon.projectile->GetProjectileBase() : nullptr;
+    if (baseProjectile) {
+        auto& gravity = weapon.projectile->GetProjectileBase()->data.gravity;
+        gravity = defaultGravity;
     }
+
+    if (!isBoomerang) return;
+
+    auto thrower       = weapon.thrower;
+    auto throwerParent = thrower ? thrower->GetParent() : nullptr;
+    if (throwerParent)
+        throwerParent->DoAction(ActionType::kWeaponCall);
+}
+
+void HomingState::OnTransition(float a_delta, RE::NiPoint3& a_vel)
+{
+    weapon.projState = ProjectileState::kLaunched;
+    if (GetTransitionElapsed() < transitionDuration) return;
+    weapon.projState = ProjectileState::kHoming;
+
+    if (IsReadyToHit() && GetNextTarget()) {
+        process = Process::kAttack;
+        return;
+    }
+
+    if (GetTransitionElapsed() >= 0.2f) {
+        process = Process::kMain;
+    }
+}
+
+Status HomingState::MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoint3& a_vel)
+{
+    if (a_target && projLivingTime > 0.69f) {
+        Attack(a_target, a_vel);
+        return Status::kRunning;
+    }
+
+    if (livingTime > 1.69f && targets.empty())
+        return Status::kCompleted;
+
+    auto throwerActor = GetControllerActor();
+    if (!throwerActor) return Status::kCancelled;
+
+    const float waveSin = waveAmplitude * std::cos(waveFrequency * livingTime);
+    const float waveCos = waveAmplitude * std::sin(waveFrequency * livingTime);
+
+    const auto  targetPos = throwerActor->GetPosition() + (throwerActor->GetBoundMax() + throwerActor->GetBoundMin()) * 0.75f;
+    const float distance  = targetPos.GetDistance(weapon.position);
+    auto        targetDir = targetPos - weapon.position;
+    targetDir.Unitize();
+
+    RE::NiPoint3 originVelocity;
+    throwerActor->GetLinearVelocity(originVelocity);
+
+    RE::NiPoint3 circularVel;
+    circularVel.x = -speed * targetDir.y + originVelocity.x + waveSin;
+    circularVel.y =  speed * targetDir.x + originVelocity.y + waveCos;
+    circularVel.z =  speed * targetDir.z + originVelocity.z + waveCos;
+    circularVel += targetDir * (distance - 100.f) / 0.2f;
+    circularVel.Unitize();
+
+    const float targetSpeed = speed * (livingTime > 0.5f && projLivingTime < 1.f ? projLivingTime + 0.2f : 1.f);
+    a_vel = MathUtil::Angle::BlendVectors(weapon.direction, circularVel, tau, true) * targetSpeed;
+    DampVerticalVelocity(a_vel, throwerActor->GetPosition());
+    return Status::kRunning;
 }

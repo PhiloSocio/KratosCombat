@@ -11,6 +11,20 @@ RelicWeapon::RelicWeapon(RE::TESBoundObject* a_object)
     spdlog::warn("relic weapon constructed");
 }
 
+BaseActor* RelicWeapon::GetCarrier() const
+{
+    if (wielder) return wielder;
+    else if (lastWielder && lastWielder->IsValid()) {
+        const auto invChanges = lastWielder->GetActor()->GetInventoryChanges();
+        const auto entries = invChanges->entryList;
+        for (const auto entry : *entries) {
+            if (entry && entry->object && entry->object == weap) {
+                return lastWielder;
+            }
+        }
+    } return nullptr;
+}
+
 void RelicWeapon::OnEquip(BaseActor* a_actor) {
     if (a_actor && a_actor->IsValid()) {
         wielder = a_actor;

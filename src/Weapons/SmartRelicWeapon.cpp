@@ -2,6 +2,7 @@
 #include "Weapons/States/ArrivingState.h"
 #include "Weapons/States/HomingState.h"
 #include "Actors/BaseActor.h"
+#include "Actors/Capabilities/Thrower.h"
 #include "Actors/Capabilities/Caller.h"
 #include "Actors/Capabilities/Rager.h"
 #include "Assets.h"
@@ -22,6 +23,12 @@ bool SmartRelicWeapon::Initialize()
     return ArrivingWeaponDummyAmmo != nullptr;
 }
 
+ActorCapability* SmartRelicWeapon::GetActiveController() const noexcept
+{
+    if (IsArriving() && GetCaller()) return GetCaller();
+    else if (IsHoming() && GetThrower()) return GetThrower();
+    else return nullptr;
+}
 void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
 {
     if (replacedProjectileModel) {
@@ -60,13 +67,13 @@ void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
             spdlog::debug("{} is coming from back sheathe of {}", weap->GetFullName(), GetWielder()->GetActor()->GetName());
         }
     }
-    auto pcPos = callerActor->GetPosition();
-    float dist = pcPos.GetDistance(a_point);
+    const auto callerPos = callerActor->GetPosition();
+    const float dist = callerPos.GetDistance(a_point);
     if (dist > 36000.f) {   // ~42000 is limit
         spdlog::info("{} is too far away from you! ({} m)", weap->GetFullName(), (int)dist / 100);
-        auto dir = a_point - pcPos;
+        auto dir = a_point - callerPos;
         dir.Unitize();
-        a_point = pcPos + dir * 36000.f;
+        a_point = callerPos + dir * 36000.f;
     }
 }
 
@@ -149,11 +156,7 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
                 spdlog::debug("{} is woobling to leave where it is stucked", weap->GetFullName());
                 return false;
             } else {
-                auto& projectileRTD = projectile->GetProjectileRuntimeData();
-                auto& pFlags = projectileRTD.flags;
-                if (!(pFlags & pFlag::kDestroyed)) {
-                    pFlags |= pFlag::kDestroyed;
-                }
+                projectile->Kill();
                 projectileHandle.reset();
                 projectileModel = nullptr;
                 projectile = nullptr;
@@ -212,6 +215,10 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
         SetState(RelicWeaponState::Type::kArriving);
         spdlog::info("{} is arriving to {}...", weap->GetFullName(), callerActor->GetDisplayFullName());
     }
+
+    lastHitActors.clear();
+    lastHitForms.clear();
+
     targetLocalTranslation = RE::NiPoint3();
     _translationBlended = false;
     thrower = nullptr;
@@ -226,8 +233,7 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
     //        APIs::precision->RemoveProjectileCollision(throwerActor->GetHandle(), collisionDefinition);
     //    }
 
-        auto& projectileRTD = projectile->GetProjectileRuntimeData();
-        projectileRTD.flags |= pFlag::kDestroyed;
+        projectile->Kill();
         projectileHandle.reset();
         projectileModel = nullptr;
         projectile = nullptr;
@@ -253,7 +259,7 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
         if (weap && currentReference) {
             callerParent->SetSkipEquipAnim(true);
             callerParent->SetUnequipWhenAnimEnds(false);
-            callerParent->DoAction(ActionType::kWeaponCall);
+        //    callerParent->DoAction(ActionType::kWeaponCall);
             callerActor->PickUpObject(currentReference, 1, false, false);
         //    currentReference->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, callerActor);
             ObjectUtil::Actor::EquipItem(callerActor, weap, callerParent->GetSkipEquipAnim());//, 1U, true, false, false, true);
@@ -308,19 +314,23 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
                 if (!isTargetActor && lastHitForms.Contains(target->GetHandle())) isSameTarget = true;
                 else if (victim && shooter && victim != shooter) {
                     if (lastHitActors.Contains(victim->GetHandle())) isSameTarget = true;
-                    if (isHoming) {
-                        auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
-                        if (homingState && victim == homingState->GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) {
-                            isSameTarget = false;
-                        }
-                    }
-                    if (isArriving) {
-                        auto arrivingState = GetCurrentState() ? dynamic_cast<ArrivingState*>(GetCurrentState()) : nullptr;
-                        if (arrivingState && victim == arrivingState->GetNextTarget() && isSameTarget && rtData.livingTime > 0.5f) {
-                            isSameTarget = false;
-                        }
-                    }
                     if (!victim->IsDead()) {
+                        if (isHoming) {
+                            auto homingState = GetCurrentState() ? GetCurrentState()->As<HomingState>() : nullptr;
+                            if (homingState && victim == homingState->GetNextTarget() && rtData.livingTime > 0.5f) {
+                                homingState->OnHit(victim);
+                                spdlog::debug("{} is hit to {} ({:8x}) and passed through while homing", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
+                            }
+                        } else if (isArriving && !isSameTarget) {
+                            auto arrivingState = GetCurrentState() ? GetCurrentState()->As<ArrivingState>() : nullptr;
+                            if (arrivingState && victim == arrivingState->GetNextTarget() && rtData.livingTime > 0.5f) {
+                                arrivingState->OnHit(victim);
+                                spdlog::debug("{} is hit to {} ({:8x}) and passed through while arriving", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
+                            }
+                        } //else if (isPenetrating && !isSameTarget) {
+                        //    ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
+                        //}
+
                         if (!isArriving) stuckedActor = victim->GetHandle();
 
                         if (weap && ench && ench->effects[0])
@@ -331,23 +341,6 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 
                             callerParent->RestoreRage(Config::RageBuffRate->value * 0.25f, true);
                         }
-                    }
-                }
-                if (!isSameTarget) {
-                    if (isArriving) {
-                        auto arrivingState = GetCurrentState() ? dynamic_cast<ArrivingState*>(GetCurrentState()) : nullptr;
-                        if (victim && arrivingState) {
-                            if (arrivingState && victim == arrivingState->GetNextTarget())  arrivingState->GetTargets().erase(arrivingState->GetTargets().begin());
-                            ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
-                        }
-                        spdlog::debug("{} is hit to {} ({:8x}) and passed through while arriving", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
-                    } else if (isHoming) {
-                        auto homingState = GetCurrentState() ? dynamic_cast<HomingState*>(GetCurrentState()) : nullptr;
-                        if (victim) {
-                            if (homingState && victim == homingState->GetNextTarget()) homingState->GetTargets().erase(homingState->GetTargets().begin());
-                            ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
-                        }
-                        spdlog::debug("{} is hit to {} ({:8x}) and passed through while homing", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
                     }
                 }
             } else {spdlog::warn("WEIRD, target or levi is not exists");}
@@ -363,7 +356,7 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
             //    spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
                 angles.z = Config::HitRotationZ;//std::atan2(localTarget.x, localTarget.y) + Config::HitRotationZ;
                 localRotate.SetEulerAnglesXYZ(angles);
-            //    spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
+                spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
             }
         }
 

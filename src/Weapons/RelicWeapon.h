@@ -50,6 +50,7 @@ public:
     [[nodiscard]] RE::TESObjectWEAP* GetWeapon() const {return weap;}
     [[nodiscard]] BaseActor* GetOwner() const {return owner;}
     [[nodiscard]] BaseActor* GetWielder() const {return wielder;}
+    [[nodiscard]] BaseActor* GetCarrier() const;
     [[nodiscard]] BaseActor* GetLastWielder() const {return lastWielder;}
     [[nodiscard]] bool IsEquipped() const {return isEquipped;}
 

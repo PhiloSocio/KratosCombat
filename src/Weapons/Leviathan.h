@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Weapons/SmartRelicWeapon.h"
 #include "Weapons/States/HomingState.h"
 #include "Weapons/States/ArrivingState.h"
 
 class Caller;
-class SmartRelicWeapon;
 
 class LeviathanAxe : public SmartRelicWeapon
 {

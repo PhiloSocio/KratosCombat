@@ -4,6 +4,7 @@
 #include "Weapons/States/RelicWeaponState.h"
 
 class Caller;
+class ActorCapability;
 
 template <typename Handle>
 class RecentHitList
@@ -66,8 +67,9 @@ public:
     void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnTrailDelete() override;
 
-    [[nodiscard]] Caller* GetCaller() const {return caller;}
+    [[nodiscard]] Caller*           GetCaller() const {return caller;}
     [[nodiscard]] RelicWeaponState* GetState() const {return currentState.get();}
+    [[nodiscard]] ActorCapability*  GetActiveController() const noexcept;
     [[nodiscard]] const RecentHitList<RE::ActorHandle>&     GetLastHitActors() const noexcept {return lastHitActors;}
     [[nodiscard]] const RecentHitList<RE::ObjectRefHandle>& GetLastHitForms() const noexcept {return lastHitForms;}
 

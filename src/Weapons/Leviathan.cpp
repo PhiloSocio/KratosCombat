@@ -1,7 +1,7 @@
 #include "Leviathan.h"
 #include "SmartRelicWeapon.h"
+#include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Caller.h"
-#include "RelicManager.h"
 #include "Assets.h"
 #include "settings.h"
 #include "util.h"
@@ -109,7 +109,7 @@ void LeviathanAxe::PostThrow()
 
         _isLastThrowCharged = enchantItem != nullptr;
 
-        if (isPenetrating) return;
+    //    if (isPenetrating) return;
 
         throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
 

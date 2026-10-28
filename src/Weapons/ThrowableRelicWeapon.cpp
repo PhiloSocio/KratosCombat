@@ -260,14 +260,13 @@ bool ThrowableRelicWeapon::InitiateTrail() noexcept
         }
     } return _trailInitiated;
 }
-void ThrowableRelicWeapon::UpdateRotation(const float a_delta, const float a_livingTime) noexcept
+void ThrowableRelicWeapon::UpdateRotation(const float a_delta, const float a_livingTime, RE::NiPoint3& a_angles) noexcept
 {
     if (weaponParentNode) {
         auto& localRotation = weaponParentNode->local.rotate;
         if (!_rotationBlended && a_livingTime < std::max(Config::RotationBlendDuration, a_delta)) {
             const float t = std::clamp(a_livingTime / Config::RotationBlendDuration, 0.f, 1.f);
-            const auto& startLocalRotationC = startLocalRotation;
-            localRotation = Algebra::InterpolateRotation(startLocalRotationC, targetLocalRotation, t);
+            localRotation = Algebra::InterpolateRotation(const_cast<const RE::NiMatrix3&>(startLocalRotation), targetLocalRotation, t);
             if (rotationType != RotationType::kNone) {
                 const float angleZ = -Config::ThrowRotationSpeed * a_livingTime;
                 localRotation = localRotation * RE::NiMatrix3(0.f, 0.f, angleZ);
@@ -278,6 +277,15 @@ void ThrowableRelicWeapon::UpdateRotation(const float a_delta, const float a_liv
                 localRotation = localRotation * RE::NiMatrix3(0.f, 0.f, -Config::ThrowRotationSpeed * a_delta);
             }
         }
+        a_angles.x = asin(direction.z);
+        a_angles.z = atan2(direction.x, direction.y);
+        if (a_angles.z < 0.f) {
+            a_angles.z += PI;
+        }
+        if (direction.x < 0.f) {
+            a_angles.z += PI;
+        }
+        Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
     }
 }
 void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_livingTime) noexcept
@@ -286,8 +294,7 @@ void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_
         auto& localTranslation = weaponParentNode->local.translate;
         if (!_translationBlended && a_livingTime < std::max(Config::RotationBlendDuration * 2.f, a_delta)) {
             const float t = std::clamp(a_livingTime / Config::RotationBlendDuration / 2.f, 0.f, 1.f);
-            const auto& startLocalTranslationC = startLocalTranslation;
-            localTranslation = Algebra::BlendVectors(startLocalTranslationC, targetLocalTranslation, t);
+            localTranslation = Algebra::BlendVectors(const_cast<const RE::NiPoint3&>(startLocalTranslation), targetLocalTranslation, t);
 
             if (replacedProjectileModel) {
                 auto& weaponLocalTranslation = replacedProjectileModel->local.translate;
@@ -544,8 +551,7 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
             replacedProjectileModel.reset();
         }
         if (projectile) {
-            auto& projectileRTD = projectile->GetProjectileRuntimeData();
-            projectileRTD.flags.set(pFlag::kDestroyed);
+            projectile->Kill();
             projectileHandle.reset();
             projectileModel = nullptr;
             projectile = nullptr;
@@ -724,6 +730,6 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
         }
     }
 
-    UpdateRotation(a_delta, livingTime);
+    UpdateRotation(a_delta, livingTime, angle);
     UpdateTranslation(a_delta, livingTime);
 }

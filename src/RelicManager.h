@@ -251,8 +251,7 @@ public:
                             if (auto thrownWeapon = rRelic ? rRelic->As<ThrowableRelicWeapon>() : nullptr) {
                                 if (thrownWeapon->projectile) {
                                     thrownRelics.erase(thrownWeapon->projectile);
-                                    auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
-                                    projectileRTD.flags.set(pFlag::kDestroyed);
+                                    thrownWeapon->projectile->Kill();
                                     thrownWeapon->projectileModel = nullptr;
                                     thrownWeapon->projectileHandle.reset();
                                     thrownWeapon->projectile = nullptr;

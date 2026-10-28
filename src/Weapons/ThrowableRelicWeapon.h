@@ -150,7 +150,7 @@ public:
     [[nodiscard]] SoundManager& GetSoundManager() {return soundData;}
     [[nodiscard]] bool IsCharged(const bool a_forLastThrow = false) const {return RelicWeapon::IsCharged() ? true : (a_forLastThrow ? _isLastThrowCharged : false);}
 
-    [[nodiscard]] Thrower* GetThrower() {return thrower;}
+    [[nodiscard]] Thrower* GetThrower() const {return thrower;}
     [[nodiscard]] RE::Actor* GetThrowerActor();
     [[nodiscard]] ThrowState GetThrowState() const {return _throwState;}
     [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return droppedWeaponKeep.get().get(); }
@@ -164,7 +164,7 @@ public:
     bool InitiateTransform() noexcept;
     void InitiateModel() noexcept;
     bool InitiateTrail() noexcept;
-    void UpdateRotation(const float a_delta, const float a_livingTime) noexcept;
+    void UpdateRotation(const float a_delta, const float a_livingTime, RE::NiPoint3& a_angles) noexcept;
     void UpdateTranslation(const float a_delta, const float a_livingTime) noexcept;
     void FadeTrail();
     void RemoveTrail();

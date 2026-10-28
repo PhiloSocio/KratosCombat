@@ -1,11 +1,14 @@
 #pragma once
-#include "ThrowableWeaponState.h"
-#include "Settings.h"
-#include "Util.h"
 
-class ArrivingState : public ThrowableWeaponState
+#include "SmartWeaponState.h"
+#include "Settings.h"
+#include "util.h"
+
+class ArrivingState : public SmartWeaponState
 {
 public:
+    inline static constexpr auto kType = Type::kArriving;
+
     static constexpr std::array<float, 4> arrivingDirections {
         0.f, PI2, PI, ONEANDHALF_PI     //  b, r, f, l
     };
@@ -13,15 +16,37 @@ public:
     ~ArrivingState() override = default;
     ArrivingState(SmartRelicWeapon& a_weapon);
 
+    void Enter() override;
+    void Exit() override;
+    
+    [[nodiscard]] Type GetType() const override { return Type::kArriving; };
+
+    [[nodiscard]] bool            IsInCallingAnimation();
+    [[nodiscard]] RE::NiAVObject* GetCallerHandBone() const;
+    [[nodiscard]] RE::NiAVObject* GetCallerWeaponBone() const;
+
 protected:
-    RE::ActorHandle  callerActorHandle;
+    void   RefreshTargets() override;
+    Status MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoint3& a_vel) override;
+    void   OnAttackEnd(RE::NiPoint3& a_vel) override;
+    [[nodiscard]] bool IsTargetValid(RE::Actor* a_target) const override;
+
+    void InitializeCallerData();
+    void InitializeRoute();
+    void InitiateTransform();
+    void UpdateRotation();
+    void UpdateArrivingDirection(bool a_initial = false);
+    void UpdateArrivingRoute(const float a_delta);
+
+    static constexpr float hitDurationBudget = 0.3f;
+
     RE::Actor*       callerActor = nullptr;
     RE::NiAVObject** callerHandBoneSource = nullptr;
     RE::NiAVObject*  callerHandBone = nullptr;
     RE::NiAVObject** callerWeaponBoneSource = nullptr;
     RE::NiAVObject*  callerWeaponBone = nullptr;
     RE::NiPointer<RE::NiAVObject> callerBreastBone;
-    RE::NiAVObject* model;
+    RE::NiAVObject* model = nullptr;
     RE::NiMatrix3 startRotation = RE::NiMatrix3();
     RE::NiPoint3 handPosition;
     RE::NiPoint3 startPosition;
@@ -36,13 +61,10 @@ protected:
     RE::NiPoint3 bezierControlPoints[4];
     uint16_t arrivingRouteClosestIndex = 0u;
     uint16_t routeResolution = 64u;
-    std::vector<RE::ActorHandle> targets;
     bool  isNear = false;
     bool  isAlmostArrived = false;
     bool  isCatchable = false;
     bool  isInCallingAnimation = false;
-    float startingTime = 0.f;
-    float livingTime = 0.f;
     float timeToArrive = Config::ArrivalTime;
     float remainingTimeToArrive = Config::ArrivalTime;
     float tReal = 0.f;
@@ -53,31 +75,6 @@ protected:
     float linearDistanceFromLastCallPos = 0.f;
     float arrivingRelativeAngleZ = 0.5f;
     float arrivingRelativeAngleSnapStrength = Config::ArrivalAngleSnap;
-    float speed = 0.f;
-
-public:
-    float GetLivingTime() const {return AsyncUtil::GameTime::GetEngineTime() - startingTime;}
-    RE::NiAVObject* GetCallerHandBone() const {return callerHandBoneSource ? *callerHandBoneSource : nullptr;}
-    RE::NiAVObject* GetCallerWeaponBone() const {return callerWeaponBoneSource ? *callerWeaponBoneSource : nullptr;}
-
-    void Enter() override;
-    Status Update(float a_delta) override;
-    void Exit() override;
-
-    [[nodiscard]] Type GetType() const override { return Type::kArriving; };
-    [[nodiscard]] std::vector<RE::ActorHandle>& GetTargets() { return targets; };
-    [[nodiscard]] RE::Actor* GetNextTarget(std::optional<RE::NiPoint3> a_origin = std::nullopt);
-    [[nodiscard]] bool IsInCallingAnimation();
-
-    void InitializeCallerData();
-    void InitializeRoute();
-    void InitiateTransform();
-    void UpdateRotation();
-    void UpdateAI(RE::NiPoint3& a_outVel);
-    void UpdateArrivingDirection(bool a_initial = false);
-    void UpdateArrivingRoute();
-    void UpdateTargets(std::optional<RE::NiPoint3> a_origin = std::nullopt);
-    void CheckTargets(const RE::NiPoint3& a_origin);
 
 private:
     bool _transformInitiated = false;
