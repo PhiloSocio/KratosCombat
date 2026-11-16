@@ -126,12 +126,12 @@ public:
         uint16_t nextUID = changes->GetNextUniqueID();
         if (nextUID == 0x0) return std::nullopt;
 
-        auto xList = ExtraDataUtil::FindBaseExtraList(a_actor, obj);
+        auto xList = ExtraDataUtil::FindBaseExtraList(a_actor, obj, true);
         if (!xList) return std::nullopt;
         spdlog::debug("xList count: {}", ieData->extraLists->size());
 
         if (!xList) return std::nullopt;
-        else spdlog::debug("xList found: {}");
+        spdlog::debug("xList found: {}");
 
         auto xUID = RE::BSExtraData::Create<RE::ExtraUniqueID>();
         if (!xUID) return std::nullopt;
@@ -574,9 +574,14 @@ public:
     void BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
     {
         if (a_target) {
+            if (player && player->IsValid()) {
+                player->BeforeDamage(a_target, a_this);
+            }
             if (auto it = activeActors.find(a_target->GetHandle()); it != activeActors.end() && it->second) {
                 it->second->BeforeDamage(a_target, a_this);
-            }
+            } else if (auto it = activeActors.find(a_this.aggressor.get()->GetHandle()); it != activeActors.end() && it->second) {
+                it->second->BeforeDamage(a_target, a_this);
+            } 
         }
     }
     void BeforeDamage(RE::Projectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
