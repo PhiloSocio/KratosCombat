@@ -9,6 +9,13 @@ set(ADD_COMMONLIBSSE_PLUGIN_AUTHOR "AnArchos" CACHE STRING "Plugin author")
 set(ADD_COMMONLIBSSE_PLUGIN_EMAIL "patreon.com/AnArchos" CACHE STRING "Plugin email")
 set(commonlibSSE_min_skse_version "2.0.0.2" CACHE STRING "Minimum SKSE version")
 
+# Parse the minimum SKSE version for the generated plugin metadata.
+string(REPLACE "." ";" _skse_parts "${commonlibSSE_min_skse_version}")
+list(GET _skse_parts 0 SKSE_VERSION_MAJOR)
+list(GET _skse_parts 1 SKSE_VERSION_MINOR)
+list(GET _skse_parts 2 SKSE_VERSION_PATCH)
+list(GET _skse_parts 3 SKSE_VERSION_BUILD)
+
 if(DEFINED ENV{SKYRIM_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_FOLDER}/Data")
     set(OUTPUT_FOLDER "$ENV{SKYRIM_FOLDER}/Data")
 endif()
@@ -57,10 +64,30 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
 target_include_directories(${PROJECT_NAME} PRIVATE
     src
-    lib/glm
+    extern
     ${SIMPLEINI_INCLUDE_DIRS}
+    "${CMAKE_CURRENT_BINARY_DIR}"
 )
 
+# Generate the plugin metadata header in the build directory.
+# Include it from exactly ONE translation unit:
+# (plugin.cpp). SKSEPluginInfo expands to an extern "C" exported function;
+# including it from multiple TUs causes LNK2005 duplicate-symbol errors.
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/plugin.h" CONTENT
+"#pragma once
+
+#include <SKSE/Interfaces.h>
+
+SKSEPluginInfo(SKSE::PluginDeclaration::PluginDeclarationInfo{
+    .Version = { ${PROJECT_VERSION_MAJOR}, ${PROJECT_VERSION_MINOR}, ${PROJECT_VERSION_PATCH}, ${PROJECT_VERSION_TWEAK} },
+    .Name = \"${PROJECT_NAME}\",
+    .Author = \"${ADD_COMMONLIBSSE_PLUGIN_AUTHOR}\",
+    .SupportEmail = \"${ADD_COMMONLIBSSE_PLUGIN_EMAIL}\",
+    .StructCompatibility = ::SKSE::StructCompatibility::Independent,
+    .RuntimeCompatibility = ::SKSE::VersionIndependence::AddressLibrary,
+    .MinimumSKSEVersion = { ${SKSE_VERSION_MAJOR}, ${SKSE_VERSION_MINOR}, ${SKSE_VERSION_PATCH}, ${SKSE_VERSION_BUILD} }
+});
+")
 if(DEFINED OUTPUT_FOLDER)
     file(TO_CMAKE_PATH "${OUTPUT_FOLDER}" SANITIZED_OUTPUT_FOLDER)
     set(DLL_FOLDER "${SANITIZED_OUTPUT_FOLDER}/SKSE/Plugins")

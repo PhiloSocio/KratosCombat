@@ -1,5 +1,4 @@
 #include "Mjolnir.h"
-#include "SmartRelicWeapon.h"
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
 #include "Actors/Capabilities/Caller.h"

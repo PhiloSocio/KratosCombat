@@ -2,7 +2,7 @@
 
 #include "Weapons/Leviathan.h"
 //#include "Weapons/BladesOfChaos.h"
-//#include "Weapons/Draupnir.h"
+#include "Weapons/Draupnir.h"
 #include "Weapons/Mjolnir.h"
 
 class RelicFactory {
@@ -20,8 +20,8 @@ public:
 //        case RelicType::kBladesOfChaos:
 //            return std::make_unique<BladesOfChaos>(a_object);
 
-//        case RelicType::kDraupnir:
-//            return std::make_unique<Draupnir>(a_object);
+        case RelicType::kDraupnir:
+            return std::make_unique<Draupnir>(a_object);
 
         case RelicType::kMjolnir:
             return std::make_unique<Mjolnir>(a_object);

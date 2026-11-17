@@ -279,7 +279,7 @@ Status ArrivingState::MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoin
 {
     if (!callerActor) return Status::kCancelled;
 
-    model = weapon.projectileModel;
+    model = weapon.projectileModel.get();
     if (!model) return Status::kCancelled;
 
     callerHandBone = GetCallerHandBone();

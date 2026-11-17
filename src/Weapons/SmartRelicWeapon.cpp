@@ -174,7 +174,7 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
             } else {
                 projectile->Kill();
                 projectileHandle.reset();
-                projectileModel = nullptr;
+                projectileModel.reset();
                 projectile = nullptr;
             }
         }
@@ -213,7 +213,7 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
             }
             spdlog::info("{} is arriving to {}...", weap->GetFullName(), callerActor->GetDisplayFullName());
 
-            projectileModel = nullptr;
+            projectileModel.reset();
             _modelInitiated = false;
             if (replacedProjectileModel) {
                 weaponModelSterilizedCopy = std::move(replacedProjectileModel);
@@ -238,6 +238,7 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
 
     targetLocalTranslation = RE::NiPoint3();
     _translationBlended = false;
+    _hitTransformApplied = false;
     thrower = nullptr;
     throwerParent = nullptr;
     return true;
@@ -256,7 +257,7 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
 
         projectile->Kill();
         projectileHandle.reset();
-        projectileModel = nullptr;
+        projectileModel.reset();
         projectile = nullptr;
         if (a_justDestroy) return;
     }
@@ -379,20 +380,61 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
                         }
                     }
                 }
-            } else {spdlog::warn("WEIRD, target or levi is not exists");}
 
-            if (isSameTarget || isArriving || isHoming) {
-                return true;
-            } else if (weaponParentNode) {
-            //    auto surfaceNormal = Algebra::MatrixToVector3(point.contact.separatingNormal); surfaceNormal.Unitize();
-                auto& localRotate = weaponParentNode->local.rotate;
-            //    const auto dot = direction.Dot(surfaceNormal);
-            //    const auto localTarget = direction - dot * surfaceNormal;
-                RE::NiPoint3 angles; localRotate.ToEulerAnglesXYZ(angles);
-            //    spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
-                angles.z = Config::HitRotationZ;//std::atan2(localTarget.x, localTarget.y) + Config::HitRotationZ;
-                localRotate.SetEulerAnglesXYZ(angles);
-                spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
+                if (isSameTarget || isArriving || isHoming) {
+                    return true;
+                } else if (weaponParentNode && weaponParentNode->parent) {
+                    auto& localRotate = weaponParentNode->local.rotate;
+                    RE::NiPoint3 angles; localRotate.ToEulerAnglesXYZ(angles);
+                    auto surfaceNormal = MathUtil::Algebra::MatrixToVector3(point.contact.separatingNormal); surfaceNormal.Unitize();
+                    const auto dot = direction.Dot(surfaceNormal);
+                    const auto localTarget = direction - dot * surfaceNormal;
+                    angles.z = Config::HitRotationZ;
+                //    angles.z = std::atan2(localTarget.x, localTarget.y) + Config::HitRotationZ;   // wrong
+                    localRotate.SetEulerAnglesXYZ(angles);
+                    hitLocalRotation = localRotate;
+                    _hitTransformApplied = true;
+
+                    if (projectile && projectileModel) {
+                        projectile->Update3DPosition(true);
+                        MathUtil::Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+                    }
+                    auto setProjectileRotationFast = [this]() {
+                        if (projectile && projectileModel) {
+                            projectile->Update3DPosition(true);
+                            MathUtil::Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+                        }
+                    };
+                //    AsyncUtil::TaskManager::GetSingleton().AddPeriodicTask(1.69f, 0.5, setProjectileRotationFast);
+
+                    if (Config::DebugModeOpen) {
+                        constexpr float duration = 6.f;
+                        const auto hitPoint = MathUtil::Algebra::HkVectorToNiPoint(point.contact.position) / havokWorldScale;
+                        const auto directionPoint = hitPoint + 60.f * direction;
+                        AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
+                            duration,
+                            [hitPoint, directionPoint]() {
+                                DebugRenderer::DrawLine(hitPoint, directionPoint, GRAY);
+                            }
+                        );
+                        const auto surfaceNormalPoint = hitPoint + 30.f * MathUtil::Algebra::HkVectorToNiPoint(surfaceNormal);
+                        AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
+                            duration,
+                            [hitPoint, surfaceNormalPoint]() {
+                                DebugRenderer::DrawLine(hitPoint, surfaceNormalPoint, GOLD);
+                            }
+                        );
+                        const auto hitRotationPoint = hitPoint - 30.f * (localRotate * frontVec3);
+                        AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
+                            duration,
+                            [hitPoint, hitRotationPoint]() {
+                                DebugRenderer::DrawLine(hitPoint, hitRotationPoint, ICEBLUE);
+                            }
+                        );
+                    }
+                    spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
+                }
+                break;
             }
         }
 
@@ -482,6 +524,20 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
     case RE::ImpactResult::kNone:    projState = ProjectileState::kNone;    break;
     default: ProjectileState::kNone; break;
     }
+
+    auto setProjectileRotation = [this]() {
+        if (projectileModel)
+            MathUtil::Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+    };
+
+    auto setProjectileRotationFast = [this]() {
+        if (projectile && projectileModel) {
+            projectile->Update3DPosition(true);
+            MathUtil::Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+        }
+    };
+    //AsyncUtil::TaskManager::GetSingleton().AddPeriodicTask(2.69f, 0.2, setProjectileRotationFast);
+    //AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(2.69f, setProjectileRotationFast);
 }
 void SmartRelicWeapon::OnTrailDelete()
 {

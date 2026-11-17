@@ -189,7 +189,7 @@ bool ThrowableRelicWeapon::InitiateTransform() noexcept
 void ThrowableRelicWeapon::InitiateModel() noexcept
 {
     if (!_modelInitiated) {
-        if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel == projectile->Get3D()) {
+        if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel.get() == projectile->Get3D()) {
             auto weaponParentBone = projectileModel->GetChildren()[0];//->GetObjectByName(projectileAttachNodeName);
             weaponParentNode.reset(weaponParentBone ? weaponParentBone->AsNode() : nullptr);
 
@@ -209,7 +209,7 @@ void ThrowableRelicWeapon::InitiateModel() noexcept
                 replacedProjectileModel->local = RE::NiTransform();
                 weaponParentNode->local = RE::NiTransform();
                 weaponParentNode->AttachChild(replacedProjectileModel.get(), false);
-                ObjectUtil::Node::Collision::ReplaceRigidBody(projectileModel, ObjectUtil::Node::Collision::GetRigidBody(replacedProjectileModel.get()));
+                ObjectUtil::Node::Collision::ReplaceRigidBody(projectileModel.get(), ObjectUtil::Node::Collision::GetRigidBody(replacedProjectileModel.get()));
             //    ObjectUtil::Node::Collision::ReplaceCollisionObject(weaponParentNode, replacedProjectileModel->collisionObject);
 
             //    ObjectUtil::Node::Collision::RemoveCollisionObject(weaponParentNode);
@@ -271,7 +271,7 @@ bool ThrowableRelicWeapon::InitiateTrail() noexcept
 }
 void ThrowableRelicWeapon::UpdateRotation(const float a_delta, const float a_livingTime, RE::NiPoint3& a_angles) noexcept
 {
-    if (weaponParentNode) {
+    if (weaponParentNode && !_hitTransformApplied) {
         auto& localRotation = weaponParentNode->local.rotate;
         if (!_rotationBlended && a_livingTime < std::max(Config::RotationBlendDuration, a_delta)) {
             const float t = std::clamp(a_livingTime / Config::RotationBlendDuration, 0.f, 1.f);
@@ -295,6 +295,7 @@ void ThrowableRelicWeapon::UpdateRotation(const float a_delta, const float a_liv
             a_angles.z += PI;
         }
         Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+        spdlog::info("rotation is {}, {}, {}", angles.x, angles.y, angles.z);
     }
 }
 void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_livingTime) noexcept
@@ -309,6 +310,11 @@ void ThrowableRelicWeapon::UpdateTranslation(const float a_delta, const float a_
                 auto& weaponLocalTranslation = replacedProjectileModel->local.translate;
                 auto rotationOriginOffset = targetLocalTranslation.y / Config::HitRotationZcos;
                 weaponLocalTranslation += RE::NiPoint3(0.f, rotationOriginOffset * 0.1669f, 0.f) * a_delta * 0.5f / Config::RotationBlendDuration;
+            }
+
+            if (_hitTransformApplied) {
+                localTranslation = targetLocalTranslation;
+                _translationBlended = true;
             }
         } else {
             _translationBlended = true;
@@ -459,6 +465,7 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
         _rotationBlended = false;
         _translationBlended = false;
         _transformInitiated = false;
+        _hitTransformApplied = false;
         _collisionInitiated = false;
 
         if (!weaponModelSterilizedCopy && !replacedProjectileModel) {
@@ -557,7 +564,7 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
         if (projectile) {
             projectile->Kill();
             projectileHandle.reset();
-            projectileModel = nullptr;
+            projectileModel.reset();
             projectile = nullptr;
         }
         SetThrowState(ThrowState::kThrowable);
@@ -686,8 +693,8 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
         spdlog::warn("projectile {}'s 3d not loaded", a_projectile->GetName());
         return;
     }
-    if (projectileModel != projectileNode) {
-        projectileModel = projectileNode->AsFadeNode();
+    if (projectileModel.get() != projectileNode) {
+        projectileModel.reset(projectileNode->AsFadeNode());
         if (GetThrowState() == ThrowState::kThrown) {
             soundData.PlayThrowingLoopSounds(reinterpret_cast<RE::NiAVObject**>(&projectileModel));
         }
@@ -702,11 +709,18 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
     auto& angle = a_projectile->data.angle;
     auto& vel = runtimeData.linearVelocity;
     auto dir = vel; dir.Unitize();
-    position = pos;
-    angles = angle;
-    velocity = vel;
-    direction = dir;
+
     livingTime = GetLivingTime();
+    position   = pos;
+    velocity   = vel;
+
+    if (_hitTransformApplied) { //  to prevent impact orientation application
+        angle = angles;
+    } else {
+        direction = dir;
+        angles = angle;
+    }
+
 
     if (projState == ProjectileState::kTransition) return;
 

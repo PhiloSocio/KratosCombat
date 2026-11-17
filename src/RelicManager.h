@@ -281,7 +281,7 @@ public:
                                     thrownRelics.erase(thrownWeapon->projectile);
                                     if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
                                         thrownWeapon->projectile->Kill();
-                                    thrownWeapon->projectileModel = nullptr;
+                                    thrownWeapon->projectileModel.reset();
                                     thrownWeapon->projectileHandle.reset();
                                     thrownWeapon->projectile = nullptr;
                                 }
@@ -307,7 +307,7 @@ public:
                             thrownRelics.erase(thrownWeapon->projectile);
                             auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
                             projectileRTD.flags.set(pFlag::kDestroyed);
-                            thrownWeapon->projectileModel = nullptr;
+                            thrownWeapon->projectileModel.reset();
                             thrownWeapon->projectileHandle.reset();
                             thrownWeapon->projectile = nullptr;
                         }
@@ -361,7 +361,7 @@ public:
                     thrownRelics.erase(thrownWeapon->projectile);
                     auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
                     projectileRTD.flags.set(pFlag::kDestroyed);
-                    thrownWeapon->projectileModel = nullptr;
+                    thrownWeapon->projectileModel.reset();
                     thrownWeapon->projectileHandle.reset();
                     thrownWeapon->projectile = nullptr;
                 }
@@ -431,7 +431,7 @@ public:
                         thrownRelics.erase(thrownWeapon->projectile);
                         auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
                         projectileRTD.flags.set(pFlag::kDestroyed);
-                        thrownWeapon->projectileModel = nullptr;
+                        thrownWeapon->projectileModel.reset();
                         thrownWeapon->projectileHandle.reset();
                         thrownWeapon->projectile = nullptr;
                     }
@@ -549,7 +549,7 @@ public:
             if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
                 auto thrownWeapon = it->second;
                 if (thrownWeapon && thrownWeapon->projectile == a_this) {
-                    thrownWeapon->projectileModel = nullptr;
+                    thrownWeapon->projectileModel.reset();
                     thrownWeapon->projectileHandle.reset();
                     thrownWeapon->projectile = nullptr;
                 }

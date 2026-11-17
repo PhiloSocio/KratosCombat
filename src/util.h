@@ -47,6 +47,7 @@ inline constexpr RE::NiColorA BLACK(0.f, 0.f, 0.f, 1.f);
 inline constexpr RE::NiColorA WHITE(1.f, 1.f, 1.f, 1.f);
 
 inline constexpr float havokWorldScale = 0.0142857142857143f;
+inline constexpr float kEpsilon = 1.0e-5F;
 
 static float* g_deltaTime = (float*)RELOCATION_ID(523660, 410199).address();            //  sensitive to slow time spell
 static float* g_deltaTimeRealTime = (float*)RELOCATION_ID(523661, 410200).address();    //  const
@@ -154,11 +155,18 @@ namespace AsyncUtil
             return singleton;
         }
 
-        inline void AddDelayedTask(float delaySeconds, std::function<void()> task) {
-            float targetTime = GameTime::GetEngineTime() + delaySeconds;
+        inline void AddDelayedTask(float a_delaySeconds, std::function<void()> a_task) {
+            float targetTime = GameTime::GetEngineTime() + a_delaySeconds;
 
             WriteLocker locker(_taskQueueLock); 
-            _taskQueue.emplace_back(targetTime, std::move(task));
+            _taskQueue.emplace_back(targetTime, std::move(a_task));
+        }
+        inline void AddPeriodicTask(float a_duration, float a_interval, std::function<void()> a_task) {
+            for (float delay = 0.f; delay <= a_duration; delay += a_interval)
+                AsyncUtil::TaskManager::GetSingleton().AddDelayedTask(delay, a_task);
+        }
+        inline void AddPerFrameTask(float a_duration, std::function<void()> a_task) {
+            AddPeriodicTask(a_duration, *g_deltaTimeRealTime - kEpsilon, a_task);
         }
 
         inline void ProcessDelayedTasks() {

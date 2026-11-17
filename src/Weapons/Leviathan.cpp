@@ -1,5 +1,4 @@
 #include "Leviathan.h"
-#include "SmartRelicWeapon.h"
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Caller.h"
 #include "Assets.h"

@@ -99,16 +99,17 @@ public:
 
     RE::ProjectileHandle projectileHandle;
     RE::Projectile*      projectile = nullptr;
-    RE::BSFadeNode*      projectileModel = nullptr;
-    RE::NiPointer<RE::NiNode> weaponParentNode;
-    RE::NiPointer<RE::NiNode> weaponModelCopy;
-    RE::NiPointer<RE::NiNode> weaponModelSterilizedCopy;
-    RE::NiPointer<RE::NiNode> replacedProjectileModel;
+    RE::NiPointer<RE::BSFadeNode> projectileModel;
+    RE::NiPointer<RE::NiNode>     weaponParentNode;
+    RE::NiPointer<RE::NiNode>     weaponModelCopy;
+    RE::NiPointer<RE::NiNode>     weaponModelSterilizedCopy;
+    RE::NiPointer<RE::NiNode>     replacedProjectileModel;
     std::unique_ptr<InventoryEntryData> weapIED;
 
     ProjectileRot projectileRotation;
     RE::NiMatrix3 startLocalRotation;
     RE::NiMatrix3 targetLocalRotation;
+    RE::NiMatrix3 hitLocalRotation;
     RE::NiPoint3 startLocalTranslation  = {0.f, 0.f, 0.f};
     RE::NiPoint3 targetLocalTranslation = {0.f, 0.f, 0.f};
     RE::NiPoint3 velocity       = {0.f, 0.f, 0.f};
@@ -210,6 +211,7 @@ protected:
     bool _modelInitiated = false;
     bool _trailInitiated = false;
     bool _rotationBlended = false;
+    bool _hitTransformApplied = false;
     bool _translationBlended = false;
     bool _isLastThrowCharged = false;
 
