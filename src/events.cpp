@@ -126,13 +126,13 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             player->ThrowWeapon(RotationType::kNone, ThrowType::kNormalThrow);
             break;
         case "DraupnirsCallStage1"_h:
-//            if (WeaponIdentify::isDraupnirSpear) Draupnir::SetExplosionMagnitude(1.2f);
+            player->ChargeWeapon(1u);
             break;
         case "DraupnirsCallStage2"_h:
-//            if (WeaponIdentify::isDraupnirSpear) Draupnir::SetExplosionMagnitude(1.5f);
+            player->ChargeWeapon(2u);
             break;
         case "DraupnirsCall"_h:
-//            if (WeaponIdentify::isDraupnirSpear) Draupnir::Call(10.f, 100.f);
+            player->ChargeWeapon(3u);
 #ifdef TRIDENT
             else if (WeaponIdentify::isTrident || !Trident::GetSingleton()->isTridentThrowable) Trident::GetSingleton()->Call(10, 100);
 #endif

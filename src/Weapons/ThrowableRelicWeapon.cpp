@@ -444,8 +444,7 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     ThrowableWeaponDummyProjectile->data.speed = throwVelocity.Length();
     ThrowableWeaponDummyProjectile->data.force = impulse / 1000.f;   // [N.s]
 
-
-    if (!PreThrow()) return false;
+    if (!PreThrow(lData)) return false;
 
     soundData.PlayThrowingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
 
@@ -519,7 +518,6 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
             }
         }
         if (droppedWeaponKeep.get().get()) {
-
             ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, false, true, true, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
 

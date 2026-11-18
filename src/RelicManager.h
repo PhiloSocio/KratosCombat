@@ -305,8 +305,8 @@ public:
                     if (auto thrownWeapon = it->second ? it->second.get()->As<ThrowableRelicWeapon>() : nullptr) {
                         if (thrownWeapon->projectile) {
                             thrownRelics.erase(thrownWeapon->projectile);
-                            auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
-                            projectileRTD.flags.set(pFlag::kDestroyed);
+                            if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
+                                thrownWeapon->projectile->Kill();
                             thrownWeapon->projectileModel.reset();
                             thrownWeapon->projectileHandle.reset();
                             thrownWeapon->projectile = nullptr;
@@ -359,8 +359,8 @@ public:
             if (auto thrownWeapon = activeRelic->As<ThrowableRelicWeapon>()) {
                 if (thrownWeapon->projectile) {
                     thrownRelics.erase(thrownWeapon->projectile);
-                    auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
-                    projectileRTD.flags.set(pFlag::kDestroyed);
+                    if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
+                        thrownWeapon->projectile->Kill();
                     thrownWeapon->projectileModel.reset();
                     thrownWeapon->projectileHandle.reset();
                     thrownWeapon->projectile = nullptr;
@@ -429,8 +429,8 @@ public:
                 if (auto thrownWeapon = activeRelic->As<ThrowableRelicWeapon>()) {
                     if (thrownWeapon->projectile) {
                         thrownRelics.erase(thrownWeapon->projectile);
-                        auto& projectileRTD = thrownWeapon->projectile->GetProjectileRuntimeData();
-                        projectileRTD.flags.set(pFlag::kDestroyed);
+                        if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
+                            thrownWeapon->projectile->Kill();
                         thrownWeapon->projectileModel.reset();
                         thrownWeapon->projectileHandle.reset();
                         thrownWeapon->projectile = nullptr;
@@ -644,7 +644,7 @@ public:
                 if (relic->projState < ProjectileState::kStucked)
                     relic->UpdateProjectile(a_this, a_delta);
             } else if (relic) {
-                spdlog::error("{} is not the projectile of {}", a_this->GetName(), relic->weap->GetName());
+            //    spdlog::error("{} is not the projectile of {}", a_this->GetName(), relic->weap->GetName());
             }
         }
     }

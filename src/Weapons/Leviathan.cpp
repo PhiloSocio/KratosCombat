@@ -81,7 +81,7 @@ void LeviathanAxe::OnMenuOpenCloseEvent(const bool a_opening)
         soundData.ContinueAllLoopingSounds();
     }
 }
-bool LeviathanAxe::PreThrow()
+bool LeviathanAxe::PreThrow(RE::Projectile::LaunchData& a_launchData)
 {
     ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
     return true;

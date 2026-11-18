@@ -18,7 +18,7 @@ public:
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
     RelicType GetType() const override {return RelicType::kLeviathanAxe;}
-    bool PreThrow() override;
+    bool PreThrow(RE::Projectile::LaunchData& a_launchData) override;
     void PostThrow() override;
     bool Call(Caller* a_caller, const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt) override;
     void Catch(bool a_justDestroy = false) override;

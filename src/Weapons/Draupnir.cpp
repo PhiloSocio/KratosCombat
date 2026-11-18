@@ -19,15 +19,15 @@ bool Draupnir::Initialize()
 {
     bool found = true;
     auto dataHandler = RE::TESDataHandler::GetSingleton();
-    DraupnirsCallProjBaseL  = dataHandler->LookupForm<RE::BGSProjectile>(0x818, Config::DraupnirModESP);
-    SpellDraupnirsCallProjL = dataHandler->LookupForm<RE::SpellItem>    (0x805, Config::DraupnirModESP);
+    DraupnirsCallProjBase   = dataHandler->LookupForm<RE::BGSProjectile>(0x818, Config::DraupnirModESP);
+    SpellDraupnirsCallProj  = dataHandler->LookupForm<RE::SpellItem>    (0x805, Config::DraupnirModESP);
     DraupnirExplosion       = dataHandler->LookupForm<RE::BGSExplosion> (0x809, Config::DraupnirModESP);
     DraupnirStuckedFX       = dataHandler->LookupForm<RE::BGSArtObject> (0x819, Config::DraupnirModESP);
-    if (DraupnirsCallProjBaseL)
-        spdlog::debug("Draupnir's call projectile is {}", DraupnirsCallProjBaseL->GetName());
+    if (DraupnirsCallProjBase)
+        spdlog::debug("Draupnir's call projectile is {}", DraupnirsCallProjBase->GetName());
     else {spdlog::error("Can't find Draupnir Spear projectile"); found = false;}
-    if (SpellDraupnirsCallProjL)
-        spdlog::debug("Draupnir's call spell is {}", SpellDraupnirsCallProjL->GetName());
+    if (SpellDraupnirsCallProj)
+        spdlog::debug("Draupnir's call spell is {}", SpellDraupnirsCallProj->GetName());
     else {spdlog::error("Can't find Draupnir Spear projectile spell"); found = false;}
     if (DraupnirExplosion)
         spdlog::debug("Draupnir Spear explosion is {}", DraupnirExplosion->GetName());
@@ -60,8 +60,7 @@ void Draupnir::Update()
     SmartRelicWeapon::Update();
     if (explosionsStarted) {
         if (AsyncUtil::GameTime::GetEngineTime() >= nextExplosionTime) {
-            RE::ProjectileHandle pHandle;
-            TriggerExplosions(explosionDelay, 15.f, pHandle);
+            TriggerExplosions(explosionDelay, 15.f);
         }
     }
     if (draupnirRainStarted) {
@@ -79,9 +78,15 @@ void Draupnir::OnMenuOpenCloseEvent(const bool a_opening)
         soundData.ContinueAllLoopingSounds();
     }
 }
-bool Draupnir::PreThrow()
+bool Draupnir::PreThrow(RE::Projectile::LaunchData& a_launchData)
 {
     ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
+
+    auto& weaponBone = throwerParent->GetWeaponBone();
+    const auto& weaponRot = weaponBone->world.rotate;
+    const auto pRot = MathUtil::Algebra::VectorToPitchYaw(weaponRot * frontVec3);
+    a_launchData.angleX = pRot.x;
+    a_launchData.angleZ = pRot.z;
     return true;
 }
 void Draupnir::PostThrow()
@@ -134,19 +139,30 @@ void Draupnir::RainOfDraupnir()
 
     nextLaunchTime = AsyncUtil::GameTime::GetEngineTime() + nextLaunchDelay;
 }
-bool Draupnir::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
+bool Draupnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
 {
-    if (SpellDraupnirsCallProjL && DraupnirExplosion) {
-    //    DraupnirExplosion->data.force = a_force * explosionMagnitude;
-        StartExplosions(Config::DraupnirExplosionsInterval);
-    } return false;
+    switch (a_stage) {
+    case 1u:
+        explosionMagnitude = 1.2f;
+        break;
+    case 2u:
+        explosionMagnitude = 1.5f;
+        break;
+    case 3u:
+        if (DraupnirsCallProjBase && DraupnirExplosion) {
+            DraupnirExplosion->data.force = 100.f * explosionMagnitude;
+            StartExplosions(Config::DraupnirExplosionsInterval);
+        }
+        break;
+    }
+    return _isCharged;
 }
 void Draupnir::AddSpearHit(RE::NiNode* bone, RE::Actor* actor)
 {
     if (bone) {
         if (spearHits.size() > Config::DraupnirSpearCount) {
             auto& [oldBone, oldTarget, oldProjectileHandle] = spearHits.front();
-            if (const auto oldProjectile = oldProjectileHandle.get().get(); oldProjectile)
+            if (const auto oldProjectile = oldProjectileHandle.get().get(); oldProjectile && !oldProjectile->IsDestroyed())
                 oldProjectile->Kill();
             spearHits.erase(spearHits.begin());
         }   spearHits.emplace_back(bone, actor, RE::ProjectileHandle());
@@ -175,24 +191,24 @@ void Draupnir::StartExplosions(const float a_delay)
     explosionsStarted = true;
     spdlog::info("draupnir explosions triggered");
 }
-void Draupnir::TriggerExplosions(float a_delay, float a_force, RE::ProjectileHandle& a_pHandle)
+void Draupnir::TriggerExplosions(float a_delay, float a_force)
 {
     if (spearHits.empty()) {
         if (AsyncUtil::GameTime::GetEngineTime() > timeToDoneExplosions) {
             explosionsStarted = false;
             currentHitIndex = 0;
-            SetExplosionMagnitude(1.f);
+            explosionMagnitude = 1.f;
             spdlog::info("draupnir explosion chain finished");
         } //spdlog::info("all draupnir explosions done");
     } else {
-        auto& [bone, target, proj] = spearHits.front();
+        auto& [bone, target, projectileHandle] = spearHits.front();
         currentHitIndex++;
-        if (bone && target && a_pHandle.get().get()) {
-            TriggerExplosionAtLocation(bone.get(), a_pHandle, target.get().get());
+        if (bone && target) {
+            TriggerExplosionAtLocation(bone.get(), target.get().get());
             target.get()->RemoveExtraArrows3D();
             spdlog::info("{}. draupnir explosion done", currentHitIndex);
-        } else if (proj && a_pHandle.get().get()) {
-            TriggerExplosionAtLocation(proj.get().get(), a_pHandle);
+        } else if (auto proj = projectileHandle.get().get(); proj && !proj->IsDestroyed()) {
+            TriggerExplosionAtLocation(proj);
             spdlog::info("{}. draupnir explosion done", currentHitIndex);
         } else spdlog::info("{}. draupnir explosion is empty!", currentHitIndex);
         spearHits.erase(spearHits.begin());
@@ -200,18 +216,20 @@ void Draupnir::TriggerExplosions(float a_delay, float a_force, RE::ProjectileHan
         timeToDoneExplosions = nextExplosionTime + 0.3f;
     }
 }
-void Draupnir::TriggerExplosionAtLocation(RE::Projectile* a_proj, RE::ProjectileHandle& a_pHandle)
+void Draupnir::TriggerExplosionAtLocation(RE::Projectile* a_proj)
 {
-    RE::Projectile::LaunchData lData(RE::PlayerCharacter::GetSingleton(), a_proj->data.location, RE::Projectile::ProjectileRot(), SpellDraupnirsCallProjL);
-    RE::Projectile::Launch(&a_pHandle, lData);
-    a_proj->GetProjectileRuntimeData().flags |= pFlag::kDestroyed;
+    RE::ProjectileHandle pHandle;
+    RE::Projectile::LaunchData lData(GetThrowerActor(), a_proj->data.location, RE::Projectile::ProjectileRot(), SpellDraupnirsCallProj);
+    RE::Projectile::Launch(&pHandle, lData);
+    a_proj->Kill();
 //    a_proj->GetProjectileRuntimeData().explosionTimer = 0;    //  this method just works but explodes at the first hit position, not current 3d position.
 }
-void Draupnir::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::ProjectileHandle& a_pHandle, RE::Actor* a_target)
+void Draupnir::TriggerExplosionAtLocation(RE::NiNode* a_bone, RE::Actor* a_target)
 {
-    RE::Projectile::LaunchData lData(GetThrowerActor(), a_bone->world.translate, RE::Projectile::ProjectileRot(), SpellDraupnirsCallProjL);
+    RE::ProjectileHandle pHandle;
+    RE::Projectile::LaunchData lData(GetThrowerActor(), a_bone->world.translate, RE::Projectile::ProjectileRot(), SpellDraupnirsCallProj);
     lData.desiredTarget = a_target;
-    RE::Projectile::Launch(&a_pHandle, lData);
+    RE::Projectile::Launch(&pHandle, lData);
     auto explosionDamage = projectile ? projectile->GetProjectileRuntimeData().weaponDamage : damage;
     explosionDamage *= explosionMagnitude;
     FenixUtils::stagger(std::clamp(explosionDamage / 10.f, 0.1f, 100.f), a_target, GetThrowerActor());
@@ -251,6 +269,50 @@ void Draupnir::ReplaceStickedProjectileModel(RE::Projectile* a_proj)
     } else spdlog::warn("projectile or projectile model is null");
 }
 
+void Draupnir::OnEquip(BaseActor* a_actor) {
+    RelicWeapon::OnEquip(a_actor);
+}
+bool Draupnir::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) 
+{
+    if (projectile) {
+        auto& rtData = projectile->GetProjectileRuntimeData();
+        if (rtData.livingTime <= 1.69f * *g_deltaTime) return true;
+
+        RE::Actor* shooter = nullptr;
+        if (auto shooterRef = rtData.shooter.get()) shooter = shooterRef->As<RE::Actor>();
+
+        if (projectile->GetProjectileBase() == DraupnirsCallProjBase) {
+            spdlog::debug("draupnir's call projectile");
+            return true;
+        }
+
+        for (auto& point : a_AllCdPointCollector->hits) {
+        //    const auto ourProj  = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
+            const auto target   = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
+
+            bool isTargetActor = target ? target->formType == RE::FormType::ActorCharacter : false;
+            const auto victim = target ? target->As<RE::Actor>() : nullptr;
+            if (target && projectile != target->AsProjectile()) {
+                if (victim && shooter && victim != shooter) {
+                    if (!victim->IsDead()) {
+                        if (weap && ench && ench->effects[0])
+                            ObjectUtil::Enchantment::ChargeInventoryWeapon(shooter, weap, -ench->effects[0]->effectItem.magnitude);
+
+                        if (throwerParent) {
+                            shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
+
+                            throwerParent->RestoreRage(Config::RageBuffRate->value * 0.25f, true);
+                        }
+                    }
+                }
+
+                _hitTransformApplied = true;
+                break;
+            }
+        }
+    }
+    return false;
+}
 void Draupnir::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) 
 {
     auto missileProjectile = projectile ? projectile->As<RE::MissileProjectile>() : nullptr;

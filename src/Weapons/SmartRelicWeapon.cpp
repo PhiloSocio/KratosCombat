@@ -384,6 +384,10 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
                 if (isSameTarget || isArriving || isHoming) {
                     return true;
                 } else if (weaponParentNode && weaponParentNode->parent) {
+                    _hitTransformApplied = true;
+                    if (rotationType == RotationType::kNone) {
+                        break;
+                    }
                     auto& localRotate = weaponParentNode->local.rotate;
                     RE::NiPoint3 angles; localRotate.ToEulerAnglesXYZ(angles);
                     auto surfaceNormal = MathUtil::Algebra::MatrixToVector3(point.contact.separatingNormal); surfaceNormal.Unitize();
@@ -393,7 +397,6 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
                 //    angles.z = std::atan2(localTarget.x, localTarget.y) + Config::HitRotationZ;   // wrong
                     localRotate.SetEulerAnglesXYZ(angles);
                     hitLocalRotation = localRotate;
-                    _hitTransformApplied = true;
 
                     if (projectile && projectileModel) {
                         projectile->Update3DPosition(true);

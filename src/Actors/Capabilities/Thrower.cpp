@@ -83,6 +83,9 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
                 if (auto smartRelicWeapon = thrownWeapon->As<SmartRelicWeapon>(); smartRelicWeapon) {
                     smartRelicWeapon->SetState(RelicWeaponState::Type::kHoming);
                 }
+            } else if (a_throwType == ThrowType::kMelee) {
+                if (thrownWeapon->projectile)
+                    thrownWeapon->projectile->GetProjectileRuntimeData().range = 169.f;
             }
             RelicManager::GetSingleton()->OnRelicThrow(thrownWeapon->projectile, thrownWeapon);
         } else {

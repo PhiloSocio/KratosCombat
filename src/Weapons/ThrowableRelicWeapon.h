@@ -173,7 +173,7 @@ public:
     void RemoveTrail();
 
     virtual void UpdateProjectile(RE::Projectile* a_projectile, float a_delta);
-    virtual bool PreThrow() {return true;};
+    virtual bool PreThrow(RE::Projectile::LaunchData& a_launchData) {return true;};
     virtual void PostThrow() {};
     virtual void OnTrailDelete() {};
 //    virtual void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical);

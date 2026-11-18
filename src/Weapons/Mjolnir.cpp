@@ -82,7 +82,7 @@ void Mjolnir::OnMenuOpenCloseEvent(const bool a_opening)
         soundData.ContinueAllLoopingSounds();
     }
 }
-bool Mjolnir::PreThrow()
+bool Mjolnir::PreThrow(RE::Projectile::LaunchData& a_launchData)
 {
     ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
     return true;
