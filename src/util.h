@@ -2337,3 +2337,167 @@ namespace NifUtil
         }
     };
 }
+
+namespace HookUtil
+{
+    template <class T, std::size_t VTableSize>
+    class InstanceHook
+    {
+        static_assert(VTableSize > 0, "VTableSize should be bigger than 0");
+        static_assert(std::is_polymorphic_v<T>, "T should be polymorphic");
+
+    public:
+        T*    target   = nullptr;
+        void* userData = nullptr;
+
+        static InstanceHook* Create(T* a_target)
+        {
+            if (!a_target) return nullptr;
+            if (auto* existing = From(a_target)) return existing;
+
+            auto* ctx = new InstanceHook(a_target);
+            {
+                WriteLocker lock(RegistryMutex());
+                Registry().emplace(a_target, ctx);
+            }
+            return ctx;
+        }
+
+        static InstanceHook* GetOrCreate(T* a_target)
+        {
+            if (auto* existing = From(a_target)) return existing;
+            return Create(a_target);
+        }
+
+        static InstanceHook* From(T* a_target)
+        {
+            if (!a_target) return nullptr;
+
+            InstanceHook* ctx = nullptr;
+            bool stale = false;
+            {
+                ReadLocker lock(RegistryMutex());
+                auto& reg = Registry();
+                auto it = reg.find(a_target);
+                if (it == reg.end()) return nullptr;
+                ctx = it->second;
+                stale = !ctx->IsAlive(a_target);
+            }
+            if (stale) {
+                Destroy(a_target);
+                return nullptr;
+            }
+            return ctx;
+        }
+
+        static void Destroy(T* a_target)
+        {
+            if (!a_target) return;
+
+            InstanceHook* ctx = nullptr;
+            {
+                WriteLocker lock(RegistryMutex());
+                auto& reg = Registry();
+                auto it = reg.find(a_target);
+                if (it == reg.end()) return;
+                ctx = it->second;
+                reg.erase(it);
+            }
+            ctx->Remove();
+            delete ctx;
+        }
+
+        static void Destroy(InstanceHook* a_ctx)
+        {
+            if (!a_ctx) return;
+
+            {
+                WriteLocker lock(RegistryMutex());
+                auto& reg = Registry();
+                auto it = reg.find(a_ctx->target);
+                if (it != reg.end() && it->second == a_ctx)
+                    reg.erase(it);
+            }
+            a_ctx->Remove();
+            delete a_ctx;
+        }
+
+        template <std::size_t Slot, class Fn>
+        InstanceHook* Hook(Fn a_hook)
+        {
+            static_assert(Slot < VTableSize, "Slot >= VTableSize");
+            vtableCopy[Slot] = reinterpret_cast<void*>(a_hook);
+            return this;
+        }
+
+        void Apply()
+        {
+            if (applied || !target) return;
+            *reinterpret_cast<void***>(target) = vtableCopy;
+            applied = true;
+        }
+
+        void Remove()
+        {
+            if (!applied) return;
+            if (*reinterpret_cast<void***>(target) == vtableCopy)
+                *reinterpret_cast<void***>(target) = originalVtable;
+            applied = false;
+        }
+
+        template <class Fn, std::size_t Slot>
+        Fn Original() const
+        {
+            static_assert(Slot < VTableSize, "Slot >= VTableSize");
+            return reinterpret_cast<Fn>(originals[Slot]);
+        }
+
+        template <class Fn, std::size_t Slot, class... Args>
+        decltype(auto) Call(Args&&... args) const
+        {
+            return Original<Fn, Slot>()(std::forward<Args>(args)...);
+        }
+
+    private:
+        explicit InstanceHook(T* a_target)
+            : target(a_target)
+        {
+            originalVtable = *reinterpret_cast<void***>(a_target);
+            vtableCopy = new void*[VTableSize + 1] + 1;
+            std::memcpy(vtableCopy - 1, originalVtable - 1, (VTableSize + 1) * sizeof(void*));
+            std::memcpy(originals, originalVtable, VTableSize * sizeof(void*));
+        }
+
+        ~InstanceHook()
+        {
+            Remove();
+            delete[] (vtableCopy - 1);
+        }
+
+        InstanceHook(const InstanceHook&) = delete;
+        InstanceHook& operator=(const InstanceHook&) = delete;
+
+        [[nodiscard]] bool IsAlive(T* a_target) const
+        {
+            if (target != a_target) return false;
+            const auto currentVtable = *reinterpret_cast<void***>(a_target);
+            return applied ? currentVtable == vtableCopy : currentVtable == originalVtable;
+        }
+
+        static std::unordered_map<T*, InstanceHook*>& Registry()
+        {
+            static std::unordered_map<T*, InstanceHook*> reg;
+            return reg;
+        }
+        static Lock& RegistryMutex()
+        {
+            static Lock mutex;
+            return mutex;
+        }
+
+        void** originalVtable = nullptr;
+        void*  originals[VTableSize];
+        void** vtableCopy = nullptr;
+        bool   applied = false;
+    };
+}

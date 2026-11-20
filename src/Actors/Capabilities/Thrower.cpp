@@ -85,9 +85,8 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
                 }
             } else if (a_throwType == ThrowType::kMelee) {
                 if (thrownWeapon->projectile)
-                    thrownWeapon->projectile->GetProjectileRuntimeData().range = 169.f;
+                    thrownWeapon->projectile->GetProjectileRuntimeData().range = 100.f;
             }
-            RelicManager::GetSingleton()->OnRelicThrow(thrownWeapon->projectile, thrownWeapon);
         } else {
             spdlog::error("throw failed");
         }

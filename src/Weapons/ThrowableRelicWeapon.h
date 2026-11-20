@@ -11,7 +11,7 @@ class ThrowableRelicWeapon : public RelicWeapon
 public:
     static constexpr RelicAbility kRequiredAbility = RelicAbility::kThrowable;
 
-    ~ThrowableRelicWeapon() override = default;
+    ~ThrowableRelicWeapon() override;
     explicit ThrowableRelicWeapon(RE::TESBoundObject* a_object);
 
     static constexpr RE::NiMatrix3 RotationAngle(RotationType a_type) noexcept
@@ -91,6 +91,27 @@ public:
         }
     };
     TrailData trailData;
+
+    static constexpr std::size_t kVFuncCount = 0x100;
+
+    using ProjectileInstanceHook = HookUtil::InstanceHook<RE::Projectile, kVFuncCount>;
+
+    static constexpr std::size_t kUpdateArrow        = 0xAB;
+    static constexpr std::size_t kOnArrowKill        = 0xA8;
+    static constexpr std::size_t kGetCollisionArrow  = 0xBE;
+    static constexpr std::size_t kGetArrowImpactData = 0xBD;
+
+    static void UpdateArrow(RE::ArrowProjectile* a_this, float a_delta);
+    static void OnArrowKill(RE::ArrowProjectile* a_this);
+    static void GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
+    static RE::Projectile::ImpactData* GetArrowImpactData(RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable, std::uint32_t a6, std::uint32_t a7);
+
+    bool HookProjectile(RE::Projectile* a_projectile);
+    void UnhookProjectile(RE::Projectile* a_projectile);
+    void UnhookProjectiles();
+    void ResetProjectile();
+
+    std::unordered_map<RE::Projectile*, ProjectileInstanceHook*> projectileHooks;
 
     Thrower* thrower = nullptr;
     BaseActor* throwerParent = nullptr;

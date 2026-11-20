@@ -2,6 +2,7 @@
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
 #include "Assets.h"
+#include "hook.h"
 #include "util.h"
 
 using namespace MathUtil;
@@ -10,6 +11,10 @@ using namespace GameSettingUtil;
 using pbType = RE::BGSProjectileData::Type;
 using pbFlag = RE::BGSProjectileData::BGSProjectileFlags;
 
+ThrowableRelicWeapon::~ThrowableRelicWeapon()
+{
+    UnhookProjectiles();
+}
 ThrowableRelicWeapon::ThrowableRelicWeapon(RE::TESBoundObject* a_object)
     : RelicWeapon(a_object)
 {
@@ -437,9 +442,11 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     length = weaponBone->worldBound.radius;
     targetLocalRotation = RotationAngle(a_rotationType);
     targetLocalTranslation = TranslationOffset(a_rotationType, length, Config::HitRotationZcos);
+    
+    float collisionRadius = a_rotationType == RotationType::kNone ? 6.9f : length * 0.36f;
 
 //    ThrowableWeaponDummyProjectile->model = projectileModelPath;
-    ThrowableWeaponDummyProjectile->data.collisionRadius = length * 0.36f;
+    ThrowableWeaponDummyProjectile->data.collisionRadius = collisionRadius;
 //    ThrowableWeaponDummyProjectile->data.light = light;
     ThrowableWeaponDummyProjectile->data.speed = throwVelocity.Length();
     ThrowableWeaponDummyProjectile->data.force = impulse / 1000.f;   // [N.s]
@@ -455,6 +462,7 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
         projectile = pHandlePtr->get().get();
         projectile->inGameFormFlags.set(RE::TESForm::InGameFormFlag::kForcedPersistent);
         projState = ProjectileState::kLaunched;
+        HookProjectile(projectile);
 
         auto& rtData = projectile->GetProjectileRuntimeData();
         rtData.weaponDamage = weaponDamage * thrower->GetChargeMultiplier();
@@ -500,10 +508,14 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
             _modelInitiated = false;
         }
 
+        if (isCountless) {
+            PostThrow();
+            spdlog::info("{} throwed by {}, raw damage is: {}", weap->GetFullName(), throwerActor->GetName(), throwableDamage);
+            return true;
+        }
         if (GetThrowState() != ThrowState::kThrowable) return true;
 
         SetThrowState(ThrowState::kThrown);
-        if (isCountless) return true;
     //    RE::ObjectRefHandle handle;
     //    droppedWeaponKeep = RE::TESObjectREFR::CreateReference(handle, RE::FormType::Container, false);
     //    droppedWeaponKeep.get().get()->SetObjectReference(WeaponThrowing::ThrowableWeaponContainer);
@@ -549,6 +561,107 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
 
     return result;
 }
+bool ThrowableRelicWeapon::HookProjectile(RE::Projectile* a_projectile)
+{
+    if (!a_projectile) return false;
+
+    auto ctx = ProjectileInstanceHook::GetOrCreate(a_projectile);
+    if (ctx && ctx->userData && ctx->userData != this) {
+        static_cast<ThrowableRelicWeapon*>(ctx->userData)->projectileHooks.erase(a_projectile);
+        ProjectileInstanceHook::Destroy(a_projectile);
+        ctx = ProjectileInstanceHook::Create(a_projectile);
+    }
+    if (!ctx) return false;
+
+    ctx->userData = this;
+    ctx->Hook<kUpdateArrow>(&ThrowableRelicWeapon::UpdateArrow)
+        ->Hook<kOnArrowKill>(&ThrowableRelicWeapon::OnArrowKill)
+        ->Hook<kGetCollisionArrow>(&ThrowableRelicWeapon::GetCollisionArrow)
+        ->Hook<kGetArrowImpactData>(&ThrowableRelicWeapon::GetArrowImpactData)
+        ->Apply();
+    projectileHooks.insert_or_assign(a_projectile, ctx);
+    return true;
+}
+void ThrowableRelicWeapon::UnhookProjectile(RE::Projectile* a_projectile)
+{
+    if (!a_projectile) return;
+
+    auto ctx = ProjectileInstanceHook::From(a_projectile);
+    if (!ctx || ctx->userData != this) return;
+
+    projectileHooks.erase(a_projectile);
+    ProjectileInstanceHook::Destroy(a_projectile);
+}
+void ThrowableRelicWeapon::UnhookProjectiles()
+{
+    for (auto& [proj, ctx] : projectileHooks)
+        ProjectileInstanceHook::Destroy(ctx);
+    projectileHooks.clear();
+}
+void ThrowableRelicWeapon::ResetProjectile()
+{
+    if (projectile) {
+        UnhookProjectile(projectile);
+        if (projectileHandle.get().get() == projectile)
+            projectile->Kill();
+        projectileModel.reset();
+        projectileHandle.reset();
+        projectile = nullptr;
+    }
+}
+void ThrowableRelicWeapon::UpdateArrow(RE::ArrowProjectile* a_this, float a_delta)
+{
+    auto ctx = ProjectileInstanceHook::From(a_this);
+    if (!ctx) return;
+
+    auto _UpdateArrow = ctx->Original<decltype(&ThrowableRelicWeapon::UpdateArrow), kUpdateArrow>();
+    auto relic = static_cast<ThrowableRelicWeapon*>(ctx->userData);
+    _UpdateArrow(a_this, a_delta);
+    if (relic && relic->projectile == a_this) {
+        if (relic->projState < ProjectileState::kStucked)
+            relic->UpdateProjectile(a_this, a_delta);
+    }
+}
+void ThrowableRelicWeapon::OnArrowKill(RE::ArrowProjectile* a_this)
+{
+    auto ctx = ProjectileInstanceHook::From(a_this);
+    if (!ctx) return;
+
+    auto _OnArrowKill = ctx->Original<decltype(&ThrowableRelicWeapon::OnArrowKill), kOnArrowKill>();
+    auto relic = static_cast<ThrowableRelicWeapon*>(ctx->userData);
+    if (relic) {
+        relic->UnhookProjectile(a_this);
+        if (relic->projectile == a_this) {
+            relic->projectileModel.reset();
+            relic->projectileHandle.reset();
+            relic->projectile = nullptr;
+        }
+    }
+    _OnArrowKill(a_this);
+}
+void ThrowableRelicWeapon::GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
+{
+    auto ctx = ProjectileInstanceHook::From(a_this);
+    if (!ctx) return;
+
+    auto _GetCollisionArrow = ctx->Original<decltype(&ThrowableRelicWeapon::GetCollisionArrow), kGetCollisionArrow>();
+    auto relic = static_cast<ThrowableRelicWeapon*>(ctx->userData);
+    if (relic && relic->projectile == a_this && relic->OnHit(a_AllCdPointCollector)) return;
+    AttackHook::BeforeDamage(a_this, a_AllCdPointCollector);
+    _GetCollisionArrow(a_this, a_AllCdPointCollector);
+}
+RE::Projectile::ImpactData* ThrowableRelicWeapon::GetArrowImpactData(RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable, std::uint32_t a6, std::uint32_t a7)
+{
+    auto ctx = ProjectileInstanceHook::From(a_this);
+    if (!ctx) return nullptr;
+
+    auto _GetArrowImpactData = ctx->Original<decltype(&ThrowableRelicWeapon::GetArrowImpactData), kGetArrowImpactData>();
+    auto impactData = _GetArrowImpactData(a_this, a_target, a_targetLoc, a_velocity, a_collidable, a6, a7);
+    auto relic = static_cast<ThrowableRelicWeapon*>(ctx->userData);
+    if (relic && relic->projectile == a_this)
+        relic->PostImpact(impactData, a_target, a_targetLoc, a_velocity, a_collidable);
+    return impactData;
+}
 void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
 {
     RelicWeapon::OnEquip(a_actor);
@@ -559,12 +672,7 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
             replacedProjectileModel.reset();
         }
         projectile = projectileHandle.get().get();
-        if (projectile) {
-            projectile->Kill();
-            projectileHandle.reset();
-            projectileModel.reset();
-            projectile = nullptr;
-        }
+        ResetProjectile();
         SetThrowState(ThrowState::kThrowable);
         projState = ProjectileState::kNone;
         auto weapIEDnew = ObjectUtil::Actor::GetInventoryEntryDataForBoundObject(wielder->GetActor(), weap);

@@ -277,14 +277,7 @@ public:
                     if (it != activeRelics.end()) {
                         if (auto rRelic = it->second ? it->second.get() : nullptr) {
                             if (auto thrownWeapon = rRelic ? rRelic->As<ThrowableRelicWeapon>() : nullptr) {
-                                if (thrownWeapon->projectile) {
-                                    thrownRelics.erase(thrownWeapon->projectile);
-                                    if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
-                                        thrownWeapon->projectile->Kill();
-                                    thrownWeapon->projectileModel.reset();
-                                    thrownWeapon->projectileHandle.reset();
-                                    thrownWeapon->projectile = nullptr;
-                                }
+                                thrownWeapon->ResetProjectile();
                             }
 
                             if (rRelic && rRelic->GetWielder())
@@ -303,14 +296,7 @@ public:
                         return;
                     }
                     if (auto thrownWeapon = it->second ? it->second.get()->As<ThrowableRelicWeapon>() : nullptr) {
-                        if (thrownWeapon->projectile) {
-                            thrownRelics.erase(thrownWeapon->projectile);
-                            if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
-                                thrownWeapon->projectile->Kill();
-                            thrownWeapon->projectileModel.reset();
-                            thrownWeapon->projectileHandle.reset();
-                            thrownWeapon->projectile = nullptr;
-                        }
+                        thrownWeapon->ResetProjectile();
                     }
 
                     activeRelics.erase(it);
@@ -357,14 +343,7 @@ public:
             activeRelic->OnEquip(activeActor);
 
             if (auto thrownWeapon = activeRelic->As<ThrowableRelicWeapon>()) {
-                if (thrownWeapon->projectile) {
-                    thrownRelics.erase(thrownWeapon->projectile);
-                    if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
-                        thrownWeapon->projectile->Kill();
-                    thrownWeapon->projectileModel.reset();
-                    thrownWeapon->projectileHandle.reset();
-                    thrownWeapon->projectile = nullptr;
-                }
+                thrownWeapon->ResetProjectile();
             }
             spdlog::info("{} type relic {} picked up by {}", (uint8_t)activeRelic->GetType(), activeRelic->weap->GetFullName(), a_actor->GetName());
         }
@@ -427,14 +406,7 @@ public:
                     knownRelics.emplace_back(relicID);
                 }
                 if (auto thrownWeapon = activeRelic->As<ThrowableRelicWeapon>()) {
-                    if (thrownWeapon->projectile) {
-                        thrownRelics.erase(thrownWeapon->projectile);
-                        if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
-                            thrownWeapon->projectile->Kill();
-                        thrownWeapon->projectileModel.reset();
-                        thrownWeapon->projectileHandle.reset();
-                        thrownWeapon->projectile = nullptr;
-                    }
+                    thrownWeapon->ResetProjectile();
                 }
             }
         }
@@ -513,64 +485,6 @@ public:
 
         activeActor->OnEquip(nullptr);
     }
-    bool OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
-    {
-        if (!a_AllCdPointCollector || !a_this) return false;
-
-        ThrowableRelicWeapon* relic = nullptr;
-        {
-            ReadLocker lock(thrownRelicsMapLock);
-            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
-                relic = it->second;
-            }
-        }
-        return relic && relic->projectile == a_this ? relic->OnHit(a_AllCdPointCollector) : false;
-    }
-    void OnImpact(RE::Projectile::ImpactData* a_impactData, RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable)
-    {
-        if (!a_impactData || !a_this) return;
-
-        ThrowableRelicWeapon* relic = nullptr;
-        {
-            ReadLocker lock(thrownRelicsMapLock);
-            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
-                relic = it->second;
-            }
-        }
-        if (relic && relic->projectile == a_this) relic->PostImpact(a_impactData, a_target, a_targetLoc, a_velocity, a_collidable);
-    }
-    void OnArrowKill(RE::ArrowProjectile* a_this)
-    {
-        if (!a_this) return;
-
-        {
-            WriteLocker lock(thrownRelicsMapLock);
-
-            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
-                auto thrownWeapon = it->second;
-                if (thrownWeapon && thrownWeapon->projectile == a_this) {
-                    thrownWeapon->projectileModel.reset();
-                    thrownWeapon->projectileHandle.reset();
-                    thrownWeapon->projectile = nullptr;
-                }
-                thrownRelics.erase(it);
-            }
-        }
-    }
-    bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result)
-    {
-        if (!a_this) return a_result;
-
-        ThrowableRelicWeapon* relic = nullptr;
-        {
-            ReadLocker lock(thrownRelicsMapLock);
-            if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
-                relic = it->second;
-            }
-        }
-        return relic ? relic->GetKillOnCollision(a_this, a_result) : a_result;
-    }
-
     void BeforeDamage(RE::Actor* a_target, RE::HitData& a_this)
     {
         if (a_target) {
@@ -616,37 +530,12 @@ public:
         }
     }
 
-    void OnRelicThrow(RE::Projectile* a_projectile, ThrowableRelicWeapon* a_relic)
-    {
-        WriteLocker lock(thrownRelicsMapLock);
-
-        thrownRelics.emplace(a_projectile, a_relic);
-    }
-
     Kratos* GetPlayer() const {return player;}
 
     void OnRageConfigChanged()
     {
         if (GetOrInitializePlayer())
             player->SetRageType((RageType)Config::RageType);
-    }
-    void UpdateRelic(RE::Projectile* a_this, float a_delta)
-    {
-        if (a_this) {
-            ThrowableRelicWeapon* relic = nullptr;
-            {
-                ReadLocker lock(thrownRelicsMapLock);
-                if (auto it = thrownRelics.find(a_this); it != thrownRelics.end()) {
-                    relic = it->second;
-                }
-            }
-            if (relic && relic->projectile == a_this) {
-                if (relic->projState < ProjectileState::kStucked)
-                    relic->UpdateProjectile(a_this, a_delta);
-            } else if (relic) {
-            //    spdlog::error("{} is not the projectile of {}", a_this->GetName(), relic->weap->GetName());
-            }
-        }
     }
     void UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta)
     {
@@ -671,14 +560,12 @@ public:
 private:
     Lock activeActorsMapLock;
     Lock activeRelicsMapLock;
-    Lock thrownRelicsMapLock;
 
     KratosPtr playerPtr;
     Kratos* player = nullptr;
     std::unordered_map<RE::ActorHandle, BaseActorPtr> activeActors;
 
     std::unordered_map<RelicIdentity, RelicWeaponPtr> activeRelics;
-    std::unordered_map<RE::Projectile*, ThrowableRelicWeapon*> thrownRelics;
 
     std::vector<SavedRelic> savedRelics;
     std::vector<SavedActor> savedActors;
@@ -944,13 +831,18 @@ private:
 
     void ClearRuntimeState()
     {
+        for (auto& relic : activeRelics) {
+            if (relic.second) {
+                if (auto thrownWeapon = relic.second->As<ThrowableRelicWeapon>())
+                    thrownWeapon->UnhookProjectiles();
+            }
+        }
+
         activeRelics.clear();
         activeActors.clear();
 
         playerPtr.reset();
         player = nullptr;
-
-        thrownRelics.clear();
 
         if (Config::SpecialWeapon) Config::SpecialWeapon->value = (uint8_t)RelicType::kNone;
     }
@@ -1296,7 +1188,5 @@ private:
 
         savedActors.reserve(64);
         savedRelics.reserve(256);
-
-        thrownRelics.reserve(128);
     }
 };

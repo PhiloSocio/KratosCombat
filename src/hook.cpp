@@ -14,20 +14,6 @@ using namespace Util;
 
 static double lastUpdate(0.0000);
 
-void ProjectileHook::UpdateArrow(RE::ArrowProjectile* a_this, float a_delta)
-{
-    _UpdateArrow(a_this, a_delta);
-#ifdef KRATOS_COMBAT_3
-    RelicManager::GetSingleton()->UpdateRelic(a_this, a_delta);
-#endif
-}
-void ProjectileHook::OnArrowKill(RE::ArrowProjectile* a_this)
-{
-#ifdef KRATOS_COMBAT_3
-    RelicManager::GetSingleton()->OnArrowKill(a_this);
-#endif
-    return _OnArrowKill(a_this);
-}
 void ProjectileHook::GetLinearVelocityArrow(RE::ArrowProjectile* a_this, RE::NiPoint3& a_outVelocity)
 {
     _GetLinearVelocityArrow(a_this, a_outVelocity);
@@ -410,9 +396,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
 #endif
 void ProjectileHook::GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector)
 {
-#ifdef KRATOS_COMBAT_3
-    if (RelicManager::GetSingleton()->OnHit(a_this, a_AllCdPointCollector)) return;
-#else
+#ifndef KRATOS_COMBAT_3
     if (LeviAndDraupnirHit(a_this, a_AllCdPointCollector)) return;
 #endif
     AttackHook::BeforeDamage(a_this, a_AllCdPointCollector);
@@ -679,9 +663,7 @@ RE::Projectile::ImpactData* ProjectileHook::GetMissileImpactData(RE::MissileProj
 RE::Projectile::ImpactData* ProjectileHook::GetArrowImpactData(RE::ArrowProjectile *proj, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable, uint32_t a6, uint32_t a7)
 {
     auto impactData = _GetArrowImpactData(proj, a_target, a_targetLoc, a_velocity, a_collidable, a6, a7);
-#ifdef KRATOS_COMBAT_3
-    RelicManager::GetSingleton()->OnImpact(impactData, proj, a_target, a_targetLoc, a_velocity, a_collidable);
-#else
+#ifndef KRATOS_COMBAT_3
     LeviAndDraupnirImpactData(impactData, proj, a_target, a_targetLoc, a_velocity, a_collidable);
 #endif
     return impactData;
@@ -876,10 +858,7 @@ bool ProjectileHook::GetKillOnCollisionArrow(RE::ArrowProjectile* a_this)
 {
     bool result = _GetKillOnCollisionArrow(a_this);
 
-#ifdef KRATOS_COMBAT_3
-    if (result);
-        result = RelicManager::GetSingleton()->GetKillOnCollision(a_this, result);
-#else
+#ifndef KRATOS_COMBAT_3
     if (WeaponIdentify::IsRelic(a_this, Kratos::Relic::kMjolnir))
         if (Mjolnir::GetSingleton()->data.isPenetrating)
             result = false;

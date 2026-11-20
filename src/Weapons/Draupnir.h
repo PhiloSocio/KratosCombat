@@ -44,7 +44,8 @@ private:
     bool explosionsStarted     = false;
     std::vector<RE::ProjectileHandle> MeleeHitProjectiles;
     RE::BSFixedString DefaultDraupnirModel;
-    std::vector<std::tuple<RE::NiPointer<RE::NiNode>, RE::ActorHandle, RE::ProjectileHandle>> spearHits;
+    using SpearHits = std::vector<std::tuple<RE::NiPointer<RE::NiNode>, RE::ActorHandle, RE::ProjectileHandle>>;
+    std::shared_ptr<SpearHits> spearHits = std::make_shared<SpearHits>();
 
     void MeleeThrow();
     void StartExplosions(const float a_delay);

@@ -10,7 +10,6 @@ void Caller::CallWeapon(SmartRelicWeapon* a_weaponToCall)
 {
     if (parent && parent->IsValid()) {
         if (a_weaponToCall && a_weaponToCall->Call(this, false)) {
-            RelicManager::GetSingleton()->OnRelicThrow(a_weaponToCall->projectile, a_weaponToCall);
         } else if (auto weaponToCall = _weaponToCall ? _weaponToCall->As<SmartRelicWeapon>() : nullptr) {
             if (auto wielder = weaponToCall->GetWielder(); wielder && wielder->GetActor() != parent->GetActor()) {
             //    if (weaponToCall->Call(this, false, 1.618f)) {
@@ -18,7 +17,6 @@ void Caller::CallWeapon(SmartRelicWeapon* a_weaponToCall)
                     spdlog::info("weapon forcefully called from {}", wielder->GetActor()->GetName());
             //    }
             } else if (weaponToCall->Call(this, false)) {
-                RelicManager::GetSingleton()->OnRelicThrow(weaponToCall->projectile, weaponToCall);
                 spdlog::info("{} has successfully called {}", parent->GetActor()->GetName(), weaponToCall->weap->fullName);
             } else {
                 spdlog::info("{} has failed to call {}", parent->GetActor()->GetName(), weaponToCall->weap->fullName);

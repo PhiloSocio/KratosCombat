@@ -102,7 +102,7 @@ void Draupnir::PostThrow()
 
     if (projectile = projectileHandle.get().get(); projectile) {
         MeleeHitProjectiles.emplace_back(projectileHandle);
-        spdlog::debug("melee thrown draupnir form id: {}", projectile->formID);
+        spdlog::debug("melee thrown draupnir form id: {:08x}", projectile->formID);
     }
 }
 
@@ -160,28 +160,28 @@ bool Draupnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, c
 void Draupnir::AddSpearHit(RE::NiNode* bone, RE::Actor* actor)
 {
     if (bone) {
-        if (spearHits.size() > Config::DraupnirSpearCount) {
-            auto& [oldBone, oldTarget, oldProjectileHandle] = spearHits.front();
+        if (spearHits->size() > Config::DraupnirSpearCount) {
+            auto& [oldBone, oldTarget, oldProjectileHandle] = spearHits->front();
             if (const auto oldProjectile = oldProjectileHandle.get().get(); oldProjectile && !oldProjectile->IsDestroyed())
                 oldProjectile->Kill();
-            spearHits.erase(spearHits.begin());
-        }   spearHits.emplace_back(bone, actor, RE::ProjectileHandle());
+            spearHits->erase(spearHits->begin());
+        }   spearHits->emplace_back(bone, actor, RE::ProjectileHandle());
     }
 }
 void Draupnir::AddSpearHit(RE::Projectile* a_proj)
 {
     if (a_proj) {
-        if (spearHits.size() > Config::DraupnirSpearCount) {
-            auto& [oldBone, oldTarget, oldProjectileHandle] = spearHits.front();
+        if (spearHits->size() > Config::DraupnirSpearCount) {
+            auto& [oldBone, oldTarget, oldProjectileHandle] = spearHits->front();
             if (const auto oldProjectile = oldProjectileHandle.get().get(); oldProjectile)
                 oldProjectile->Kill();
-            spearHits.erase(spearHits.begin());
-        }   spearHits.emplace_back(nullptr, RE::ActorHandle(), a_proj);
+            spearHits->erase(spearHits->begin());
+        }   spearHits->emplace_back(nullptr, RE::ActorHandle(), a_proj);
     }
 }
 void Draupnir::StartExplosions(const float a_delay)
 {
-    if (spearHits.empty() && explosionsStarted) {
+    if (spearHits->empty() && explosionsStarted) {
         spdlog::info("there is no thrown explodable draupnir spear");
         explosionsStarted = false;
         return;
@@ -193,7 +193,7 @@ void Draupnir::StartExplosions(const float a_delay)
 }
 void Draupnir::TriggerExplosions(float a_delay, float a_force)
 {
-    if (spearHits.empty()) {
+    if (spearHits->empty()) {
         if (AsyncUtil::GameTime::GetEngineTime() > timeToDoneExplosions) {
             explosionsStarted = false;
             currentHitIndex = 0;
@@ -201,7 +201,7 @@ void Draupnir::TriggerExplosions(float a_delay, float a_force)
             spdlog::info("draupnir explosion chain finished");
         } //spdlog::info("all draupnir explosions done");
     } else {
-        auto& [bone, target, projectileHandle] = spearHits.front();
+        auto& [bone, target, projectileHandle] = spearHits->front();
         currentHitIndex++;
         if (bone && target) {
             TriggerExplosionAtLocation(bone.get(), target.get().get());
@@ -211,7 +211,7 @@ void Draupnir::TriggerExplosions(float a_delay, float a_force)
             TriggerExplosionAtLocation(proj);
             spdlog::info("{}. draupnir explosion done", currentHitIndex);
         } else spdlog::info("{}. draupnir explosion is empty!", currentHitIndex);
-        spearHits.erase(spearHits.begin());
+        spearHits->erase(spearHits->begin());
         nextExplosionTime = AsyncUtil::GameTime::GetEngineTime() + a_delay;
         timeToDoneExplosions = nextExplosionTime + 0.3f;
     }
@@ -323,13 +323,11 @@ void Draupnir::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjec
         auto& missileRTD = missileProjectile->GetMissileRuntimeData();
         auto shooter = rtData.shooter ? rtData.shooter.get()->As<RE::Actor>() : nullptr;
         const auto projBase = missileProjectile->GetProjectileBase();
-        bool isDraupnirSpear = throwerParent->GetRightHandRelic() == this;
 
         if (projBase == DraupnirsCallProjBase) {
             missileRTD.impactResult = RE::ImpactResult::kImpale;
             a_impactData->impactResult = RE::ImpactResult::kImpale;
-        }
-        else if (isDraupnirSpear) {
+        } else {
         //    bool isMelee = false;
         //    if (!Draupnir::MeleeHitProjectileIDs.empty())
         //        for (auto ID : Draupnir::MeleeHitProjectileIDs) {

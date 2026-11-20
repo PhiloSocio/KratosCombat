@@ -172,10 +172,7 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
                 spdlog::debug("{} is woobling to leave where it is stucked", weap->GetFullName());
                 return false;
             } else {
-                projectile->Kill();
-                projectileHandle.reset();
-                projectileModel.reset();
-                projectile = nullptr;
+                ResetProjectile();
             }
         }
 
@@ -202,6 +199,7 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
             launchTime = AsyncUtil::GameTime::GetEngineTime();
             projectile = pHandlePtr->get().get();
             projectile->inGameFormFlags.set(RE::TESForm::InGameFormFlag::kForcedPersistent);
+            HookProjectile(projectile);
         //    currentReference->Disable();
 
             if (IsArriving()) {
@@ -255,10 +253,7 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
             return;
         }
 
-        projectile->Kill();
-        projectileHandle.reset();
-        projectileModel.reset();
-        projectile = nullptr;
+        ResetProjectile();
         if (a_justDestroy) return;
     }
 
