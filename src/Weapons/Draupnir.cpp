@@ -81,12 +81,6 @@ void Draupnir::OnMenuOpenCloseEvent(const bool a_opening)
 bool Draupnir::PreThrow(RE::Projectile::LaunchData& a_launchData)
 {
     ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
-
-    auto& weaponBone = throwerParent->GetWeaponBone();
-    const auto& weaponRot = weaponBone->world.rotate;
-    const auto pRot = MathUtil::Algebra::VectorToPitchYaw(weaponRot * frontVec3);
-    a_launchData.angleX = pRot.x;
-    a_launchData.angleZ = pRot.z;
     return true;
 }
 void Draupnir::PostThrow()
@@ -101,8 +95,11 @@ void Draupnir::PostThrow()
     trailData.trailOverride.baseColorOverride = trailData.GetColorByIndex(Config::TrailColorIndexLeviathan);
 
     if (projectile = projectileHandle.get().get(); projectile) {
-        MeleeHitProjectiles.emplace_back(projectileHandle);
-        spdlog::debug("melee thrown draupnir form id: {:08x}", projectile->formID);
+        if (throwingType == ThrowType::kMelee) {
+            std::erase_if(MeleeHitProjectiles, [](const RE::ProjectileHandle& a_handle) { return !a_handle.get().get(); });
+            MeleeHitProjectiles.emplace_back(projectileHandle);
+            spdlog::debug("melee thrown draupnir form id: {:08x}", projectile->formID);
+        }
     }
 }
 

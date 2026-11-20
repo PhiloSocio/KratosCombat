@@ -156,6 +156,7 @@ public:
     float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
     float gravity           = 3.21f;
     float throwingChargeDuration = 0.f;
+    ThrowType throwingType = ThrowType::kNormalThrow;
     RotationType rotationType = RotationType::kNone;
 
     bool Initialize() override;
@@ -184,7 +185,7 @@ public:
 
     void SetThrowState(const ThrowState a_throwState) {_throwState = a_throwState;};
 
-    bool Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt);
+    bool Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt, const ThrowType a_throwType = ThrowType::kNormalThrow);
     bool InitiateTransform() noexcept;
     void InitiateModel() noexcept;
     bool InitiateTrail() noexcept;

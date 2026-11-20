@@ -75,7 +75,7 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
     auto rRelic = parent->GetRightHandRelic();
     if (auto thrownWeapon = rRelic ? rRelic->As<ThrowableRelicWeapon>() : nullptr) {
         thrownWeapon->throwingChargeDuration = _isCharging ? _chargeDuration : 0.f;
-        if(const bool success = thrownWeapon->Throw(this, a_rotationType); success) {
+        if(const bool success = thrownWeapon->Throw(this, a_rotationType, std::nullopt, std::nullopt, a_throwType); success) {
             thrownWeapon->throwingChargeDuration = 0.f;
             StopChargingThrow();
             lastThrownRelic = thrownWeapon;
@@ -83,9 +83,6 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
                 if (auto smartRelicWeapon = thrownWeapon->As<SmartRelicWeapon>(); smartRelicWeapon) {
                     smartRelicWeapon->SetState(RelicWeaponState::Type::kHoming);
                 }
-            } else if (a_throwType == ThrowType::kMelee) {
-                if (thrownWeapon->projectile)
-                    thrownWeapon->projectile->GetProjectileRuntimeData().range = 100.f;
             }
         } else {
             spdlog::error("throw failed");

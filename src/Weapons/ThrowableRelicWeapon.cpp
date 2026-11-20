@@ -371,7 +371,7 @@ void ThrowableRelicWeapon::RemoveTrail()
     }
 }
 
-bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin)
+bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot, std::optional<RE::NiPoint3> a_origin, const ThrowType a_throwType)
 {
     bool result = false;
     isPenetrating = false;
@@ -402,7 +402,9 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
         spdlog::debug("thrower bones are invalid");
         return result;
     }
+
     rotationType = a_rotationType;
+    throwingType = a_throwType;
 
     auto weaponDamage = (float)weap->attackDamage;
     if (throwerActor->IsPlayerRef()) {
@@ -415,15 +417,26 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     const auto handVelocity = (handTransform.translate - handPeviousTransform.translate) / *g_deltaTime;    // g_deltaTimeRealTime?
     auto origin = handTransform.translate;
 
-    if (a_pRot.has_value())
+    if (a_pRot.has_value()) {
         projectileRotation = a_pRot.value();
-    else
+    } else if (a_throwType == ThrowType::kMelee) {
+        const auto& weaponRot = weaponBone->world.rotate;
+        projectileRotation = MathUtil::Algebra::VectorToPitchYaw(weaponRot * frontVec3);
+    } else {
         projectileRotation = RE::Projectile::ProjectileRot(throwerActor->GetAimAngle(), throwerActor->GetAimHeading());
+    }
 
     auto throwDir = Algebra::PitchYawToVector(projectileRotation);
     throwDir.Unitize();
-    origin += throwDir * handVelocity.Length() * *g_deltaTime;
+
+    if (a_throwType == ThrowType::kMelee) {
+        origin -= throwDir * length * 0.5f;
+    } else {
+        origin += throwDir * handVelocity.Length() * *g_deltaTime;
+    }
+
     if (a_origin.has_value()) origin = a_origin.value();
+
 //    RE::Projectile::LaunchData lData(ThrowableWeaponDummyProjectile, throwerActor, origin, projectileRotation);
     RE::Projectile::LaunchData lData(throwerActor, origin, projectileRotation, ThrowableWeaponDummyAmmo, weap);
     lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(throwerActor, false);
@@ -445,11 +458,14 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     
     float collisionRadius = a_rotationType == RotationType::kNone ? 6.9f : length * 0.36f;
 
-//    ThrowableWeaponDummyProjectile->model = projectileModelPath;
-    ThrowableWeaponDummyProjectile->data.collisionRadius = collisionRadius;
-//    ThrowableWeaponDummyProjectile->data.light = light;
-    ThrowableWeaponDummyProjectile->data.speed = throwVelocity.Length();
-    ThrowableWeaponDummyProjectile->data.force = impulse / 1000.f;   // [N.s]
+    auto& projBaseData = ThrowableWeaponDummyProjectile->data;
+    projBaseData.collisionRadius = collisionRadius;
+//    projBaseData.light = light;
+    projBaseData.speed = throwVelocity.Length();
+    projBaseData.force = impulse / 1000.f;   // [N.s]
+    projBaseData.range = 69696.9f;
+    if (a_throwType == ThrowType::kMelee)
+        projBaseData.range = length > 69.f ? length * 2.1f : 137.f + 6.9f;
 
     if (!PreThrow(lData)) return false;
 
@@ -474,8 +490,9 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
         _transformInitiated = false;
         _hitTransformApplied = false;
         _collisionInitiated = false;
+        _trailInitiated = false;
 
-        if (!weaponModelSterilizedCopy && !replacedProjectileModel) {
+        if (isCountless || (!weaponModelSterilizedCopy && !replacedProjectileModel)) {
             _modelInitiated = false;
         //    RE::NiObjectPtr weaponCopy;
         //    weaponBone->CreateDeepCopy(weaponCopy);
