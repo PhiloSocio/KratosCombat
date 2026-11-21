@@ -67,5 +67,6 @@ enum class ThrowType : std::uint8_t {
     kChargingThrow,
     kPowerChargingThrow,
     kHomingThrow,
-    kMelee
+    kMelee,
+    kArtilleryThrow    //  launched from high above onto the target area, like a mortar barrage
 };

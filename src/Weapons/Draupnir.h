@@ -12,8 +12,8 @@ public:
     void Update() override;
     void OnEquip(BaseActor* a_actor) override;
     void SetState(RelicWeaponState::Type a_type) override {};
-    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
-    void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
+    bool OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
+    void PostImpact(RE::ArrowProjectile* a_this, RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
     RelicType GetType() const override {return RelicType::kDraupnir;}

@@ -84,6 +84,8 @@ public:
 
     //Draupnir spear
     static inline float DraupnirExplosionsInterval  = 0.24f;
+    static inline float DraupnirRainInterval        = 0.1f;         //  seconds between artillery launches
+    static inline float DraupnirRainDuration        = 3.f;          //  total duration of the rain
     static inline uint32_t DraupnirSpearCount       = 6;            //  count of spear explodable projectiles (max 9)
     static inline float NoGravityDurationDraupnir   = 0.18f;
     static inline std::string DraupnirsCallEvent    = "DraupnirsCall";

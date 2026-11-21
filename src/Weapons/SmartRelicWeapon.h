@@ -62,11 +62,13 @@ public:
     bool Initialize() override;
     void Update() override;
     void UpdateProjectile(RE::Projectile* a_projectile, float a_delta) override;
-    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
-    void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
-    void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
+    bool OnHit(RE::ArrowProjectile* a_projectile, RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
+    void PreImpact(RE::ArrowProjectile* a_projectile, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
+    void PostImpact(RE::ArrowProjectile* a_projectile, RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     void OnTrailDelete() override;
 
+    [[nodiscard]] bool IsArriving() const noexcept {return currentState ? currentState->GetType() == RelicWeaponState::Type::kArriving : false;}
+    [[nodiscard]] bool IsHoming() const noexcept {return currentState ? currentState->GetType() == RelicWeaponState::Type::kHoming : false;}
     [[nodiscard]] Caller*           GetCaller() const {return caller;}
     [[nodiscard]] RelicWeaponState* GetState() const {return currentState.get();}
     [[nodiscard]] ActorCapability*  GetActiveController() const noexcept;
@@ -79,8 +81,6 @@ public:
     void GetPosition(RE::NiPoint3& a_point);
     virtual bool Call(Caller* a_caller, const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt);
     virtual void Catch(bool a_justDestroy = false);
-    virtual bool IsArriving() const {return currentState ? currentState->GetType() == RelicWeaponState::Type::kArriving : false;}
-    virtual bool IsHoming() const {return currentState ? currentState->GetType() == RelicWeaponState::Type::kHoming : false;}
 
 protected:
     std::unique_ptr<RelicWeaponState> currentState;

@@ -163,8 +163,6 @@ public:
     void Update() override;
     void OnEquip(BaseActor* a_actor) override;
 //    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
-    void PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override {};
-    void PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) override;
     bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result);
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
@@ -194,6 +192,9 @@ public:
     void FadeTrail();
     void RemoveTrail();
 
+    virtual bool OnHit(RE::ArrowProjectile* a_projectile, RE::hkpAllCdPointCollector* a_AllCdPointCollector) = 0;
+    virtual void PreImpact(RE::ArrowProjectile* a_projectile, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) = 0;
+    virtual void PostImpact(RE::ArrowProjectile* a_projectile, RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable);
     virtual void UpdateProjectile(RE::Projectile* a_projectile, float a_delta);
     virtual bool PreThrow(RE::Projectile::LaunchData& a_launchData) {return true;};
     virtual void PostThrow() {};

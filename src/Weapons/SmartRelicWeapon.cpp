@@ -323,131 +323,134 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
     caller = nullptr;
 }
 
-bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) 
+bool SmartRelicWeapon::OnHit(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector) 
 {
-    if (projectile) {
-        auto& rtData = projectile->GetProjectileRuntimeData();
-        if (rtData.livingTime <= 1.69f * *g_deltaTime) return true;
+    if (!a_this || projectile != a_this) return false;
 
-        RE::Actor* shooter = nullptr;
-        if (auto shooterRef = rtData.shooter.get()) shooter = shooterRef->As<RE::Actor>();
+    auto& rtData = projectile->GetProjectileRuntimeData();
+    if (rtData.livingTime <= 1.69f * *g_deltaTime) return true;
 
-        const bool isHoming = IsHoming();
-        const bool isArriving = IsArriving();
-        if (/*rtData.livingTime < 0.01f || */(isArriving && Config::DontDamageWhileArrive)) return true;
-        for (auto& point : a_AllCdPointCollector->hits) {
-        //    const auto ourProj  = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
-            const auto target   = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
+    RE::Actor* shooter = nullptr;
+    if (auto shooterRef = rtData.shooter.get()) shooter = shooterRef->As<RE::Actor>();
 
-            bool isSameTarget = false;
-            bool isTargetActor = target ? target->formType == RE::FormType::ActorCharacter : false;
-            const auto victim = target ? target->As<RE::Actor>() : nullptr;
-            if (target && projectile != target->AsProjectile()) {
-                if (!isTargetActor && lastHitForms.Contains(target->GetHandle())) isSameTarget = true;
-                else if (victim && shooter && victim != shooter) {
-                    if (lastHitActors.Contains(victim->GetHandle())) isSameTarget = true;
-                    if (!victim->IsDead()) {
-                        if (isHoming) {
-                            auto homingState = GetCurrentState() ? GetCurrentState()->As<HomingState>() : nullptr;
-                            if (homingState && victim == homingState->GetNextTarget() && rtData.livingTime > 0.5f) {
-                                homingState->OnHit(victim);
-                                spdlog::debug("{} is hit to {} ({:8x}) and passed through while homing", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
-                            }
-                        } else if (isArriving && !isSameTarget) {
-                            auto arrivingState = GetCurrentState() ? GetCurrentState()->As<ArrivingState>() : nullptr;
-                            if (arrivingState && victim == arrivingState->GetNextTarget() && rtData.livingTime > 0.5f) {
-                                arrivingState->OnHit(victim);
-                                spdlog::debug("{} is hit to {} ({:8x}) and passed through while arriving", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
-                            }
-                        } //else if (isPenetrating && !isSameTarget) {
-                        //    ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
-                        //}
+    const bool isHoming = IsHoming();
+    const bool isArriving = IsArriving();
+    if (/*rtData.livingTime < 0.01f || */(isArriving && Config::DontDamageWhileArrive)) return true;
+    for (auto& point : a_AllCdPointCollector->hits) {
+    //    const auto ourProj  = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableA);
+        const auto target   = RE::TESHavokUtilities::FindCollidableRef(*point.rootCollidableB);
 
-                        if (!isArriving) stuckedActor = victim->GetHandle();
-
-                        if (weap && ench && ench->effects[0])
-                            ObjectUtil::Enchantment::ChargeInventoryWeapon(shooter, weap, -ench->effects[0]->effectItem.magnitude);
-
-                        if (!isArriving && throwerParent) {
-                            shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
-
-                            throwerParent->RestoreRage(Config::RageBuffRate->value * 0.25f, true);
+        bool isSameTarget = false;
+        bool isTargetActor = target ? target->formType == RE::FormType::ActorCharacter : false;
+        const auto victim = target ? target->As<RE::Actor>() : nullptr;
+        if (target && projectile != target->AsProjectile()) {
+            if (!isTargetActor && lastHitForms.Contains(target->GetHandle())) isSameTarget = true;
+            else if (victim && shooter && victim != shooter) {
+                if (lastHitActors.Contains(victim->GetHandle())) isSameTarget = true;
+                if (!victim->IsDead()) {
+                    if (isHoming) {
+                        auto homingState = GetCurrentState() ? GetCurrentState()->As<HomingState>() : nullptr;
+                        if (homingState && victim == homingState->GetNextTarget() && rtData.livingTime > 0.5f) {
+                            homingState->OnHit(victim);
+                            spdlog::debug("{} is hit to {} ({:8x}) and passed through while homing", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
                         }
+                    } else if (isArriving && !isSameTarget) {
+                        auto arrivingState = GetCurrentState() ? GetCurrentState()->As<ArrivingState>() : nullptr;
+                        if (arrivingState && victim == arrivingState->GetNextTarget() && rtData.livingTime > 0.5f) {
+                            arrivingState->OnHit(victim);
+                            spdlog::debug("{} is hit to {} ({:8x}) and passed through while arriving", projectile->GetName(), target ? target->GetName() : "NULL",  target ? target->formID : 0x0);
+                        }
+                    } //else if (isPenetrating && !isSameTarget) {
+                    //    ObjectUtil::Actor::ProcessHitImpl(shooter, victim, projectile, false);
+                    //}
+
+                    if (!isArriving) stuckedActor = victim->GetHandle();
+
+                    if (weap && ench && ench->effects[0])
+                        ObjectUtil::Enchantment::ChargeInventoryWeapon(shooter, weap, -ench->effects[0]->effectItem.magnitude);
+
+                    if (!isArriving && throwerParent) {
+                        shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
+
+                        throwerParent->RestoreRage(Config::RageBuffRate->value * 0.25f, true);
                     }
                 }
+            }
 
-                if (isSameTarget || isArriving || isHoming) {
-                    return true;
-                } else if (weaponParentNode && weaponParentNode->parent) {
-                    _hitTransformApplied = true;
-                    if (rotationType == RotationType::kNone) {
-                        break;
-                    }
-                    auto& localRotate = weaponParentNode->local.rotate;
-                    RE::NiPoint3 angles; localRotate.ToEulerAnglesXYZ(angles);
-                    auto surfaceNormal = MathUtil::Algebra::MatrixToVector3(point.contact.separatingNormal); surfaceNormal.Unitize();
-                    const auto dot = direction.Dot(surfaceNormal);
-                    const auto localTarget = direction - dot * surfaceNormal;
-                    angles.z = Config::HitRotationZ;
-                //    angles.z = std::atan2(localTarget.x, localTarget.y) + Config::HitRotationZ;   // wrong
-                    localRotate.SetEulerAnglesXYZ(angles);
-                    hitLocalRotation = localRotate;
+            if (isSameTarget || isArriving || isHoming) {
+                return true;
+            } else if (weaponParentNode && weaponParentNode->parent) {
+                _hitTransformApplied = true;
+                if (rotationType == RotationType::kNone) {
+                    break;
+                }
+                auto& localRotate = weaponParentNode->local.rotate;
+                RE::NiPoint3 angles; localRotate.ToEulerAnglesXYZ(angles);
+                auto surfaceNormal = MathUtil::Algebra::MatrixToVector3(point.contact.separatingNormal); surfaceNormal.Unitize();
+                const auto dot = direction.Dot(surfaceNormal);
+                const auto localTarget = direction - dot * surfaceNormal;
+                angles.z = Config::HitRotationZ;
+            //    angles.z = std::atan2(localTarget.x, localTarget.y) + Config::HitRotationZ;   // wrong
+                localRotate.SetEulerAnglesXYZ(angles);
+                hitLocalRotation = localRotate;
 
+                if (projectile && projectileModel) {
+                    projectile->Update3DPosition(true);
+                    MathUtil::Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+                }
+                auto setProjectileRotationFast = [this]() {
                     if (projectile && projectileModel) {
                         projectile->Update3DPosition(true);
                         MathUtil::Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
                     }
-                    auto setProjectileRotationFast = [this]() {
-                        if (projectile && projectileModel) {
-                            projectile->Update3DPosition(true);
-                            MathUtil::Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+                };
+            //    AsyncUtil::TaskManager::GetSingleton().AddPeriodicTask(1.69f, 0.5, setProjectileRotationFast);
+
+                if (Config::DebugModeOpen) {
+                    constexpr float duration = 6.f;
+                    const auto hitPoint = MathUtil::Algebra::HkVectorToNiPoint(point.contact.position) / havokWorldScale;
+                    const auto directionPoint = hitPoint + 60.f * direction;
+                    AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
+                        duration,
+                        [hitPoint, directionPoint]() {
+                            DebugRenderer::DrawLine(hitPoint, directionPoint, GRAY);
                         }
-                    };
-                //    AsyncUtil::TaskManager::GetSingleton().AddPeriodicTask(1.69f, 0.5, setProjectileRotationFast);
-
-                    if (Config::DebugModeOpen) {
-                        constexpr float duration = 6.f;
-                        const auto hitPoint = MathUtil::Algebra::HkVectorToNiPoint(point.contact.position) / havokWorldScale;
-                        const auto directionPoint = hitPoint + 60.f * direction;
-                        AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
-                            duration,
-                            [hitPoint, directionPoint]() {
-                                DebugRenderer::DrawLine(hitPoint, directionPoint, GRAY);
-                            }
-                        );
-                        const auto surfaceNormalPoint = hitPoint + 30.f * MathUtil::Algebra::HkVectorToNiPoint(surfaceNormal);
-                        AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
-                            duration,
-                            [hitPoint, surfaceNormalPoint]() {
-                                DebugRenderer::DrawLine(hitPoint, surfaceNormalPoint, GOLD);
-                            }
-                        );
-                        const auto hitRotationPoint = hitPoint - 30.f * (localRotate * frontVec3);
-                        AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
-                            duration,
-                            [hitPoint, hitRotationPoint]() {
-                                DebugRenderer::DrawLine(hitPoint, hitRotationPoint, ICEBLUE);
-                            }
-                        );
-                    }
-                    spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
+                    );
+                    const auto surfaceNormalPoint = hitPoint + 30.f * MathUtil::Algebra::HkVectorToNiPoint(surfaceNormal);
+                    AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
+                        duration,
+                        [hitPoint, surfaceNormalPoint]() {
+                            DebugRenderer::DrawLine(hitPoint, surfaceNormalPoint, GOLD);
+                        }
+                    );
+                    const auto hitRotationPoint = hitPoint - 30.f * (localRotate * frontVec3);
+                    AsyncUtil::TaskManager::GetSingleton().AddPerFrameTask(
+                        duration,
+                        [hitPoint, hitRotationPoint]() {
+                            DebugRenderer::DrawLine(hitPoint, hitRotationPoint, ICEBLUE);
+                        }
+                    );
                 }
-                break;
+                spdlog::info("hit rotation is {}, {}, {}", angles.x, angles.y, angles.z);
             }
+            break;
         }
-
-        if (GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
-        
     }
+
+    if (GetThrowState() == ThrowState::kThrown) SetThrowState(ThrowState::kCanArrive);
+
     return false;
 }
-void SmartRelicWeapon::PreImpact(RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable)
+void SmartRelicWeapon::PreImpact(RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable)
 {}
-void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) 
+void SmartRelicWeapon::PostImpact(RE::ArrowProjectile* a_this, RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) 
 {
+    if (!a_this || projectile != a_this) return;
+
     const bool isTargetActor = a_target ? a_target->formType == RE::FormType::ActorCharacter : false;
     const auto victim = isTargetActor ? a_target->As<RE::Actor>() : nullptr;
-    auto& rtData = projectile->GetProjectileRuntimeData();
+    auto& rtDataMissile = a_this->GetMissileRuntimeData();
+    auto& rtData = a_this->GetProjectileRuntimeData();
 //    auto shooter = rtData.shooter ? rtData.shooter.get()->As<RE::Actor>() : nullptr;
 
 //    currentReference->Enable(false);
@@ -474,22 +477,8 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
     else if (a_target) lastHitForms.Push(a_target->GetHandle());
     else skipIt = true; //  the target is not an actor or a form, probably the ground or an inpenetrable thing.
 
-    if (isPenetrating && skipIt) {
-        a_impactData->impactResult = RE::ImpactResult::kBounce;
-        isPenetrating = false;
-    } else if (isPenetrating) {
-        a_impactData->impactResult = RE::ImpactResult::kBounce;
-        stopSounds = true;
-        spdlog::debug("{} is hit to {} ({:8x}) but not passed through!", projectile->GetName(), a_target ? a_target->GetName() : "NULL",  a_target ? a_target->formID : 0x0);
-    } else if (a_impactData->impactResult == RE::ImpactResult::kStick) {  //  let it try to stick if it can
-        //
-    } else if (isTargetActor) { //  don't let it stick to actors but let it do whatever it wants.
-    //    for (auto& impact : rtData.impacts) if (impact) impact->impactResult = RE::ImpactResult::kBounce;
-    //    a_impactData->impactResult = RE::ImpactResult::kBounce;
-    }
-
-    const bool itWillStick = a_impactData->impactResult == RE::ImpactResult::kStick;
-    const bool itWillBounce = a_impactData->impactResult == RE::ImpactResult::kBounce;
+    const bool itWillStick  = rtDataMissile.impactResult == RE::ImpactResult::kStick;
+    const bool itWillBounce = rtDataMissile.impactResult == RE::ImpactResult::kBounce;
     if (itWillStick) {
         if (victim) {
             auto victimAVO = victim->AsActorValueOwner();
@@ -507,14 +496,12 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
     } else if (itWillBounce) {
     //    for (auto& impact : rtData.impacts) if (impact) impact->impactResult = RE::ImpactResult::kBounce;
         spdlog::debug("{} is bounced from {}!", projectile->GetName(), a_impactData->damageRootNode ? a_impactData->damageRootNode->name : "NULL");
-    } else {
-        a_impactData->impactResult = RE::ImpactResult::kBounce;
     }
 
     if (stopSounds)
         GetSoundManager().FadeThrowingLoopSounds(369);
 
-    switch (a_impactData->impactResult) {
+    switch (rtDataMissile.impactResult) {
     case RE::ImpactResult::kBounce:  projState = ProjectileState::kHavok;   break;
     case RE::ImpactResult::kStick:   projState = ProjectileState::kStucked; break;
     case RE::ImpactResult::kDestroy: projState = ProjectileState::kNone;    break;
@@ -584,9 +571,9 @@ void SmartRelicWeapon::Update()
         }
     }
 }
-void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float a_delta) 
+void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_this, float a_delta) 
 {
-    ThrowableRelicWeapon::UpdateProjectile(a_projectile, a_delta);
+    ThrowableRelicWeapon::UpdateProjectile(a_this, a_delta);
     if (currentState) {
         auto const state  = currentState.get();
         const auto status = currentState->Update(a_delta);

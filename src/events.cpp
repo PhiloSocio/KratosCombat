@@ -187,10 +187,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             player->ThrowWeapon(RotationType::kNone, ThrowType::kMelee);
             break;
         case "RainOfSpear"_h:
-//            if (WeaponIdentify::isDraupnirSpear) Draupnir::ArtilleryOfTheAncients(0.1f, 3.f);
-#ifdef TRIDENT
-            else if(WeaponIdentify::isTrident) Trident::GetSingleton()->TrishulsMight(1.f, 6.f);
-#endif
+            player->ThrowWeapon(RotationType::kNone, ThrowType::kArtilleryThrow);
             break;
         case "chainOpenR"_h:
     //        if (auto BoC = BladeOfChaos::GetSingleton()) {

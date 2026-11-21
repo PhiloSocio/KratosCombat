@@ -420,12 +420,10 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     if (a_pRot.has_value()) {
         projectileRotation = a_pRot.value();
     } else if (a_throwType == ThrowType::kMelee) {
-        const auto& weaponRot = weaponBone->world.rotate;
-        projectileRotation = MathUtil::Algebra::VectorToPitchYaw(weaponRot * frontVec3);
+        throwerActor->Unk_A0(weaponBone, projectileRotation.x, projectileRotation.z, origin);
     } else {
         projectileRotation = RE::Projectile::ProjectileRot(throwerActor->GetAimAngle(), throwerActor->GetAimHeading());
     }
-
     auto throwDir = Algebra::PitchYawToVector(projectileRotation);
     throwDir.Unitize();
 
@@ -578,15 +576,15 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
 
     return result;
 }
-bool ThrowableRelicWeapon::HookProjectile(RE::Projectile* a_projectile)
+bool ThrowableRelicWeapon::HookProjectile(RE::Projectile* a_this)
 {
-    if (!a_projectile) return false;
+    if (!a_this) return false;
 
-    auto ctx = ProjectileInstanceHook::GetOrCreate(a_projectile);
+    auto ctx = ProjectileInstanceHook::GetOrCreate(a_this);
     if (ctx && ctx->userData && ctx->userData != this) {
-        static_cast<ThrowableRelicWeapon*>(ctx->userData)->projectileHooks.erase(a_projectile);
-        ProjectileInstanceHook::Destroy(a_projectile);
-        ctx = ProjectileInstanceHook::Create(a_projectile);
+        static_cast<ThrowableRelicWeapon*>(ctx->userData)->projectileHooks.erase(a_this);
+        ProjectileInstanceHook::Destroy(a_this);
+        ctx = ProjectileInstanceHook::Create(a_this);
     }
     if (!ctx) return false;
 
@@ -596,18 +594,18 @@ bool ThrowableRelicWeapon::HookProjectile(RE::Projectile* a_projectile)
         ->Hook<kGetCollisionArrow>(&ThrowableRelicWeapon::GetCollisionArrow)
         ->Hook<kGetArrowImpactData>(&ThrowableRelicWeapon::GetArrowImpactData)
         ->Apply();
-    projectileHooks.insert_or_assign(a_projectile, ctx);
+    projectileHooks.insert_or_assign(a_this, ctx);
     return true;
 }
-void ThrowableRelicWeapon::UnhookProjectile(RE::Projectile* a_projectile)
+void ThrowableRelicWeapon::UnhookProjectile(RE::Projectile* a_this)
 {
-    if (!a_projectile) return;
+    if (!a_this) return;
 
-    auto ctx = ProjectileInstanceHook::From(a_projectile);
+    auto ctx = ProjectileInstanceHook::From(a_this);
     if (!ctx || ctx->userData != this) return;
 
-    projectileHooks.erase(a_projectile);
-    ProjectileInstanceHook::Destroy(a_projectile);
+    projectileHooks.erase(a_this);
+    ProjectileInstanceHook::Destroy(a_this);
 }
 void ThrowableRelicWeapon::UnhookProjectiles()
 {
@@ -663,7 +661,7 @@ void ThrowableRelicWeapon::GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hk
 
     auto _GetCollisionArrow = ctx->Original<decltype(&ThrowableRelicWeapon::GetCollisionArrow), kGetCollisionArrow>();
     auto relic = static_cast<ThrowableRelicWeapon*>(ctx->userData);
-    if (relic && relic->projectile == a_this && relic->OnHit(a_AllCdPointCollector)) return;
+    if (relic && relic->OnHit(a_this, a_AllCdPointCollector)) return;
     AttackHook::BeforeDamage(a_this, a_AllCdPointCollector);
     _GetCollisionArrow(a_this, a_AllCdPointCollector);
 }
@@ -675,8 +673,8 @@ RE::Projectile::ImpactData* ThrowableRelicWeapon::GetArrowImpactData(RE::ArrowPr
     auto _GetArrowImpactData = ctx->Original<decltype(&ThrowableRelicWeapon::GetArrowImpactData), kGetArrowImpactData>();
     auto impactData = _GetArrowImpactData(a_this, a_target, a_targetLoc, a_velocity, a_collidable, a6, a7);
     auto relic = static_cast<ThrowableRelicWeapon*>(ctx->userData);
-    if (relic && relic->projectile == a_this)
-        relic->PostImpact(impactData, a_target, a_targetLoc, a_velocity, a_collidable);
+    if (relic)
+        relic->PostImpact(a_this, impactData, a_target, a_targetLoc, a_velocity, a_collidable);
     return impactData;
 }
 void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
@@ -722,7 +720,7 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
             SetThrowState(ThrowState::kNone);
     }
 }
-void ThrowableRelicWeapon::PostImpact(RE::Projectile::ImpactData *a_impactData, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable)
+void ThrowableRelicWeapon::PostImpact(RE::ArrowProjectile* a_this, RE::Projectile::ImpactData *a_impactData, RE::TESObjectREFR *a_target, RE::NiPoint3 *a_targetLoc, RE::NiPoint3 *a_velocity, RE::hkpCollidable *a_collidable)
 {
     RemoveTrail();
 //    InitiateMapMarker();
@@ -809,11 +807,11 @@ void ThrowableRelicWeapon::Update()
         trailRemoveUpdate.Done();
     }
 }
-void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float a_delta)
+void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_this, float a_delta)
 {
-    auto projectileNode = a_projectile->Get3D2();
+    auto projectileNode = a_this->Get3D2();
     if (!projectileNode) {
-        spdlog::warn("projectile {}'s 3d not loaded", a_projectile->GetName());
+        spdlog::warn("projectile {}'s 3d not loaded", a_this->GetName());
         return;
     }
     if (projectileModel.get() != projectileNode) {
@@ -826,10 +824,10 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
     }
     InitiateModel();
 
-    auto& runtimeData = a_projectile->GetProjectileRuntimeData();
+    auto& runtimeData = a_this->GetProjectileRuntimeData();
     const auto& projectileLivingTime = runtimeData.livingTime;
-    auto& pos   = a_projectile->data.location;
-    auto& angle = a_projectile->data.angle;
+    auto& pos   = a_this->data.location;
+    auto& angle = a_this->data.angle;
     auto& vel = runtimeData.linearVelocity;
     auto dir = vel; dir.Unitize();
 
@@ -858,7 +856,7 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
     const float speed = velocity.Length();
     vel -= direction * a_delta * (drag * speed * speed);
 
-    if (auto projBase = a_projectile->GetProjectileBase()) {
+    if (auto projBase = a_this->GetProjectileBase()) {
         if (livingTime < Config::NoGravityDurationLeviathan) {
             projBase->data.gravity = 0.f;
         } else if (projBase->data.gravity == gravity) {
