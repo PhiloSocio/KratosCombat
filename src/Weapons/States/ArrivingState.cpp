@@ -3,6 +3,9 @@
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Caller.h"
 
+using namespace MathUtil::Angle;
+using namespace MathUtil::Algebra;
+
 ArrivingState::ArrivingState(ThrownSmartWeapon& a_weapon)
     : SmartWeaponState(a_weapon)
 {
@@ -83,7 +86,7 @@ void ArrivingState::InitializeCallerData()
 }
 void ArrivingState::InitializeRoute()
 {
-    arrivingRoute             = MathUtil::Algebra::BezierCurve();
+    arrivingRoute             = BezierCurve();
     arrivingRouteClosestIndex = 0;
 
     bezierControlPoints[0] = startPosition;
@@ -116,7 +119,7 @@ void ArrivingState::UpdateRotation()
         targetLocalRotation = callerWeaponBone->world.rotate;
 
     const float angleZ = livingTime * rotationSpeed;
-    MathUtil::Angle::NormalAbsoluteAngle(angleZ);
+    NormalAbsoluteAngle(angleZ);
 
     float tZrot = tReal;
     if (tReal < 0.33333f) {
@@ -126,7 +129,7 @@ void ArrivingState::UpdateRotation()
     }
 
     const float blendZ = std::lerp(angleZ, arrivalSpin, tReal * tZrot);
-    localRotation = MathUtil::Algebra::InterpolateRotation(const_cast<const RE::NiMatrix3&>(startRotation), targetLocalRotation, tReal);
+    localRotation = InterpolateRotation(const_cast<const RE::NiMatrix3&>(startRotation), targetLocalRotation, tReal);
     localRotation = localRotation * RE::NiMatrix3(0.f, 0.f, blendZ);
 }
 void ArrivingState::UpdateArrivingDirection(const bool a_initial)
@@ -147,7 +150,7 @@ void ArrivingState::UpdateArrivingDirection(const bool a_initial)
         const float dot = spineForwardDir.Dot(linearDir2D);
         const float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
         arrivingRelativeAngleZ = std::atan2(det, dot);
-        arrivingRelativeAngleZ = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngleZ);
+        arrivingRelativeAngleZ = NormalAbsoluteAngle(arrivingRelativeAngleZ);
 
         float snapStrength = arrivingRelativeAngleSnapStrength;
         if (a_initial) snapStrength = 1.f;
@@ -155,7 +158,7 @@ void ArrivingState::UpdateArrivingDirection(const bool a_initial)
             snapStrength += 0.69f;
         snapStrength = std::min(snapStrength, 1.f);
         if (snapStrength > 0.f)
-            arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);
+            arrivingRelativeAngleZ = AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);
 
         if (!a_initial) {
             float previousAngle = -69.f;
@@ -164,7 +167,7 @@ void ArrivingState::UpdateArrivingDirection(const bool a_initial)
                 spdlog::error("weird, could not get graph variable value!");
                 return;
             }
-            const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
+            const float delta = NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
             constexpr float smoothTime = 0.369f;
             const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
             arrivingRelativeAngleZ = previousAngle + delta * alpha;
@@ -179,15 +182,15 @@ void ArrivingState::UpdateArrivingRoute(const float a_delta)
     const auto& previousHandRot = callerHandBone->previousWorld.rotate;
     const float alphaHandRot    = 1.f - std::exp(-a_delta / 0.169f);
     RE::NiMatrix3 smoothedHandRot =
-        MathUtil::Algebra::QuaternionToMatrix(MathUtil::Algebra::Slerp(
-            MathUtil::Algebra::MatrixToQuaternion(previousHandRot),
-            MathUtil::Algebra::MatrixToQuaternion(handRot), alphaHandRot));
+        QuaternionToMatrix(Slerp(
+            MatrixToQuaternion(previousHandRot),
+            MatrixToQuaternion(handRot), alphaHandRot));
     RE::NiPoint3 palmDir     = smoothedHandRot * RE::NiPoint3(backVec3);
     RE::NiPoint3 handForward = smoothedHandRot * RE::NiPoint3(upVec3);
     palmDir.Unitize();
     handForward.Unitize();
 
-    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(arrivingRelativeAngleZ, 0.1f, 0.3f);
+    const float handSideOffsetMult = ParabolicClamp(arrivingRelativeAngleZ, 0.1f, 0.3f);
 
     const RE::NiPoint3 handVelocity = (callerHandBone->world.translate - callerHandBone->previousWorld.translate) / a_delta;
     const float predictionTime = std::clamp(a_delta, 0.0f, 0.1f);
@@ -195,15 +198,16 @@ void ArrivingState::UpdateArrivingRoute(const float a_delta)
 
     bezierControlPoints[3] = predictedHandPos;
     bezierControlPoints[2] = predictedHandPos
-        + (float)IsInCallingAnimation() * (palmDir * (linearDistanceFromLastCallPos * 0.33f + 20.f)
-                                         + handForward * (linearDistanceFromLastCallPos * handSideOffsetMult + 10.f));
+        + (float)IsInCallingAnimation() * (
+            palmDir * (linearDistanceFromLastCallPos * 0.33f + 20.f)
+            + handForward * (linearDistanceFromLastCallPos * handSideOffsetMult + 10.f));
 
     RE::NiPoint3& p0 = bezierControlPoints[0];
     RE::NiPoint3& p1 = bezierControlPoints[1];
     RE::NiPoint3& p2 = bezierControlPoints[2];
     RE::NiPoint3& p3 = bezierControlPoints[3];
 
-    arrivingRoute = MathUtil::Algebra::CalculateAndMeasureBezier(p0, p1, p2, p3, routeResolution);
+    arrivingRoute = CalculateAndMeasureBezier(p0, p1, p2, p3, routeResolution);
 
     float bestDist2 = FLT_MAX;
     for (int i = 0; i < (int)arrivingRoute.samples.size() - 1; i++) {
@@ -359,14 +363,14 @@ Status ArrivingState::MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoin
     const bool doBlend = weapon.projState == ProjectileState::kNone
                       || weapon.projState == ProjectileState::kLaunched;
     const auto referenceStartVelocity = doBlend ? weapon.velocity : (linearArrivingDir * speed);
-    a_vel = MathUtil::Angle::BlendVectors(referenceStartVelocity, desiredDir * speed, tau);
+    a_vel = BlendVectors(referenceStartVelocity, desiredDir * speed, tau);
 
     DampVerticalVelocity(a_vel, handPosition, -40.f, 69.f);
 
     UpdateRotation();
     UpdateArrivingDirection();
 
-    if (a_target) Attack(a_target, a_vel);
+    if (a_target) Attack(a_target, a_vel, a_delta);
 
     return Status::kRunning;
 }

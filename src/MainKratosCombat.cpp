@@ -2,6 +2,8 @@
 //#include "API/TrueDirectionalMovementAPI.h"
 
 using namespace Util;
+using namespace MathUtil::Angle;
+using namespace MathUtil::Algebra;
 
 #pragma region Weapon_Identification
 void WeaponIdentify::Initialize(RE::Actor* a_actor)
@@ -1327,8 +1329,8 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
     //            RE::hkTransform rbTransform;
     //            data.replacedProjectileModel->collisionObject->AsBhkRigidBody()->GetTransform(rbTransform);
     //            RE::NiTransform niTransform;
-    //            niTransform.translate = MathUtil::Algebra::HkVectorToNiPoint(rbTransform.translation);
-    //            niTransform.rotate = MathUtil::Algebra::HKMatrixToNiMatrix(rbTransform.rotation);
+    //            niTransform.translate = HkVectorToNiPoint(rbTransform.translation);
+    //            niTransform.rotate = HKMatrixToNiMatrix(rbTransform.rotation);
     //            data.transformW = niTransform;
     //            data.transformL = niTransform;
     //        } else {
@@ -1393,7 +1395,7 @@ void LeviathanAxe::Call(const bool a_justDestroy, const bool a_justContinue, RE:
                 GetPosition(startPoint, AnArchos);
             }
             RE::ProjectileHandle pHandle;
-            RE::Projectile::ProjectileRot pRot(MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation));
+            RE::Projectile::ProjectileRot pRot(VectorToPitchYaw(data.lastOrientation));
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellLeviProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
@@ -1534,7 +1536,7 @@ void LeviathanAxe::AddProjectileTrail(const float a_delta)
             //    auto dir = data.trailTransform.translate - bone->world.translate;
                 auto dir = data.lastOrientation;
             //    dir.Unitize();
-                MathUtil::Algebra::SetRotationMatrix(trailData.trailTransform.rotate, -dir.x, dir.y, dir.z);
+                SetRotationMatrix(trailData.trailTransform.rotate, -dir.x, dir.y, dir.z);
                 RE::NiMatrix3 weaponRotation(0.f, NI_HALF_PI, -NI_HALF_PI);
                 trailData.trailTransform.rotate = trailData.trailTransform.rotate * weaponRotation;
                 RE::NiMatrix3 flip90(-NI_HALF_PI, 0.f, 0.f);
@@ -1850,11 +1852,11 @@ void LeviathanAxe::ArrivingWeapon::UpdateRotation()
         //    );
         }
         const float angleZ = livingTime * rotationSpeed;
-        MathUtil::Angle::NormalAbsoluteAngle(angleZ);
+        NormalAbsoluteAngle(angleZ);
         arrivalSpin = (int)(std::floor(1 + (livingTime + remainingTimeToArrive) * rotationSpeed / TWO_PI)) * TWO_PI;
         const float blendZ = std::lerp(angleZ, arrivalSpin, tReal);
         const auto& startRotationC = startRotation;
-        localRotation = MathUtil::Algebra::InterpolateRotation(startRotationC, targetLocalRotation, tReal);
+        localRotation = InterpolateRotation(startRotationC, targetLocalRotation, tReal);
         localRotation = localRotation * RE::NiMatrix3(0.f, 0.f, blendZ);
     //    spdlog::debug("target angle: {} calculated target angle: {} blended angle: {} tau: {}", angleZ, arrivalSpin, blendZ, tReal);
     }
@@ -1899,14 +1901,14 @@ void LeviathanAxe::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
             float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
 
             arrivingRelativeAngleZ = atan2(det, dot);  //  angle between spine forward direction and arriving weapon direction
-            arrivingRelativeAngleZ = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, 2PI]
+            arrivingRelativeAngleZ = NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, 2PI]
 
             float snapStrength = arrivingRelativeAngleSnapStrength;
             if (a_initial) snapStrength = 1.f;
             else if ((arrivingRelativeAngleZ < PI4 || arrivingRelativeAngleZ > ONEANDHALF_PI) && snapStrength < 0.69f) snapStrength += 0.69f;
             snapStrength = std::min(snapStrength, 1.f);
             if (snapStrength > 0.f) {
-                arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);    //  for helping to the blender generator
+                arrivingRelativeAngleZ = AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);    //  for helping to the blender generator
             }
 
             if (!a_initial) {
@@ -1915,7 +1917,7 @@ void LeviathanAxe::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
                     spdlog::error("weird, could not get graph variable value!");
                     return;
                 }
-                const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
+                const float delta = NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
                 constexpr float smoothTime = 0.369f;
                 const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
                 float smoothedArrivingRelativeAngle = previousAngle;
@@ -1933,15 +1935,15 @@ void LeviathanAxe::ArrivingWeapon::UpdateArrivingRoute()
     RE::NiMatrix3 handRot   = callerHandBone->world.rotate;
     const float alphaHandRot = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
     RE::NiMatrix3 smoothedHandRot = 
-        MathUtil::Algebra::QuaternionToMatrix(MathUtil::Algebra::Slerp(
-            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->previousWorld.rotate),
-            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->world.rotate), alphaHandRot));
+        QuaternionToMatrix(Slerp(
+            MatrixToQuaternion(callerHandBone->previousWorld.rotate),
+            MatrixToQuaternion(callerHandBone->world.rotate), alphaHandRot));
     RE::NiPoint3 palmDir    = smoothedHandRot * RE::NiPoint3(backVec3);
     RE::NiPoint3 handForward= smoothedHandRot * RE::NiPoint3(upVec3);
     palmDir.Unitize();
     handForward.Unitize();
 
-    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.25f);
+    const float handSideOffsetMult = ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.25f);
 
     RE::NiPoint3 handVelocity = (callerHandBone->world.translate - callerHandBone->previousWorld.translate) / *g_deltaTimeRealTime;
     const float predictionTime = std::clamp(*g_deltaTimeRealTime, 0.0f, 0.1f);
@@ -1954,7 +1956,7 @@ void LeviathanAxe::ArrivingWeapon::UpdateArrivingRoute()
     RE::NiPoint3& p3 = bezierControlPoints[3];
     RE::NiPoint3& p2 = bezierControlPoints[2];
 
-    arrivingRoute = MathUtil::Algebra::CalculateAndMeasureBezier(
+    arrivingRoute = CalculateAndMeasureBezier(
         p0, p1, p2, p3,
         routeResolution);
     float bestDist2 = FLT_MAX;
@@ -2108,7 +2110,7 @@ void LeviathanAxe::ArrivingWeapon::Update(const float a_delta)
     const bool doBlend = 
         parent->data.projState == ProjectileState::kNone ||
         parent->data.projState == ProjectileState::kLaunched;
-    vel = MathUtil::Angle::BlendVectors(doBlend ? parent->data.lastVelocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
+    vel = BlendVectors(doBlend ? parent->data.lastVelocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
     if (vel.z < 0.f) {
         constexpr float minHeight = -40.f;
         constexpr float dampingRange = 69.f;
@@ -2668,11 +2670,11 @@ void Draupnir::RainOfDraupnir()
     const auto AnArchos = PlayerCharacter::GetSingleton();
     const std::vector<RE::Actor*> nearCombatTargets = ObjectUtil::Actor::GetNearCombatTargets<std::vector<RE::Actor*>>(AnArchos, 666.f);
     const bool isThereNearTarget = (!nearCombatTargets.empty() && nearCombatTargets.front()) ? true : false;
-    RE::NiPoint3 origin = isThereNearTarget ? nearCombatTargets.front()->GetPosition() : (AnArchos->GetPosition() + MathUtil::Algebra::GetForwardVector(AnArchos) * 360.f);
-    origin = origin + RE::NiPoint3(MathUtil::Algebra::GenerateRandomFloat(-100.f, 100.f), MathUtil::Algebra::GenerateRandomFloat(-100.f, 100.f), 2000.f);
+    RE::NiPoint3 origin = isThereNearTarget ? nearCombatTargets.front()->GetPosition() : (AnArchos->GetPosition() + GetForwardVector(AnArchos) * 360.f);
+    origin = origin + RE::NiPoint3(GenerateRandomFloat(-100.f, 100.f), GenerateRandomFloat(-100.f, 100.f), 2000.f);
     RE::ProjectileHandle pHandle;
     RE::Projectile::ProjectileRot pRot{};
-    pRot.x = PI2 + MathUtil::Algebra::GenerateRandomFloat(-0.018f, 0.018f);
+    pRot.x = PI2 + GenerateRandomFloat(-0.018f, 0.018f);
 //    spdlog::debug("aim angle: {} heading angle: {}", pRot.x, pRot.z);
     RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellDraupnirProjL);
 //    lData.weaponSource = WeaponIdentify::DraupnirSpear;
@@ -3013,7 +3015,7 @@ void Mjolnir::Throw(const bool justContinue, const bool a_isVertical, const bool
         auto origin = justContinue ? data.position : WeaponIdentify::RHandBone->world.translate;
         RE::ProjectileHandle pHandle;
         RE::Projectile::ProjectileRot pRot = RE::Projectile::ProjectileRot(a_actor->GetAimAngle(), a_actor->GetAimHeading());
-        if (data.model && (justContinue/* || isHoming*/)) pRot = MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation);//a_actor->Unk_A0(data.model, pRot.x, pRot.z, origin);
+        if (data.model && (justContinue/* || isHoming*/)) pRot = VectorToPitchYaw(data.lastOrientation);//a_actor->Unk_A0(data.model, pRot.x, pRot.z, origin);
         RE::Projectile::LaunchData lData(a_actor, origin, pRot, MjolnirThrowSpell);
 
     //    lData.weaponSource = data.weap;
@@ -3161,7 +3163,7 @@ void Mjolnir::Call(const bool a_justDestroy, const bool a_justContinue, std::opt
             RE::NiPoint3  targetPoint = WeaponIdentify::RHandBone ? WeaponIdentify::RHandBone->world.translate : AnArchos->GetPosition();
 
             RE::ProjectileHandle pHandle;
-            RE::Projectile::ProjectileRot pRot(MathUtil::Algebra::VectorToPitchYaw(data.lastOrientation));
+            RE::Projectile::ProjectileRot pRot(VectorToPitchYaw(data.lastOrientation));
             RE::Projectile::LaunchData lData(AnArchos, startPoint, pRot, SpellMjolnirProjA);
 
             lData.noDamageOutsideCombat = true; //  can be an option
@@ -3369,7 +3371,7 @@ void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, co
                     auto targetPos = target->GetNodeByName("NPC Spine2 [Spn2]") ? target->GetNodeByName("NPC Spine2 [Spn2]")->world.translate : (target->GetPosition() + (target->GetBoundMax() + target->GetBoundMin()) / 2.f);
                     auto direction = targetPos - origin2;
                     direction.Unitize();
-                    RE::Projectile::ProjectileRot pRot3(MathUtil::Algebra::VectorToPitchYaw(direction));
+                    RE::Projectile::ProjectileRot pRot3(VectorToPitchYaw(direction));
                     RE::Projectile::LaunchData lData3(AnArchos, origin2, pRot3, kratos->vanillaSpell.lightningBolt);
                     lData3.autoAim = false;
                     lData3.alwaysHit = true;
@@ -3554,15 +3556,15 @@ void Mjolnir::ArrivingWeapon::UpdateRotation()
             targetLocalRotation = WeaponIdentify::WeaponBone->world.rotate;
         }
         const float angleZ = livingTime * rotationSpeed;
-        MathUtil::Angle::NormalAbsoluteAngle(angleZ);
+        NormalAbsoluteAngle(angleZ);
         arrivalSpin = (int)(std::floor(1 + (livingTime + remainingTimeToArrive) * rotationSpeed / TWO_PI)) * TWO_PI;
         const float blendZ = std::lerp(angleZ, arrivalSpin, tReal);
         const auto& startRotationC = startRotation;
-        auto desiredLocalRotation = MathUtil::Algebra::InterpolateRotation(startRotationC, targetLocalRotation, tReal);
+        auto desiredLocalRotation = InterpolateRotation(startRotationC, targetLocalRotation, tReal);
         desiredLocalRotation = desiredLocalRotation * RE::NiMatrix3(0.f, blendZ, 0.f);
         constexpr float smoothTime = 0.0069f;
         const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
-        MathUtil::Algebra::InterpolateRotation(localRotation, desiredLocalRotation, alpha);
+        InterpolateRotation(localRotation, desiredLocalRotation, alpha);
     //    spdlog::debug("target angle: {} calculated target angle: {} blended angle: {} tau: {}", angleZ, arrivalSpin, blendZ, tReal);
     }
 //    mjolnirAngle = mjolnir->data.lastEulerAngles;
@@ -3585,10 +3587,10 @@ void Mjolnir::ArrivingWeapon::UpdateAI(RE::NiPoint3& a_outVel)
                 auto& localRotation = replacedPMParent->local.rotate;
                 localRotation = RE::NiMatrix3();
             //    RE::NiMatrix3 targetLocalRotation;
-            //    MathUtil::Algebra::SetRotationMatrix(targetLocalRotation, -targetDir.x, targetDir.y, targetDir.z);
+            //    SetRotationMatrix(targetLocalRotation, -targetDir.x, targetDir.y, targetDir.z);
             //    constexpr float smoothTime = 0.0069f;
             //    const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
-            //    MathUtil::Algebra::InterpolateRotation(localRotation, targetLocalRotation, alpha);
+            //    InterpolateRotation(localRotation, targetLocalRotation, alpha);
                 auto& mjolnirAngle = parent->data.lastEulerAngles;
                 mjolnirAngle.x = asin(desiredDir.z);
                 mjolnirAngle.z = atan2(desiredDir.x, desiredDir.y);
@@ -3621,14 +3623,14 @@ void Mjolnir::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
             float det = spineForwardDir.x * linearDir2D.y - spineForwardDir.y * linearDir2D.x;
 
             arrivingRelativeAngleZ = atan2(det, dot);  //  angle between spine forward direction and arriving weapon direction
-            arrivingRelativeAngleZ = MathUtil::Angle::NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, 2PI]
+            arrivingRelativeAngleZ = NormalAbsoluteAngle(arrivingRelativeAngleZ);      //  normalize angle to [0, 2PI]
 
             float snapStrength = arrivingRelativeAngleSnapStrength;
             if (a_initial) snapStrength = 1.f;
             else if ((arrivingRelativeAngleZ < PI4 || arrivingRelativeAngleZ > ONEANDHALF_PI) && snapStrength < 0.69f) snapStrength += 0.69f;
             snapStrength = std::min(snapStrength, 1.f);
             if (snapStrength > 0.f) {
-                arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);    //  for helping to the blender generator
+                arrivingRelativeAngleZ = AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);    //  for helping to the blender generator
             }
 
             if (!a_initial) {
@@ -3637,7 +3639,7 @@ void Mjolnir::ArrivingWeapon::UpdateArrivingDirection(const bool a_initial)
                     spdlog::error("weird, could not get graph variable value!");
                     return;
                 }
-                const float delta = MathUtil::Angle::NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
+                const float delta = NormalizeSignedAngle(arrivingRelativeAngleZ - previousAngle);
                 constexpr float smoothTime = 0.369f;
                 const float alpha = 1.f - std::exp(-*g_deltaTimeRealTime / smoothTime);
                 float smoothedArrivingRelativeAngle = previousAngle;
@@ -3655,15 +3657,15 @@ void Mjolnir::ArrivingWeapon::UpdateArrivingRoute()
     RE::NiMatrix3 handRot   = callerHandBone->world.rotate;
     const float alphaHandRot = 1.f - std::exp(-*g_deltaTimeRealTime / 0.169f);
     RE::NiMatrix3 smoothedHandRot = 
-        MathUtil::Algebra::QuaternionToMatrix(MathUtil::Algebra::Slerp(
-            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->previousWorld.rotate),
-            MathUtil::Algebra::MatrixToQuaternion(callerHandBone->world.rotate), alphaHandRot));
+        QuaternionToMatrix(Slerp(
+            MatrixToQuaternion(callerHandBone->previousWorld.rotate),
+            MatrixToQuaternion(callerHandBone->world.rotate), alphaHandRot));
     RE::NiPoint3 palmDir    = smoothedHandRot * RE::NiPoint3(backVec3);
     RE::NiPoint3 handForward= smoothedHandRot * RE::NiPoint3(upVec3);
     palmDir.Unitize();
     handForward.Unitize();
 
-    const float handSideOffsetMult = MathUtil::Algebra::ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.25f);
+    const float handSideOffsetMult = ParabolicClamp(arrivingRelativeAngleZ, 0.f, 0.25f);
 
     RE::NiPoint3 handVelocity = (callerHandBone->world.translate - callerHandBone->previousWorld.translate) / *g_deltaTimeRealTime;
     const float predictionTime = std::clamp(*g_deltaTimeRealTime, 0.0f, 0.1f);
@@ -3676,7 +3678,7 @@ void Mjolnir::ArrivingWeapon::UpdateArrivingRoute()
     RE::NiPoint3& p3 = bezierControlPoints[3];
     RE::NiPoint3& p2 = bezierControlPoints[2];
 
-    arrivingRoute = MathUtil::Algebra::CalculateAndMeasureBezier(
+    arrivingRoute = CalculateAndMeasureBezier(
         p0, p1, p2, p3,
         routeResolution);
     float bestDist2 = FLT_MAX;
@@ -3830,7 +3832,7 @@ void Mjolnir::ArrivingWeapon::Update(const float a_delta)
     const bool doBlend = 
         parent->data.projState == ProjectileState::kNone ||
         parent->data.projState == ProjectileState::kLaunched;
-    vel = MathUtil::Angle::BlendVectors(doBlend ? parent->data.lastVelocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
+    vel = BlendVectors(doBlend ? parent->data.lastVelocity : (linearArrivingDir * speed), desiredDir * speed, livingTime / 0.2f);
     if (vel.z < 0.f) {
         constexpr float minHeight = -40.f;
         constexpr float dampingRange = 69.f;
@@ -4194,11 +4196,11 @@ void Trident::RainOfTrident()
     }
 
     const bool isThereNearTarget = (!nearCombatTargets.empty() && nearCombatTargets.front()) ? true : false;
-    RE::NiPoint3 origin = isThereNearTarget ? nearCombatTargets.front()->GetPosition() : (AnArchos->GetPosition() + MathUtil::Algebra::GetForwardVector(AnArchos) * 360.f);
-    origin = origin + RE::NiPoint3(MathUtil::Algebra::GenerateRandomFloat(-150.f, 150.f), MathUtil::Algebra::GenerateRandomFloat(-150.f, 150.f), 3000.f);
+    RE::NiPoint3 origin = isThereNearTarget ? nearCombatTargets.front()->GetPosition() : (AnArchos->GetPosition() + GetForwardVector(AnArchos) * 360.f);
+    origin = origin + RE::NiPoint3(GenerateRandomFloat(-150.f, 150.f), GenerateRandomFloat(-150.f, 150.f), 3000.f);
     RE::ProjectileHandle pHandle;
     RE::Projectile::ProjectileRot pRot{};
-    pRot.x = PI2 + MathUtil::Algebra::GenerateRandomFloat(-0.02f, 0.02f);
+    pRot.x = PI2 + GenerateRandomFloat(-0.02f, 0.02f);
 //    spdlog::debug("aim angle: {} heading angle: {}", pRot.x, pRot.z);
     RE::Projectile::LaunchData lData(AnArchos, origin, pRot, SpellTrishulsMightProjL);
 //    lData.weaponSource = WeaponIdentify::DraupnirSpear;

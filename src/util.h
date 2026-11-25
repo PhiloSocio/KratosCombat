@@ -736,7 +736,7 @@ namespace Util
 
 namespace MathUtil
 {
-    struct Angle 
+    namespace Angle 
     {
         [[nodiscard]] constexpr static float DegreeToRadian(const float a_angle)
         {
@@ -784,19 +784,9 @@ namespace MathUtil
                 a_angle -= TWO_PI;
             return a_angle;
         }
-
-        static NiPoint3 BlendVectors(const NiPoint3& a, const NiPoint3& b, float a_to_b_ratio, const bool a_normalize = false)
-        {
-            a_to_b_ratio = std::clamp(a_to_b_ratio, 0.0f, 1.0f);
-
-            RE::NiPoint3 v = (a * (1.0f - a_to_b_ratio) + b * a_to_b_ratio);
-            if (a_normalize) v.Unitize();
-
-            return v;
-        }
     }; 
 
-    struct Algebra
+    namespace Algebra
     {
         [[nodiscard]] inline static RE::NiTransform hkTransformToNiTransform(const RE::hkTransform& a_hkTransform) noexcept
         {
@@ -830,23 +820,59 @@ namespace MathUtil
                     a_matrix.quad.m128_f32[2]
                 );
         }
-        [[nodiscard]] inline static RE::NiPoint3 BlendVectors(const RE::NiPoint3& a, const RE::NiPoint3& b, float a_to_b_ratio, const bool a_normalize = false)
+        template<typename Vec>
+        [[nodiscard]] inline Vec BlendVectors(const Vec& a, const Vec& b, float a_ratio, bool a_normalize = false)
         {
-            a_to_b_ratio = std::clamp(a_to_b_ratio, 0.0f, 1.0f);
-
-            RE::NiPoint3 v = (a * (1.0f - a_to_b_ratio) + b * a_to_b_ratio);
-            if (a_normalize) v.Unitize();
-
+            a_ratio = std::clamp(a_ratio, 0.f, 1.f);
+            Vec v = a * (1.f - a_ratio) + b * a_ratio;
+            if (a_normalize) {
+                const float len2 = v.SqrLength();
+                if (len2 > 1e-12f) v *= (1.f / std::sqrt(len2));
+            }
             return v;
         }
-        [[nodiscard]] inline static RE::NiPoint3 RotateVectorRodrigues(const RE::NiPoint3& v, const RE::NiPoint3& rotatingAxis, const float theta)
-        {
-            float cosTheta = std::cos(theta);
-            float sinTheta = std::sin(theta);
+        template<typename Vec>
+        [[nodiscard]] inline Vec RotateVectorRodrigues(const Vec& v,
+                                                    const Vec& rotatingAxis,
+                                                    float theta) {
+            const float cosTheta = std::cos(theta);
+            const float sinTheta = std::sin(theta);
+            return v * cosTheta
+                + rotatingAxis.Cross(v) * sinTheta
+                + rotatingAxis * rotatingAxis.Dot(v) * (1.f - cosTheta);
+        }
+        template<typename Vec>
+        [[nodiscard]] inline Vec SlerpDirection(const Vec& a_from,
+                                                const Vec& a_to,
+                                                float a_t) {
+            const float dot   = std::clamp(a_from.Dot(a_to), -1.f, 1.f);
+            const float theta = std::acos(dot);
+            if (theta < 1e-4f) return a_to;
 
-            return v * cosTheta +
-                rotatingAxis.Cross(v) * sinTheta +
-                rotatingAxis * (rotatingAxis.Dot(v)) * (1.f - cosTheta);
+            Vec axis = a_from.Cross(a_to);
+            if (axis.SqrLength() < 1e-8f) {
+                axis = a_from.Cross(std::fabs(a_from.z) < 0.99f
+                                        ? Vec{ 0.f, 0.f, 1.f }
+                                        : Vec{ 1.f, 0.f, 0.f });
+            }
+            axis.Unitize();
+            return RotateVectorRodrigues(a_from, axis, theta * a_t);
+        }
+        inline static void Unitize(RE::NiQuaternion& q)
+        {
+            float lenSqr = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
+
+            if (lenSqr > 1e-6f) {
+                float invLen = 1.0f / std::sqrt(lenSqr);
+                q.w *= invLen;
+                q.x *= invLen;
+                q.y *= invLen;
+                q.z *= invLen;
+            } else {
+                // Geçersiz dönüş, identity quaternion’a sıfırla
+                q.w = 1.f;
+                q.x = q.y = q.z = 0.f;
+            }
         }
         [[nodiscard]] inline static RE::NiQuaternion QuaternionWithAngleAxis(const float angleRadians, const RE::NiPoint3& axis)
         {
@@ -943,22 +969,6 @@ namespace MathUtil
                     normQ.y / s,
                     normQ.z / s
                 };
-            }
-        }
-        inline static void Unitize(RE::NiQuaternion& q)
-        {
-            float lenSqr = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
-
-            if (lenSqr > 1e-6f) {
-                float invLen = 1.0f / std::sqrt(lenSqr);
-                q.w *= invLen;
-                q.x *= invLen;
-                q.y *= invLen;
-                q.z *= invLen;
-            } else {
-                // Geçersiz dönüş, identity quaternion’a sıfırla
-                q.w = 1.f;
-                q.x = q.y = q.z = 0.f;
             }
         }
         [[nodiscard]] inline static RE::NiQuaternion MultiplyQuaternions(const RE::NiQuaternion& a, const RE::NiQuaternion& b)

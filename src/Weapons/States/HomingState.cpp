@@ -4,6 +4,8 @@
 #include "Actors/Capabilities/Thrower.h"
 #include "Util.h"
 
+using namespace MathUtil::Algebra;
+
 HomingState::HomingState(
     ThrownSmartWeapon& a_weapon,
     uint8_t a_hitCount,
@@ -90,7 +92,7 @@ void HomingState::OnTransition(float a_delta, RE::NiPoint3& a_vel)
 Status HomingState::MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoint3& a_vel)
 {
     if (a_target && projLivingTime > 0.69f) {
-        Attack(a_target, a_vel);
+        Attack(a_target, a_vel, a_delta);
         return Status::kRunning;
     }
 
@@ -119,7 +121,7 @@ Status HomingState::MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoint3
     circularVel.Unitize();
 
     const float targetSpeed = speed * (livingTime > 0.5f && projLivingTime < 1.f ? projLivingTime + 0.2f : 1.f);
-    a_vel = MathUtil::Angle::BlendVectors(weapon.direction, circularVel, tau, true) * targetSpeed;
+    a_vel = BlendVectors(weapon.direction, circularVel, tau, true) * targetSpeed;
     DampVerticalVelocity(a_vel, throwerActor->GetPosition());
     return Status::kRunning;
 }
