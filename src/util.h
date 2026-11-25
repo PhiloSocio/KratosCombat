@@ -150,42 +150,74 @@ namespace AsyncUtil
 
     class TaskManager {
     public:
+        using TaskID = std::uint64_t;
+
         static TaskManager& GetSingleton() {
             static TaskManager singleton;
             return singleton;
         }
 
-        inline void AddDelayedTask(float a_delaySeconds, std::function<void()> a_task) {
-            float targetTime = GameTime::GetEngineTime() + a_delaySeconds;
+        inline TaskID AddDelayedTask(float a_delaySeconds, std::function<void()> a_task) {
+            const auto taskID = _nextTaskID.fetch_add(1u, std::memory_order_relaxed) + 1u;
+            const auto targetTime = GameTime::GetEngineTime() + a_delaySeconds;
 
-            WriteLocker locker(_taskQueueLock); 
-            _taskQueue.emplace_back(targetTime, std::move(a_task));
+            WriteLocker locker(_taskQueueLock);
+            _taskQueue.push_back({taskID, targetTime, 0.f, targetTime, std::move(a_task)});
+            return taskID;
         }
-        inline void AddPeriodicTask(float a_duration, float a_interval, std::function<void()> a_task) {
-            for (float delay = 0.f; delay <= a_duration; delay += a_interval)
-                AsyncUtil::TaskManager::GetSingleton().AddDelayedTask(delay, a_task);
+        inline TaskID AddPeriodicTask(float a_duration, float a_interval, std::function<void()> a_task) {
+            if (a_duration < a_interval || a_interval <= 0.f) return 0u;
+
+            const auto taskID = _nextTaskID.fetch_add(1u, std::memory_order_relaxed) + 1u;
+            const auto startTime = GameTime::GetEngineTime();
+
+            WriteLocker locker(_taskQueueLock);
+            _taskQueue.push_back({taskID, startTime + a_interval, a_interval, startTime + a_duration, std::move(a_task)});
+            return taskID;
         }
-        inline void AddPerFrameTask(float a_duration, std::function<void()> a_task) {
-            AddPeriodicTask(a_duration, *g_deltaTimeRealTime - kEpsilon, a_task);
+        inline bool CancelTask(TaskID a_taskID) {
+            if (!a_taskID) return false;
+
+            WriteLocker locker(_taskQueueLock);
+            const auto task = std::find_if(_taskQueue.begin(), _taskQueue.end(), [a_taskID](const Task& a_task) {
+                return a_task.id == a_taskID;
+            });
+            if (task == _taskQueue.end()) return false;
+
+            _taskQueue.erase(task);
+            return true;
+        }
+        inline TaskID AddPerFrameTask(float a_duration, std::function<void()> a_task) {
+            return AddPeriodicTask(a_duration, *g_deltaTimeRealTime - kEpsilon, std::move(a_task));
         }
 
         inline void ProcessDelayedTasks() {
-            float currentTime = GameTime::GetEngineTime();
-            std::vector<std::function<void()>> tasksToRun;
+            const auto currentTime = GameTime::GetEngineTime();
+            const auto lastTaskID = _nextTaskID.load(std::memory_order_relaxed);
 
-            {
-                WriteLocker locker(_taskQueueLock);
-                for (auto it = _taskQueue.begin(); it != _taskQueue.end(); ) {
-                    if (currentTime >= it->first) {
-                        tasksToRun.push_back(std::move(it->second));
-                        it = _taskQueue.erase(it);
+            while (true) {
+                std::function<void()> task;
+                {
+                    WriteLocker locker(_taskQueueLock);
+                    const auto it = std::find_if(_taskQueue.begin(), _taskQueue.end(), [currentTime, lastTaskID](const Task& a_task) {
+                        return a_task.id <= lastTaskID && currentTime >= a_task.targetTime;
+                    });
+                    if (it == _taskQueue.end()) break;
+
+                    task = it->callback;
+                    if (it->interval > 0.f && currentTime < it->endTime) {
+                        auto nextTime = it->targetTime + it->interval;
+                        if (nextTime <= currentTime)
+                            nextTime = currentTime + it->interval;
+                        if (nextTime <= it->endTime)
+                            it->targetTime = nextTime;
+                        else
+                            _taskQueue.erase(it);
                     } else {
-                        ++it;
+                        _taskQueue.erase(it);
                     }
                 }
-            }
 
-            for (auto& task : tasksToRun) {
                 try {
                     task();
                 } catch (const std::exception& e) {
@@ -198,10 +230,19 @@ namespace AsyncUtil
             WriteLocker locker(_taskQueueLock);
             _taskQueue.clear();
         }
-    private:
-        Lock _taskQueueLock;
 
-        std::vector<std::pair<float, std::function<void()>>> _taskQueue;
+    private:
+        struct Task {
+            TaskID id;
+            float targetTime;
+            float interval;
+            float endTime;
+            std::function<void()> callback;
+        };
+
+        Lock _taskQueueLock;
+        std::atomic<TaskID> _nextTaskID{0u};
+        std::vector<Task> _taskQueue;
     };
 }
 namespace ExtraDataUtil //  huge thanks to D7ry
@@ -1924,7 +1965,7 @@ namespace ObjectUtil
                 const auto av = a_isLeft ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kRightItemCharge;
                 const float sum = a_charge + a_actor->AsActorValueOwner()->GetActorValue(av);
                 const float charge = sum >= maxCharge ? maxCharge : sum;
-                a_actor->AsActorValueOwner()->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, av, charge);
+                a_actor->AsActorValueOwner()->SetActorValue(av, charge);
             }
         }
         static void ChargeInventoryWeapon(RE::Actor* a_actor, RE::TESBoundObject* a_weap, const uint16_t  a_charge)
@@ -1962,16 +2003,16 @@ namespace ObjectUtil
             }
         }
         
-        static void EnchantInventoryWeapon(RE::Actor* a_actor, RE::FormID a_weapID, RE::EnchantmentItem* a_ench, const float a_magnitude, const float a_charge, const bool a_removeOnUnequip = false)
+        static void EnchantInventoryWeapon(RE::Actor* a_actor, RE::TESBoundObject* a_weap, RE::EnchantmentItem* a_ench, const float a_charge, const bool a_removeOnUnequip = false)
         {
-            if (!a_actor || !a_ench) return;
+            if (!a_actor || !a_ench || !a_weap) return;
 
             auto invChanges = a_actor->GetInventoryChanges();
             auto entries = invChanges ? invChanges->entryList : nullptr;
             RE::BSSimpleList<RE::ExtraDataList *>* xList = nullptr;
             if (entries && !entries->empty())
                 for (auto entry : *entries) {
-                    if (entry && entry->object && entry->object->IsWeapon() && entry->object->formID == a_weapID) {
+                    if (entry && entry->object && entry->object->IsWeapon() && entry->object == a_weap) {
                         xList = entry->extraLists;
                     }
                 } if (xList) return EnchantItem(xList, a_ench, a_charge, a_removeOnUnequip);

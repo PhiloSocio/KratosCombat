@@ -130,9 +130,6 @@ public:
         if (!xList) return std::nullopt;
         spdlog::debug("xList count: {}", ieData->extraLists->size());
 
-        if (!xList) return std::nullopt;
-        spdlog::debug("xList found: {}");
-
         auto xUID = RE::BSExtraData::Create<RE::ExtraUniqueID>();
         if (!xUID) return std::nullopt;
 

@@ -1,23 +1,22 @@
 #include "HomingState.h"
-#include "Weapons/SmartRelicWeapon.h"
+#include "Weapons/ThrownSmartWeapon.h"
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
 #include "Util.h"
 
 HomingState::HomingState(
-    SmartRelicWeapon& a_weapon,
+    ThrownSmartWeapon& a_weapon,
     uint8_t a_hitCount,
     bool    a_isBoomerang,
     float   a_speed,
     float   a_angularVelocity)
-    : SmartWeaponState(a_weapon), 
-        hitCount(a_hitCount), 
-        isBoomerang(a_isBoomerang), 
+    : SmartWeaponState(a_weapon),
+        hitCount(a_hitCount),
+        isBoomerang(a_isBoomerang),
         angularVelocity(a_angularVelocity)
 {
     speed = a_speed;
 }
-
 void HomingState::InitializeTargets()
 {
     auto throwerActor = GetControllerActor();
@@ -36,7 +35,6 @@ void HomingState::InitializeTargets()
     for (size_t i = 1; i < hitCount; i++)
         std::copy_n(targets.begin(), n, targets.begin() + i * n);
 }
-
 void HomingState::Enter()
 {
     controller  = weapon.GetActiveController();
@@ -52,12 +50,9 @@ void HomingState::Enter()
     weapon.targetLocalRotation = weapon.targetLocalRotation * RE::NiMatrix3(PI4 - PI, 0.f, 0.f);
     weapon.targetLocalTranslation.x *= -1.f;
 
-    auto baseProjectile = weapon.projectile ? weapon.projectile->GetProjectileBase() : nullptr;
-    if (baseProjectile) {
-        auto& gravity = baseProjectile->data.gravity;
-        defaultGravity = gravity;
-        gravity = 0.f;
-    }
+    defaultGravity = weapon.currentGravity.load();
+    weapon.currentGravity.store(0.f);
+    weapon.gravityFrozen.store(true);
 
     InitializeTargets();
 }
@@ -67,11 +62,8 @@ void HomingState::Exit()
     weapon.targetLocalRotation    = weapon.targetLocalRotation * RE::NiMatrix3(PI + PI4, 0.f, 0.f);
     weapon.targetLocalTranslation.x *= -1.f;
 
-    auto baseProjectile = weapon.projectile ? weapon.projectile->GetProjectileBase() : nullptr;
-    if (baseProjectile) {
-        auto& gravity = weapon.projectile->GetProjectileBase()->data.gravity;
-        gravity = defaultGravity;
-    }
+    weapon.currentGravity.store(defaultGravity);
+    weapon.gravityFrozen.store(false);
 
     if (!isBoomerang) return;
 
@@ -80,7 +72,6 @@ void HomingState::Exit()
     if (throwerParent)
         throwerParent->DoAction(ActionType::kWeaponCall);
 }
-
 void HomingState::OnTransition(float a_delta, RE::NiPoint3& a_vel)
 {
     weapon.projState = ProjectileState::kLaunched;
@@ -96,7 +87,6 @@ void HomingState::OnTransition(float a_delta, RE::NiPoint3& a_vel)
         process = Process::kMain;
     }
 }
-
 Status HomingState::MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoint3& a_vel)
 {
     if (a_target && projLivingTime > 0.69f) {

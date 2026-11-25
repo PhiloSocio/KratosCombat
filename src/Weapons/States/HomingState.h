@@ -7,9 +7,8 @@ class HomingState : public SmartWeaponState
 public:
     inline static constexpr auto kType = Type::kHoming;
 
-    ~HomingState() override = default;
     HomingState(
-        SmartRelicWeapon& a_weapon,
+        ThrownSmartWeapon& a_weapon,
         uint8_t a_hitCount      = 2u,
         bool a_isBoomerang      = true,
         float a_speed           = 2000.f,

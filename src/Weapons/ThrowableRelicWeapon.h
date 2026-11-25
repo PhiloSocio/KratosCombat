@@ -1,7 +1,8 @@
 #pragma once
-#include "util.h"
-#include "settings.h"
+
+#include "ThrownWeapon.h"
 #include "RelicWeapon.h"
+#include "util.h"
 #include "SoundManager.h"
 
 class Thrower;
@@ -9,201 +10,67 @@ class Thrower;
 class ThrowableRelicWeapon : public RelicWeapon
 {
 public:
+    explicit ThrowableRelicWeapon(RE::TESBoundObject* a_object);
+    ~ThrowableRelicWeapon() override;
+
     static constexpr RelicAbility kRequiredAbility = RelicAbility::kThrowable;
 
-    ~ThrowableRelicWeapon() override;
-    explicit ThrowableRelicWeapon(RE::TESBoundObject* a_object);
-
-    static constexpr RE::NiMatrix3 RotationAngle(RotationType a_type) noexcept
-    {
-        switch (a_type) {
-        case RotationType::kNone:         return RE::NiMatrix3();
-        case RotationType::kSpinLateral:  return RE::NiMatrix3(0.f, PI8,        PI2 + PI8);
-        case RotationType::kSpinVertical: return RE::NiMatrix3(0.f, PI2 - PI32, PI2 + PI8);
-        }
-        return RE::NiMatrix3();
-    }
-    static constexpr RE::NiPoint3 TranslationOffset(RotationType a_type, const float a_length, const float a_cosZ = Config::HitRotationZcos) noexcept
-    {
-        switch (a_type) {
-        case RotationType::kNone:
-            return RE::NiPoint3(
-                0.f,
-                -a_length + 10,
-                0.f
-            );
-        case RotationType::kSpinLateral:
-            return RE::NiPoint3(
-                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ) * 0.69f,
-                -a_length * a_cosZ + 10.f,
-                0.f
-            );
-        case RotationType::kSpinVertical: 
-            return RE::NiPoint3(
-                0.f,
-                -a_length * a_cosZ + 10.f,
-                -a_length * std::sqrt(1.0 - a_cosZ * a_cosZ) * 0.69f
-            );
-        }
-        return RE::NiPoint3(0.f, 20.f, 0.f);
-    }
-
-    enum class ThrowState : std::uint8_t {
-        kNone,
-        kThrowable,
-        kThrown,
-        kCanArrive,
-        kArriving,
-        kArrived
-    };
-    enum class ProjectileState : std::uint8_t {
-        kNone,
-        kLaunched,
-        kHoming,
-        kTransition,
-        kStucked,
-        kHavok
-    };
-    enum class TrailColor : std::uint32_t {
-        kWhite,
-        kIceBlue,
-        kSkyBlue,
-        kBlue,
-        kYellow,
-        kGold,
-        kSilver
-    };
-
-    struct TrailData {
-        TrailOverride trailOverride;
-        TrailTransformOverride transformOverride = TrailTransformOverride();
-        RE::NiPointer<RE::NiNode>   trailParentNode;
-
-        const RE::NiColorA& GetColorByIndex(const uint32_t a_index) const noexcept;
-        const std::string& GetTrailMeshByEnchantment(const RE::EnchantmentItem* a_ench) const noexcept;
-        TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.F, const uint32_t a_colorIndex = 0U) {
-            trailOverride = TrailOverride(
-                Config::TrailLifetimeMult * a_intensity,
-                GetColorByIndex(a_colorIndex),
-                Config::TrailColorScaleMult * a_intensity,
-                a_meshDirectory
-            );
-        }
-    };
-    TrailData trailData;
-
-    static constexpr std::size_t kVFuncCount = 0x100;
-
-    using ProjectileInstanceHook = HookUtil::InstanceHook<RE::Projectile, kVFuncCount>;
-
-    static constexpr std::size_t kUpdateArrow        = 0xAB;
-    static constexpr std::size_t kOnArrowKill        = 0xA8;
-    static constexpr std::size_t kGetCollisionArrow  = 0xBE;
+    static constexpr std::size_t kUpdateArrow = 0xAB;
+    static constexpr std::size_t kOnArrowKill = 0xA8;
+    static constexpr std::size_t kGetCollisionArrow = 0xBE;
     static constexpr std::size_t kGetArrowImpactData = 0xBD;
+    static constexpr std::size_t kGetGravityArrow = 0xB5;
 
     static void UpdateArrow(RE::ArrowProjectile* a_this, float a_delta);
     static void OnArrowKill(RE::ArrowProjectile* a_this);
-    static void GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_AllCdPointCollector);
+    static void GetCollisionArrow(RE::ArrowProjectile* a_this, RE::hkpAllCdPointCollector* a_collector);
     static RE::Projectile::ImpactData* GetArrowImpactData(RE::ArrowProjectile* a_this, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable, std::uint32_t a6, std::uint32_t a7);
-
-    bool HookProjectile(RE::Projectile* a_projectile);
-    void UnhookProjectile(RE::Projectile* a_projectile);
-    void UnhookProjectiles();
-    void ResetProjectile();
-
-    std::unordered_map<RE::Projectile*, ProjectileInstanceHook*> projectileHooks;
-
-    Thrower* thrower = nullptr;
-    BaseActor* throwerParent = nullptr;
-
-    RE::ObjectRefHandle droppedWeaponKeep;
-
-    RE::ProjectileHandle projectileHandle;
-    RE::Projectile*      projectile = nullptr;
-    RE::NiPointer<RE::BSFadeNode> projectileModel;
-    RE::NiPointer<RE::NiNode>     weaponParentNode;
-    RE::NiPointer<RE::NiNode>     weaponModelCopy;
-    RE::NiPointer<RE::NiNode>     weaponModelSterilizedCopy;
-    RE::NiPointer<RE::NiNode>     replacedProjectileModel;
-    std::unique_ptr<InventoryEntryData> weapIED;
-
-    ProjectileRot projectileRotation;
-    RE::NiMatrix3 startLocalRotation;
-    RE::NiMatrix3 targetLocalRotation;
-    RE::NiMatrix3 hitLocalRotation;
-    RE::NiPoint3 startLocalTranslation  = {0.f, 0.f, 0.f};
-    RE::NiPoint3 targetLocalTranslation = {0.f, 0.f, 0.f};
-    RE::NiPoint3 velocity       = {0.f, 0.f, 0.f};
-    RE::NiPoint3 direction      = {0.f, 0.f, 0.f};
-    RE::NiPoint3 angles         = {0.f, 0.f, 0.f};
-    RE::NiPoint3 position       = {0.f, 0.f, 0.f};
-    RE::NiTransform transformPW = RE::NiTransform();
-    RE::NiTransform transformPL = RE::NiTransform();
-    RE::NiTransform transformW  = RE::NiTransform();
-    RE::NiTransform transformL  = RE::NiTransform();
-
-    bool isThrown = false;
-    bool isCountless = false;
-    bool isPenetrating = false;
-
-    ProjectileState projState = ProjectileState::kNone;
-    ImpactType impactType = ImpactType::kSharp;
-
-    float throwableDamage   = 0.f;
-    float yAngle            = 0.35f;
-    float launchTime        = 0.f;
-    float livingTime        = 0.f;
-    float rotationSpeed     = Config::ThrowRotationSpeed; //  rad/s
-    float gravity           = 3.21f;
-    float throwingChargeDuration = 0.f;
-    ThrowType throwingType = ThrowType::kNormalThrow;
-    RotationType rotationType = RotationType::kNone;
+    static float GetGravityArrow(RE::ArrowProjectile* a_this);
 
     bool Initialize() override;
     void Update() override;
     void OnEquip(BaseActor* a_actor) override;
-//    bool OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) override;
-    bool GetKillOnCollision(RE::ArrowProjectile* a_this, const bool a_result);
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
     [[nodiscard]] RE::BGSProjectile* CreateBaseProjectile(const char* a_editorID, const char* a_name);
     [[nodiscard]] RE::TESAmmo* CreateBaseAmmo(RE::BGSProjectile* a_baseProjectile, const char* a_editorID, const char* a_name);
 
-    [[nodiscard]] SoundManager& GetSoundManager() {return soundData;}
-    [[nodiscard]] bool IsCharged(const bool a_forLastThrow = false) const {return RelicWeapon::IsCharged() ? true : (a_forLastThrow ? _isLastThrowCharged : false);}
-
-    [[nodiscard]] Thrower* GetThrower() const {return thrower;}
-    [[nodiscard]] RE::Actor* GetThrowerActor();
-    [[nodiscard]] ThrowState GetThrowState() const {return _throwState;}
+    [[nodiscard]] SoundManager& GetSoundManager() noexcept { return soundData; }
+    [[nodiscard]] bool IsCharged() const override { return RelicWeapon::IsCharged(); }
+    [[nodiscard]] bool IsCharged(const ThrownWeapon& a_weapon) const { return RelicWeapon::IsCharged() || a_weapon.isLastThrowCharged; }
+    [[nodiscard]] Thrower* GetThrower() const noexcept;
+    [[nodiscard]] RE::Actor* GetThrowerActor() const;
+    [[nodiscard]] ThrowState GetThrowState() const noexcept { return lastThrownWeapon ? lastThrownWeapon->GetThrowState() : ThrowState::kNone; }
     [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return droppedWeaponKeep.get().get(); }
+    [[nodiscard]] ThrownWeapon* GetThrownWeapon(RE::Projectile* a_projectile) const noexcept;
+    [[nodiscard]] ThrownWeapon* GetLastThrownWeapon() const noexcept { return lastThrownWeapon; }
+    [[nodiscard]] bool HasActiveThrownWeapon() const noexcept;
 
-    [[nodiscard]] RE::NiTransform GetWorldTransform();
-    [[nodiscard]] RE::NiTransform GetLocalTransform();
-    [[nodiscard]] float GetLivingTime() const noexcept { return AsyncUtil::GameTime::GetEngineTime() - launchTime; }
+    bool Throw(Thrower* a_thrower, RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt, ThrowType a_throwType = ThrowType::kNormalThrow, float a_chargeDuration = 0.f);
+    bool RegisterAuxiliaryProjectile(RE::Projectile* a_projectile, const RE::ProjectileHandle& a_handle);
+    void ResetProjectile();
 
-    void SetThrowState(const ThrowState a_throwState) {_throwState = a_throwState;};
-
-    bool Throw(Thrower* a_thrower, const RotationType a_rotationType, std::optional<ProjectileRot> a_pRot = std::nullopt, std::optional<RE::NiPoint3> a_origin = std::nullopt, const ThrowType a_throwType = ThrowType::kNormalThrow);
-    bool InitiateTransform() noexcept;
-    void InitiateModel() noexcept;
-    bool InitiateTrail() noexcept;
-    void UpdateRotation(const float a_delta, const float a_livingTime, RE::NiPoint3& a_angles) noexcept;
-    void UpdateTranslation(const float a_delta, const float a_livingTime) noexcept;
-    void FadeTrail();
-    void RemoveTrail();
-
-    virtual bool OnHit(RE::ArrowProjectile* a_projectile, RE::hkpAllCdPointCollector* a_AllCdPointCollector) = 0;
-    virtual void PreImpact(RE::ArrowProjectile* a_projectile, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable) = 0;
-    virtual void PostImpact(RE::ArrowProjectile* a_projectile, RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable);
-    virtual void UpdateProjectile(RE::Projectile* a_projectile, float a_delta);
-    virtual bool PreThrow(RE::Projectile::LaunchData& a_launchData) {return true;};
-    virtual void PostThrow() {};
-    virtual void OnTrailDelete() {};
-//    virtual void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical);
-//    virtual void SetHitRotation(RE::NiPoint3& a_angles, const RE::NiPoint3& a_direction, const bool a_vertical);
-//    virtual void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical);
+    virtual std::unique_ptr<ThrownWeapon> CreateThrownWeapon();
+    virtual bool OnHit(ThrownWeapon& a_weapon, RE::ArrowProjectile* a_projectile, RE::hkpAllCdPointCollector* a_collector);
+    virtual void PostImpact(ThrownWeapon& a_weapon, RE::ArrowProjectile* a_projectile, RE::Projectile::ImpactData* a_impactData, RE::TESObjectREFR* a_target, RE::NiPoint3* a_targetLoc, RE::NiPoint3* a_velocity, RE::hkpCollidable* a_collidable);
+    virtual bool PreThrow(ThrownWeapon& a_weapon, RE::Projectile::LaunchData& a_launchData);
+    virtual void PostThrow(ThrownWeapon& a_weapon);
 
 protected:
+    friend class ThrownWeapon;
+    friend class ThrownSmartWeapon;
+    friend class RelicManager;
+
+    bool HookProjectile(ThrownWeapon& a_weapon);
+    void UnhookProjectile(RE::Projectile* a_projectile);
+    void UnhookProjectiles();
+    void CleanupThrownWeapons();
+    bool RetireConflictingProjectile(RE::Projectile* a_projectile);
+    bool RebindProjectile(ThrownWeapon& a_weapon, RE::Projectile* a_projectile, const RE::ProjectileHandle& a_handle);
+
+    RE::ObjectRefHandle droppedWeaponKeep;
+    std::unique_ptr<InventoryEntryData> weapIED;
+
     SoundManager soundData{
         SoundDefinition{
             .chargingLoop0 = nullptr,
@@ -221,25 +88,14 @@ protected:
     };
 
     RE::BGSProjectile* ThrowableWeaponDummyProjectile = nullptr;
-    RE::TESAmmo*       ThrowableWeaponDummyAmmo = nullptr;
+    RE::TESAmmo* ThrowableWeaponDummyAmmo = nullptr;
     RE::TESObjectLIGH* ThrowableWeaponLight = nullptr;
 
     AsyncUtil::GameTime placeWeaponUpdate;
-    AsyncUtil::GameTime trailRemoveUpdate;
-
-    ThrowState _throwState = ThrowState::kNone;
-
-    bool _transformInitiated = false;
-    bool _collisionInitiated = false;
-    bool _modelInitiated = false;
-    bool _trailInitiated = false;
-    bool _rotationBlended = false;
-    bool _hitTransformApplied = false;
-    bool _translationBlended = false;
-    bool _isLastThrowCharged = false;
-
-//    PRECISION_API::TrailOverride _trailOverride;
-//    PRECISION_API::CollisionDefinition collisionDefinition;
+    std::unordered_map<RE::Projectile*, std::unique_ptr<ThrownWeapon>> thrownWeapons;
+    std::vector<ThrownWeapon*> updateBuffer;
+    std::vector<std::pair<std::uint64_t, std::unique_ptr<ThrownWeapon>>> retiredThrownWeapons;
+    std::uint64_t updateCounter = 0;
+    ThrownWeapon* lastThrownWeapon = nullptr;
+    bool isCountless = false;
 };
-
-using ProjectileState = ThrowableRelicWeapon::ProjectileState;

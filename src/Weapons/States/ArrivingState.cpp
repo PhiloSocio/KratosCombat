@@ -1,13 +1,12 @@
 #include "ArrivingState.h"
-#include "Weapons/SmartRelicWeapon.h"
+#include "Weapons/ThrownSmartWeapon.h"
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Caller.h"
 
-ArrivingState::ArrivingState(SmartRelicWeapon& a_weapon)
+ArrivingState::ArrivingState(ThrownSmartWeapon& a_weapon)
     : SmartWeaponState(a_weapon)
 {
 }
-
 RE::NiAVObject* ArrivingState::GetCallerHandBone() const
 {
     return callerHandBoneSource ? *callerHandBoneSource : nullptr;
@@ -16,7 +15,6 @@ RE::NiAVObject* ArrivingState::GetCallerWeaponBone() const
 {
     return callerWeaponBoneSource ? *callerWeaponBoneSource : nullptr;
 }
-
 bool ArrivingState::IsInCallingAnimation()
 {
     if (callerActor)
@@ -35,7 +33,6 @@ bool ArrivingState::IsTargetValid(RE::Actor* a_target) const
     if (currentDir.Dot(linearArrivingDir) < std::cos(PI8)) return false;
     return true;
 }
-
 void ArrivingState::RefreshTargets()
 {
     if (!callerActor) return;
@@ -43,14 +40,12 @@ void ArrivingState::RefreshTargets()
     targets = ObjectUtil::Actor::GetNearCombatTargetHandles<Targets>(callerActor, linearDistance, true);
     SortTargets(position);
 }
-
 void ArrivingState::OnAttackEnd(RE::NiPoint3& a_vel)
 {
     speed *= 0.73f;
     a_vel *= 0.73f;
     timeToArrive = std::min(timeToArrive + hitDurationBudget, Config::ArrivalTime * 2.f);
 }
-
 void ArrivingState::InitializeCallerData()
 {
     if (!weapon.GetCaller() ||
@@ -107,7 +102,6 @@ void ArrivingState::InitiateTransform()
     startRotation = localRotation;
     _transformInitiated = true;
 }
-
 void ArrivingState::UpdateRotation()
 {
     if (!weapon.weaponParentNode) return;
@@ -235,7 +229,6 @@ void ArrivingState::UpdateArrivingRoute(const float a_delta)
     bezierDir = arrivingRoute.samples[targetIndex].point - position;
     bezierDir.Unitize();
 }
-
 void ArrivingState::Enter()
 {
     controller    = weapon.GetActiveController();
@@ -252,12 +245,9 @@ void ArrivingState::Enter()
 
     startingTime = AsyncUtil::GameTime::GetEngineTime();
 
-    auto baseProjectile = weapon.projectile ? weapon.projectile->GetProjectileBase() : nullptr;
-    if (baseProjectile) {
-        auto& gravity = baseProjectile->data.gravity;
-        defaultGravity = gravity;
-        gravity = 0.f;
-    }
+    defaultGravity = weapon.currentGravity.load();
+    weapon.currentGravity.store(0.f);
+    weapon.gravityFrozen.store(true);
 
     const bool doBlend = weapon.projState == ProjectileState::kNone
                       || weapon.projState == ProjectileState::kLaunched
@@ -268,13 +258,9 @@ void ArrivingState::Exit()
 {
     weapon.isPenetrating = false;
 
-    auto baseProjectile = weapon.projectile ? weapon.projectile->GetProjectileBase() : nullptr;
-    if (baseProjectile) {
-        auto& gravity = weapon.projectile->GetProjectileBase()->data.gravity;
-        gravity = defaultGravity;
-    }
+    weapon.currentGravity.store(defaultGravity);
+    weapon.gravityFrozen.store(false);
 }
-
 Status ArrivingState::MainProcess(float a_delta, RE::Actor* a_target, RE::NiPoint3& a_vel)
 {
     if (!callerActor) return Status::kCancelled;

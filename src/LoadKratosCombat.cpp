@@ -151,11 +151,14 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface *skse)
         return false;
     }
 
+#ifdef KRATOS_COMBAT_3
     auto* serialization = SKSE::GetSerializationInterface();
     serialization->SetUniqueID(kSerializationUniqueID);
     serialization->SetSaveCallback(OnSerializationSave);
     serialization->SetLoadCallback(OnSerializationLoad);
     serialization->SetRevertCallback(OnSerializationRevert);
+#else
+#endif
 
     spdlog::info("{} by {} has finished loading. Support for more mods! {}", plugin->GetName(), plugin->GetAuthor(), plugin->GetSupportEmail());
 

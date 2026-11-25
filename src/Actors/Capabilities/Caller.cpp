@@ -37,7 +37,7 @@ RelicWeapon* Caller::FindCallableRelic() const noexcept
             spdlog::debug("1");
             auto owner = relic->GetOwner();
             if (owner && owner == parent) {
-                if (const auto thrownRelic = relic->As<ThrowableRelicWeapon>(); !relic->GetCarrier() && thrownRelic->projectile) {
+                if (const auto thrownRelic = relic->As<ThrowableRelicWeapon>(); thrownRelic && !relic->GetCarrier() && thrownRelic->HasActiveThrownWeapon()) {
                     spdlog::debug("2");
                     bestOption = relic;
                     break;
@@ -64,7 +64,7 @@ RelicWeapon* Caller::FindCallableRelic() const noexcept
                 }
             } else if (const auto thrownRelic = relic->As<ThrowableRelicWeapon>()) {
                 spdlog::debug("5");
-                if (!relic->GetCarrier() && thrownRelic->projectile) {
+                if (!relic->GetCarrier() && thrownRelic->HasActiveThrownWeapon()) {
                     bestOption = relic;
                     break;
                 } else if (relic->GetCarrier() != parent) {

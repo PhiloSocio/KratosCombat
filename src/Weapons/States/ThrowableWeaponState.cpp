@@ -1,13 +1,12 @@
 #include "ThrowableWeaponState.h"
-#include "Weapons/SmartRelicWeapon.h"
+#include "Weapons/ThrownSmartWeapon.h"
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/ActorCapability.h"
 
-ThrowableWeaponState::ThrowableWeaponState(SmartRelicWeapon& a_weapon)
+ThrowableWeaponState::ThrowableWeaponState(ThrownSmartWeapon& a_weapon)
     : weapon(a_weapon)
 {
 }
-
 float ThrowableWeaponState::GetLivingTime() const noexcept
 {
     return AsyncUtil::GameTime::GetEngineTime() - startingTime;
@@ -36,7 +35,6 @@ void ThrowableWeaponState::DampVerticalVelocity(RE::NiPoint3& a_vel, const RE::N
     const float dampFactor = std::clamp((height - a_minHeight) / a_dampingRange, 0.f, 1.f);
     a_vel.z *= dampFactor;
 }
-
 void ThrowableWeaponState::RemoveInvalidTargets()
 {
     std::erase_if(targets, [this](const RE::ActorHandle actorHandle) {
@@ -67,7 +65,6 @@ void ThrowableWeaponState::SortTargets(RE::NiPoint3 a_origin)
             return dl < dr;
         });
 }
-
 void ThrowableWeaponState::OnHit(RE::Actor* a_victim)
 {
     if (!_isReadyToHit || !controller || !a_victim || !weapon.projectile) return;
@@ -78,5 +75,5 @@ void ThrowableWeaponState::OnHit(RE::Actor* a_victim)
     GetTargets().erase(GetTargets().begin());
     ObjectUtil::Actor::ProcessHitImpl(controllerActor, a_victim, weapon.projectile, false);
     _lastHitTime = AsyncUtil::GameTime::GetEngineTime();
-    _isReadyToHit = false; 
+    _isReadyToHit = false;
 }

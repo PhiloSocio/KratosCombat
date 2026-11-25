@@ -6,13 +6,12 @@ using Targets = std::vector<RE::ActorHandle>;
 using ProjectileRuntimeData = RE::Projectile::PROJECTILE_RUNTIME_DATA;
 
 class ActorCapability;
-class SmartRelicWeapon;
+class ThrownSmartWeapon;
 
 class ThrowableWeaponState : public RelicWeaponState
 {
 public:
-    explicit ThrowableWeaponState(SmartRelicWeapon& a_weapon);
-    ~ThrowableWeaponState() override = default;
+    explicit ThrowableWeaponState(ThrownSmartWeapon& a_weapon);
 
     void OnHit(RE::Actor* a_victim) override final;
 
@@ -26,7 +25,7 @@ public:
     [[nodiscard]] RE::Actor*   GetControllerActor() const;
 
 protected:
-    SmartRelicWeapon& weapon;
+    ThrownSmartWeapon& weapon;
     ActorCapability* controller = nullptr;
 
     Targets targets;

@@ -13,12 +13,11 @@ public:
         0.f, PI2, PI, ONEANDHALF_PI     //  b, r, f, l
     };
 
-    ~ArrivingState() override = default;
-    ArrivingState(SmartRelicWeapon& a_weapon);
+    ArrivingState(ThrownSmartWeapon& a_weapon);
 
     void Enter() override;
     void Exit() override;
-    
+
     [[nodiscard]] Type GetType() const override { return Type::kArriving; };
 
     [[nodiscard]] bool            IsInCallingAnimation();

@@ -1,22 +1,22 @@
 #include "Mjolnir.h"
+#include "Weapons/ThrownSmartWeapon.h"
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
-#include "Actors/Capabilities/Caller.h"
 #include "Assets.h"
 #include "settings.h"
 #include "util.h"
 
 using namespace Util;
 
-Mjolnir::~Mjolnir()
-{
-    ResetCharge(enchMag, defaultEnchMag, false, true);
-    spdlog::debug("mjolnir destructed");
-}
 Mjolnir::Mjolnir(RE::TESBoundObject* a_object)
     : SmartRelicWeapon(a_object)
 {
     Initialize();
+}
+Mjolnir::~Mjolnir()
+{
+    ResetCharge(enchMag, defaultEnchMag, false, true);
+    spdlog::debug("mjolnir destructed");
 }
 
 bool Mjolnir::Initialize()
@@ -30,9 +30,13 @@ bool Mjolnir::Initialize()
         spdlog::error("Can't find default Mjolnir enchantment spell"); found = false;
     }
 
-    ThrowableWeaponDummyProjectile->data.gravity = 3.21f;
+    if (ThrowableWeaponDummyProjectile)
+        ThrowableWeaponDummyProjectile->data.gravity = 3.21f;
+    else
+        found = false;
 
     const auto assets = Assets::GetSingleton();
+    if (!assets) return false;
     soundData =
         SoundDefinition{
             .chargingLoop0 = assets->soundEffects.chargeMjolnir,
@@ -50,80 +54,48 @@ bool Mjolnir::Initialize()
 
     return found;
 }
-void Mjolnir::Update()
+void Mjolnir::SetState(ThrownSmartWeapon& a_weapon, RelicWeaponState::Type a_type)
 {
-    SmartRelicWeapon::Update();
-}
-
-void Mjolnir::SetState(RelicWeaponState::Type a_type)
-{
-    switch (a_type)
-    {
+    switch (a_type) {
     case RelicWeaponState::Type::kArriving:
-        SmartRelicWeapon::SetState(std::make_unique<MjolnirArrivingState>(*this));
+        a_weapon.SetState(std::make_unique<MjolnirArrivingState>(a_weapon));
         break;
     case RelicWeaponState::Type::kHoming:
-        SmartRelicWeapon::SetState(std::make_unique<MjolnirHomingState>(*this));
+        a_weapon.SetState(std::make_unique<MjolnirHomingState>(a_weapon));
         break;
     case RelicWeaponState::Type::kNone:
-        SmartRelicWeapon::SetState(nullptr);
-        break;
-
     default:
-        SmartRelicWeapon::SetState(nullptr);
+        a_weapon.SetState(std::unique_ptr<RelicWeaponState>{});
         break;
     }
 }
-void Mjolnir::OnMenuOpenCloseEvent(const bool a_opening)
+bool Mjolnir::PreThrow(ThrownWeapon& a_weapon, RE::Projectile::LaunchData& a_launchData)
 {
-    if (a_opening) {
-        soundData.PauseAllLoopingSounds();
-    } else {
-        soundData.ContinueAllLoopingSounds();
-    }
-}
-bool Mjolnir::PreThrow(RE::Projectile::LaunchData& a_launchData)
-{
-    ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
+    a_weapon.ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
     return true;
 }
-void Mjolnir::PostThrow()
+void Mjolnir::PostThrow(ThrownWeapon& a_weapon)
 {
-    auto throwerActor = throwerParent ? throwerParent->GetActor() : nullptr;
+    auto throwerActor = a_weapon.GetThrowerActor();
     if (!throwerActor) {spdlog::error("Mjolnir::Throw - thrower actor is null"); return;}
 
-    gravity = 3.21f;
-    gravity /= std::max(std::powf(throwingChargeDuration + 1.f, 3.f), 0.01f);
-    gravity = std::max(gravity, 0.5f);
+    a_weapon.gravity = 3.21f;
+    a_weapon.gravity /= std::max(std::powf(a_weapon.throwingChargeDuration + 1.f, 3.f), 0.01f);
+    a_weapon.gravity = std::max(a_weapon.gravity, 0.5f);
 
-    _isLastThrowCharged = ench != nullptr;
+    a_weapon.isLastThrowCharged = a_weapon.ench != nullptr;
+    a_weapon.trailData.trailOverride.baseColorOverride = a_weapon.trailData.GetColorByIndex(Config::TrailColorIndexMjolnir);
 
-    trailData.trailOverride.baseColorOverride = trailData.GetColorByIndex(Config::TrailColorIndexMjolnir);
-
-    const auto thrower = throwerParent->GetCapabilityAs<Thrower>();
-    if (thrower && thrower->IsThrowing(ThrowType::kPowerThrow))
-        isPenetrating = true;
-    else
-        isPenetrating = false;
-
-//    if (isPenetrating) return;
-
+    const auto thrower = a_weapon.throwerParent->GetCapabilityAs<Thrower>();
+    a_weapon.isPenetrating = thrower && thrower->IsThrowing(ThrowType::kPowerThrow);
     throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
-
-    SetThrowState(ThrowState::kThrown);
-    if (stuckedBone)   stuckedBone.reset();
-    if (stuckedActor)  stuckedActor.reset();
-    lastHitActors.clear();
-    lastHitForms.clear();
-}
-
-bool Mjolnir::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
-{
-    return SmartRelicWeapon::Call(a_caller, a_justDestroy, a_delay);
-}
-void Mjolnir::Catch(const bool a_justDestroy)
-{
-    SmartRelicWeapon::Catch(a_justDestroy);
+    a_weapon.SetThrowState(ThrowState::kThrown);
+    auto weapon = a_weapon.As<ThrownSmartWeapon>();
+    if (!weapon) return;
+    weapon->stuckedBone.reset();
+    weapon->stuckedActor.reset();
+    weapon->lastHitActors.clear();
+    weapon->lastHitForms.clear();
 }
 bool Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
 {
@@ -200,8 +172,9 @@ bool Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, co
             }
         }
 
-        if (enchBase && (enchBase->HasArchetype(RE::EffectSetting::Archetype::kDualValueModifier)
-                     || enchBase->HasArchetype(RE::EffectSetting::Archetype::kValueModifier))) {
+        if (enchBase && 
+            (enchBase->HasArchetype(RE::EffectSetting::Archetype::kDualValueModifier) || 
+             enchBase->HasArchetype(RE::EffectSetting::Archetype::kValueModifier))) {
             if (ench == defaultEnch) {
                 spdlog::debug("mjolnir is already charged with {}, buffing now...", ench->GetName());
                 ResetCharge(enchMag, defaultEnchMag, false, true);

@@ -74,9 +74,7 @@ void Thrower::ThrowWeapon(const RotationType a_rotationType, const ThrowType a_t
 {
     auto rRelic = parent->GetRightHandRelic();
     if (auto thrownWeapon = rRelic ? rRelic->As<ThrowableRelicWeapon>() : nullptr) {
-        thrownWeapon->throwingChargeDuration = _isCharging ? _chargeDuration : 0.f;
-        if(const bool success = thrownWeapon->Throw(this, a_rotationType, std::nullopt, std::nullopt, a_throwType); success) {
-            thrownWeapon->throwingChargeDuration = 0.f;
+        if(const bool success = thrownWeapon->Throw(this, a_rotationType, std::nullopt, std::nullopt, a_throwType, _isCharging ? _chargeDuration : 0.f); success) {
             StopChargingThrow();
             lastThrownRelic = thrownWeapon;
             if (a_throwType == ThrowType::kHomingThrow) {

@@ -5,8 +5,7 @@
 class SmartWeaponState : public ThrowableWeaponState
 {
 public:
-    explicit SmartWeaponState(SmartRelicWeapon& a_weapon);
-    ~SmartWeaponState() override = default;
+    explicit SmartWeaponState(ThrownSmartWeapon& a_weapon);
 
     Status Update(float a_delta) override final;
 

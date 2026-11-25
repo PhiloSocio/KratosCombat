@@ -1,21 +1,21 @@
 #include "Leviathan.h"
+#include "Weapons/ThrownSmartWeapon.h"
 #include "Actors/BaseActor.h"
-#include "Actors/Capabilities/Caller.h"
 #include "Assets.h"
 #include "settings.h"
 #include "util.h"
 
 using namespace Util;
 
-LeviathanAxe::~LeviathanAxe()
-{
-    ResetCharge(enchMag, defaultEnchMag, false, true);
-    spdlog::debug("leviathan destructed");
-}
 LeviathanAxe::LeviathanAxe(RE::TESBoundObject* a_object)
     : SmartRelicWeapon(a_object)
 {
     Initialize();
+}
+LeviathanAxe::~LeviathanAxe()
+{
+    ResetCharge(enchMag, defaultEnchMag, false, true);
+    spdlog::debug("leviathan destructed");
 }
 
 bool LeviathanAxe::Initialize()
@@ -29,10 +29,14 @@ bool LeviathanAxe::Initialize()
         spdlog::error("Can't find default Leviathan Axe enchantment spell"); found = false;
     }
 
-    ThrowableWeaponDummyProjectile->data.gravity = 3.21f;
+    if (ThrowableWeaponDummyProjectile)
+        ThrowableWeaponDummyProjectile->data.gravity = 3.21f;
+    else
+        found = false;
 
     const auto assets = Assets::GetSingleton();
-    soundData = 
+    if (!assets) return false;
+    soundData =
         SoundDefinition{
             .chargingLoop0 = assets->soundEffects.chargeLeviLoop,
             .throwingStart = assets->soundEffects.throwLevi,
@@ -49,74 +53,45 @@ bool LeviathanAxe::Initialize()
 
     return found;
 }
-void LeviathanAxe::Update()
+void LeviathanAxe::SetState(ThrownSmartWeapon& a_weapon, RelicWeaponState::Type a_type)
 {
-    SmartRelicWeapon::Update();
-}
-
-void LeviathanAxe::SetState(RelicWeaponState::Type a_type)
-{
-    switch (a_type)
-    {
+    switch (a_type) {
     case RelicWeaponState::Type::kArriving:
-        SmartRelicWeapon::SetState(std::make_unique<LeviathanArrivingState>(*this));
+        a_weapon.SetState(std::make_unique<LeviathanArrivingState>(a_weapon));
         break;
     case RelicWeaponState::Type::kHoming:
-        SmartRelicWeapon::SetState(std::make_unique<LeviathanHomingState>(*this));
+        a_weapon.SetState(std::make_unique<LeviathanHomingState>(a_weapon));
         break;
     case RelicWeaponState::Type::kNone:
-        SmartRelicWeapon::SetState(nullptr);
-        break;
-
     default:
-        SmartRelicWeapon::SetState(nullptr);
+        a_weapon.SetState(std::unique_ptr<RelicWeaponState>{});
         break;
     }
 }
-void LeviathanAxe::OnMenuOpenCloseEvent(const bool a_opening)
+bool LeviathanAxe::PreThrow(ThrownWeapon& a_weapon, RE::Projectile::LaunchData& a_launchData)
 {
-    if (a_opening) {
-        soundData.PauseAllLoopingSounds();
-    } else {
-        soundData.ContinueAllLoopingSounds();
-    }
-}
-bool LeviathanAxe::PreThrow(RE::Projectile::LaunchData& a_launchData)
-{
-    ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
+    a_weapon.ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
     return true;
 }
-void LeviathanAxe::PostThrow()
+void LeviathanAxe::PostThrow(ThrownWeapon& a_weapon)
 {
-    auto throwerActor = throwerParent ? throwerParent->GetActor() : nullptr;
+    auto throwerActor = a_weapon.GetThrowerActor();
     if (!throwerActor) {spdlog::error("LeviathanAxe::Throw - thrower actor is null"); return;}
 
-    gravity = 2.34f;
-    gravity /= std::max(std::powf(throwingChargeDuration + 1.f, 3.f), 0.01f);
-    gravity = std::max(gravity, 0.5f);
+    a_weapon.gravity = 2.34f;
+    a_weapon.gravity /= std::max(std::powf(a_weapon.throwingChargeDuration + 1.f, 3.f), 0.01f);
+    a_weapon.gravity = std::max(a_weapon.gravity, 0.5f);
 
-    _isLastThrowCharged = ench != nullptr;
-
-    trailData.trailOverride.baseColorOverride = trailData.GetColorByIndex(Config::TrailColorIndexLeviathan);
-
-//    if (isPenetrating) return;
-
+    a_weapon.isLastThrowCharged = a_weapon.ench != nullptr;
+    a_weapon.trailData.trailOverride.baseColorOverride = a_weapon.trailData.GetColorByIndex(Config::TrailColorIndexLeviathan);
     throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
-
-    SetThrowState(ThrowState::kThrown);
-    if (stuckedBone)   stuckedBone.reset();
-    if (stuckedActor)  stuckedActor.reset();
-    lastHitActors.clear();
-    lastHitForms.clear();
-}
-
-bool LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
-{
-    return SmartRelicWeapon::Call(a_caller, a_justDestroy, a_delay);
-}
-void LeviathanAxe::Catch(const bool a_justDestroy)
-{
-    SmartRelicWeapon::Catch(a_justDestroy);
+    a_weapon.SetThrowState(ThrowState::kThrown);
+    auto weapon = a_weapon.As<ThrownSmartWeapon>();
+    if (!weapon) return;
+    weapon->stuckedBone.reset();
+    weapon->stuckedActor.reset();
+    weapon->lastHitActors.clear();
+    weapon->lastHitForms.clear();
 }
 bool LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
 {
@@ -125,8 +100,8 @@ bool LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
         return false;
     }
 
-    auto assets     = Assets::GetSingleton();
-    auto AnArchos   = GetWielder()->GetActor();
+    auto assets   = Assets::GetSingleton();
+    auto AnArchos = GetWielder()->GetActor();
     const auto rHandBone = wielder->GetRHandBone();
 
     if (a_stage != 0u) {
@@ -146,8 +121,8 @@ bool LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
     if (weap && chargeHitCount <= 0) {
         if (enchBase) {
             spdlog::debug("levi's enchantment is: {}", ench->GetName());
-            if (enchBase->HasArchetype(RE::EffectSetting::Archetype::kDualValueModifier)
-             || enchBase->HasArchetype(RE::EffectSetting::Archetype::kValueModifier)) {
+            if (enchBase->HasArchetype(RE::EffectSetting::Archetype::kDualValueModifier) || 
+                enchBase->HasArchetype(RE::EffectSetting::Archetype::kValueModifier)) {
                 ResetCharge(enchMag, defaultEnchMag, false, true);
                 auto& projectileDamage = enchEffect->effectItem.magnitude;
                 enchMag = &projectileDamage;

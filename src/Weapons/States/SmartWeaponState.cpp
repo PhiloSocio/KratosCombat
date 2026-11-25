@@ -1,11 +1,10 @@
 #include "SmartWeaponState.h"
-#include "Weapons/SmartRelicWeapon.h"
+#include "Weapons/ThrownSmartWeapon.h"
 
-SmartWeaponState::SmartWeaponState(SmartRelicWeapon& a_weapon)
+SmartWeaponState::SmartWeaponState(ThrownSmartWeapon& a_weapon)
     : ThrowableWeaponState(a_weapon)
 {
 }
-
 Status SmartWeaponState::Update(float a_delta)
 {
     auto proj = weapon.projectile;
@@ -38,7 +37,6 @@ Status SmartWeaponState::Update(float a_delta)
 
     return MainProcess(a_delta, process == Process::kAttack ? target : nullptr, vel);
 }
-
 void SmartWeaponState::Attack(RE::Actor* a_target, RE::NiPoint3& a_vel)
 {
     const auto aimPos = GetTargetBonePosition(a_target);
@@ -56,7 +54,6 @@ void SmartWeaponState::Attack(RE::Actor* a_target, RE::NiPoint3& a_vel)
     a_vel = MathUtil::Angle::BlendVectors(weapon.direction, aimDir, tau, true) * _smoothedSpeed;
     DampVerticalVelocity(a_vel, a_target->GetPosition());
 }
-
 void SmartWeaponState::BeginTransition(Process a_from)
 {
     transitionFrom       = a_from;
