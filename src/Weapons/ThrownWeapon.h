@@ -90,8 +90,8 @@ public:
     [[nodiscard]] Thrower* GetThrower() const noexcept { return thrower; }
     [[nodiscard]] bool IsEquipped() const noexcept;
     [[nodiscard]] BaseActor* GetCarrier() const noexcept;
+    [[nodiscard]] SoundManager& GetSoundManager() const noexcept;
     void MarkHitTransformApplied() noexcept { _hitTransformApplied = true; }
-    [[nodiscard]] SoundManager& GetSoundManager() noexcept { return soundData; }
     template <typename T>
     [[nodiscard]] T* As() noexcept
     {
@@ -136,6 +136,7 @@ public:
     RE::NiPointer<RE::NiNode> replacedProjectileModel;
 
     ProjectileRot projectileRotation{};
+    RE::NiMatrix3 startWorldRotation;
     RE::NiMatrix3 startLocalRotation;
     RE::NiMatrix3 targetLocalRotation;
     RE::NiMatrix3 hitLocalRotation;
@@ -151,7 +152,6 @@ public:
     RE::NiTransform transformL = RE::NiTransform();
 
     TrailData trailData;
-    SoundManager soundData;
     AsyncUtil::GameTime trailRemoveUpdate;
 
     bool isThrown = false;
@@ -173,6 +173,7 @@ public:
     float livingTime = 0.f;
     float rotationSpeed = Config::ThrowRotationSpeed;
     float gravity = 3.21f;
+    float aeroDragCoeff = 3.2e-4f;
     float throwingChargeDuration = 0.f;
     ThrowType throwingType = ThrowType::kNormalThrow;
     RotationType rotationType = RotationType::kNone;

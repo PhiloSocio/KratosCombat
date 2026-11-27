@@ -43,7 +43,7 @@ bool Mjolnir::Initialize()
             .throwingStart = assets->soundEffects.throwLevi,
             .throwingLoop0 = assets->soundEffects.throwingLeviLoop0,
             .throwingLoop1 = assets->soundEffects.throwingLeviLoop1,
-            .callStart     = assets->soundEffects.callLevi,
+            .callStart     = assets->soundEffects.fingerSnap,
             .arrivingStart = assets->soundEffects.arrivingLeviStart,
             .arrivingLoop0 = assets->soundEffects.arrivingLeviLoop0,
             .arrivingLoop1 = assets->soundEffects.arrivingLeviLoop1,
@@ -72,6 +72,7 @@ void Mjolnir::SetState(ThrownSmartWeapon& a_weapon, RelicWeaponState::Type a_typ
 bool Mjolnir::PreThrow(ThrownWeapon& a_weapon, RE::Projectile::LaunchData& a_launchData)
 {
     a_weapon.ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
+    a_weapon.aeroDragCoeff = 4.e-4f;
     return true;
 }
 void Mjolnir::PostThrow(ThrownWeapon& a_weapon)

@@ -61,7 +61,7 @@ float Thrower::GetImpulsePower(const float a_mass) noexcept
 {
     const float t = std::clamp(a_mass / 33.f, 0.f, 1.f);
     const float overallForce = Algebra::Interpolate(t * t, explosiveStrength, peakStrength);
-    const float baseImpulseDuration = Algebra::Interpolate(std::sqrtf(t), 0.02f, 0.3f);
+    const float baseImpulseDuration = Algebra::Interpolate(std::sqrtf(t), 0.025f, 0.36f);
     _chargeImpulseDuration = baseImpulseDuration * GetChargeMultiplier();
     return 1000.f * overallForce * _chargeImpulseDuration;
 }

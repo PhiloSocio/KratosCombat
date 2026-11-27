@@ -71,6 +71,7 @@ void LeviathanAxe::SetState(ThrownSmartWeapon& a_weapon, RelicWeaponState::Type 
 bool LeviathanAxe::PreThrow(ThrownWeapon& a_weapon, RE::Projectile::LaunchData& a_launchData)
 {
     a_weapon.ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
+    a_weapon.aeroDragCoeff = 3.6e-4f;
     return true;
 }
 void LeviathanAxe::PostThrow(ThrownWeapon& a_weapon)

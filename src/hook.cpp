@@ -113,7 +113,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         float height = leviPos.z - hTarget->GetPosition().z;
                         targetDir.Unitize();
                         const float speed = hLevi.speed * (livingTime < 1.2f ? livingTime : 1.2f);
-                        vel = MathUtil::Angle::BlendVectors(linearDir, targetDir, ((livingTime - 0.2f) / 3.f), true) * speed;
+                        vel = MathUtil::Algebra::BlendVectors(linearDir, targetDir, ((livingTime - 0.2f) / 3.f), true) * speed;
                         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
                         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
                     } else {
@@ -140,7 +140,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         circularVel += targetDir * (distance - 100.f) / 0.2f;
                         circularVel.Unitize();
                         const float speed = hLevi.speed * (hLivingTime > 0.5f && livingTime < 1.f ? livingTime + 0.2f : 1.f);
-                        vel = MathUtil::Angle::BlendVectors(linearDir, circularVel, ((livingTime - 0.2f) / 3.f), true) * speed;
+                        vel = MathUtil::Algebra::BlendVectors(linearDir, circularVel, ((livingTime - 0.2f) / 3.f), true) * speed;
                         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
                         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
                     }
@@ -230,7 +230,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         float height = mjolnirPos.z - hTarget->GetPosition().z;
                         targetDir.Unitize();
                         const float speed = hMjolnir.speed * (livingTime < 1.2f ? livingTime : 1.2f);
-                        vel = MathUtil::Angle::BlendVectors(linearDir, targetDir, ((livingTime - 0.2f) / 3.f), true) * speed;
+                        vel = MathUtil::Algebra::BlendVectors(linearDir, targetDir, ((livingTime - 0.2f) / 3.f), true) * speed;
                         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
                         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
                     } else {
@@ -257,7 +257,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                         circularVel += targetDir * (distance - 100.f) / 0.2f;
                         circularVel.Unitize();
                         const float speed = hMjolnir.speed * (hLivingTime > 0.5f && livingTime < 1.f ? livingTime + 0.2f : 1.f);
-                        vel = MathUtil::Angle::BlendVectors(linearDir, circularVel, ((livingTime - 0.2f) / 3.f), true) * speed;
+                        vel = MathUtil::Algebra::BlendVectors(linearDir, circularVel, ((livingTime - 0.2f) / 3.f), true) * speed;
                         float dampFactor = std::clamp((height - 10.f) / 90.f, 0.f, 1.f);
                         if (vel.z < 0.f) vel.z *= dampFactor;  //  damp vertical speed
                     }
@@ -329,7 +329,7 @@ void ProjectileHook::LeviAndDraupnir(RE::Projectile* a_this)
                     auto& aMjolnir = mjolnir->arrivingMjolnir;
                     const float blendTime = *Config::MjolnirArrivingDelay;
                     auto velocityWhenCalled = mjolnir->data.projState == Mjolnir::ProjectileState::kLaunched ? mjolnir->data.lastVelocity : (aMjolnir.linearArrivingDir * aMjolnir.speed);
-                    vel = MathUtil::Angle::BlendVectors(velocityWhenCalled, linearArrivingDir * mjolnir->arrivingMjolnir.speed, mjolnir->arrivingMjolnir.GetLivingTime() / blendTime);
+                    vel = MathUtil::Algebra::BlendVectors(velocityWhenCalled, linearArrivingDir * mjolnir->arrivingMjolnir.speed, mjolnir->arrivingMjolnir.GetLivingTime() / blendTime);
                     aMjolnir.startVelocity = vel;
                     mjolnir->data.lastVelocity = vel;
                     RE::NiPoint3 curvyDir = vel;

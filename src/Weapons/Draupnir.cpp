@@ -74,6 +74,8 @@ void Draupnir::Update()
 bool Draupnir::PreThrow(ThrownWeapon& a_weapon, RE::Projectile::LaunchData& a_launchData)
 {
     a_weapon.ThrowableWeaponDummyProjectile->data.speed *= Config::LeviThrowSpeedMult;
+    a_weapon.aeroDragCoeff = 3.e-4f;
+
     a_launchData.ammoSource = nullptr;
     return true;
 }

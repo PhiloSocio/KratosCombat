@@ -9,17 +9,24 @@ Caller::Caller()
 void Caller::CallWeapon(SmartRelicWeapon* a_weaponToCall)
 {
     if (parent && parent->IsValid()) {
-        if (a_weaponToCall && a_weaponToCall->Call(this, false)) {
+        bool success = false;
+        if (a_weaponToCall && a_weaponToCall->Call(this, false); success) {
+            return;
         } else if (auto weaponToCall = _weaponToCall ? _weaponToCall->As<SmartRelicWeapon>() : nullptr) {
+            std::optional<float> delay = (weaponToCall && weaponToCall->GetType() == RelicType::kMjolnir) ? Config::MjolnirArrivingDelay : std::nullopt;
             if (auto wielder = weaponToCall->GetWielder(); wielder && wielder->GetActor() != parent->GetActor()) {
-            //    if (weaponToCall->Call(this, false, 1.618f)) {
+            //    if (success = weaponToCall->Call(this, false, 1.618f); success) {
             //        weaponToCall->currentReference = wielder->GetActor()->DropObject(weaponToCall->GetWeapon(), nullptr, 1, nullptr, nullptr).get().get();
                     spdlog::info("weapon forcefully called from {}", wielder->GetActor()->GetName());
             //    }
-            } else if (weaponToCall->Call(this, false)) {
+            } else if (success = weaponToCall->Call(this, false, delay); success) {
                 spdlog::info("{} has successfully called {}", parent->GetActor()->GetName(), weaponToCall->weap->fullName);
             } else {
                 spdlog::info("{} has failed to call {}", parent->GetActor()->GetName(), weaponToCall->weap->fullName);
+            }
+            if (success) {
+                auto& rHandBone = parent->GetRHandBone();
+                weaponToCall->GetSoundManager().PlayCallingHandSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
             }
         } else {
             spdlog::info("no callable weapon found!");
@@ -130,9 +137,11 @@ void Caller::HandleAction(const ActionType a_action)
     case ActionType::kWeaponCall:
         if (!parent->IsInRage() && !parent->GetRightHandRelic()) {
             if (GetCallableRelic()) {
-                parent->GetActor()->SetGraphVariableBool("bLeviInCatchRange", false);
-                parent->GetActor()->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kWeaponCharge);   //  intentional
-                parent->GetActor()->NotifyAnimationGraph("DoKratosAction");
+                auto parentActor = parent->GetActor();
+                parentActor->SetGraphVariableInt("iNextWeaponToCall", (uint8_t)_weaponToCall->GetType());
+                parentActor->SetGraphVariableBool("bLeviInCatchRange", false);
+                parentActor->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kWeaponCharge);   //  intentional
+                parentActor->NotifyAnimationGraph("DoKratosAction");
             }
         } else if (parent->IsInRage()) {
             //  todo

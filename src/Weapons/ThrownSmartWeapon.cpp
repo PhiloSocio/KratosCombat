@@ -114,7 +114,9 @@ bool ThrownSmartWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::op
         return false;
     }
 
+    auto& rHandBone = callerParent->GetRHandBone();
     if (!weap ||
+        !rHandBone ||
         !ArrivingWeaponDummyAmmo ||
         !ArrivingWeaponDummyProjectile)
     {
@@ -132,7 +134,7 @@ bool ThrownSmartWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::op
         transformPL = weaponParentNode->local;
     }
 
-    soundData.FadeThrowingLoopSounds(369);
+    GetSoundManager().FadeThrowingLoopSounds(369);
 
     if (a_justDestroy) {
         if (stuckedActor) {
@@ -148,18 +150,17 @@ bool ThrownSmartWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::op
         }
         return false;
     }
+
     if (a_delay.has_value() && a_delay.value() > *g_deltaTime) {
         delayedCallTaskID = AsyncUtil::TaskManager::GetSingleton().AddDelayedTask(a_delay.value(), [this]() {
             delayedCallTaskID = 0u;
-            if (caller)
-                caller->CallWeapon(&smartWeapon);
+            if (this) {
+                projState = ProjectileState::kTransition;
+                this->Call(caller);
+                projState = ProjectileState::kNone;
+            }
         });
         return true;
-    }
-
-    auto& rHandBone = callerParent->GetRHandBone();
-    if (!isPenetrating) {
-        soundData.PlayCallingHandSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
     }
 
     bool isProjectileDestroyed = false, isParentsMatching = false, isProjectileActive = false, isProjectileMoving = false;
@@ -178,8 +179,8 @@ bool ThrownSmartWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::op
                 Projectile::Manager::GetSingleton()->wobble.emplace_back(projectileModel->world.rotate, projectileHandle, 0.f);
                 delayedCallTaskID = AsyncUtil::TaskManager::GetSingleton().AddDelayedTask(wobbleDuration, [this]() {
                     delayedCallTaskID = 0u;
-                    if (caller)
-                        caller->CallWeapon(&smartWeapon);
+                    if (this)
+                        this->Call(caller);
                 });
                 projState = ProjectileState::kTransition;
                 SetState(RelicWeaponState::Type::kArriving);
@@ -284,9 +285,9 @@ void ThrownSmartWeapon::Catch(const bool a_justDestroy)
     if (callerActor) {
         callerActor->SetGraphVariableBool("bLeviInCatchRange", true);
 
-        soundData.FadeArrivingNearSounds(469);
-        soundData.FadeArrivingLoopSounds(469);
-        soundData.StopArrivingLoopSounds(*g_deltaTime * 3200.f);
+        GetSoundManager().FadeArrivingNearSounds(469);
+        GetSoundManager().FadeArrivingLoopSounds(469);
+        GetSoundManager().StopArrivingLoopSounds(*g_deltaTime * 3200.f);
 
         bool success = false;
         if (weap && smartWeapon.droppedWeaponKeep.get().get()) {
@@ -313,7 +314,7 @@ void ThrownSmartWeapon::Catch(const bool a_justDestroy)
 
                 auto assets = Assets::GetSingleton();
                 auto& rHandBone = callerParent->GetRHandBone();
-                soundData.PlayCatchingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
+                GetSoundManager().PlayCatchingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
                 if (assets && assets->VFXeffects.handFrost)
                     callerActor->ApplyArtObject(assets->VFXeffects.handFrost, 1.f, nullptr, false, false, rHandBone);
 

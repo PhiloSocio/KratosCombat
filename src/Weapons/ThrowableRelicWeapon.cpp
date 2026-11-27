@@ -203,7 +203,6 @@ RE::Actor* ThrowableRelicWeapon::GetThrowerActor() const
     return lastThrownWeapon ? lastThrownWeapon->GetThrowerActor() : nullptr;
 }
 
-
 bool ThrowableRelicWeapon::HasActiveThrownWeapon() const noexcept
 {
     for (const auto& [projectile, runtime] : thrownWeapons) {
@@ -304,7 +303,7 @@ bool ThrowableRelicWeapon::RetireConflictingProjectile(RE::Projectile* a_project
         runtime->isDestroyed.store(true, std::memory_order_release);
         runtime->destructionHandled = true;
         if (runtime == lastThrownWeapon) lastThrownWeapon = nullptr;
-        runtime->soundData.FadeAllSounds(200u);
+        runtime->GetSoundManager().FadeAllSounds(200u);
         retiredThrownWeapons.emplace_back(updateCounter + 1u, std::move(it->second));
     } else {
         UnhookProjectile(a_projectile);
@@ -475,19 +474,19 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
 void ThrowableRelicWeapon::OnMenuOpenCloseEvent(const bool a_opening)
 {
     if (a_opening) {
-        soundData.PauseAllLoopingSounds();
+        GetSoundManager().PauseAllLoopingSounds();
         for (auto& [projectile, runtime] : thrownWeapons)
-            if (runtime) runtime->soundData.PauseAllLoopingSounds();
+            if (runtime) runtime->GetSoundManager().PauseAllLoopingSounds();
     } else {
-        soundData.ContinueAllLoopingSounds();
+        GetSoundManager().ContinueAllLoopingSounds();
         for (auto& [projectile, runtime] : thrownWeapons)
-            if (runtime) runtime->soundData.ContinueAllLoopingSounds();
+            if (runtime) runtime->GetSoundManager().ContinueAllLoopingSounds();
     }
 }
 void ThrowableRelicWeapon::Update()
 {
     ++updateCounter;
-    soundData.Update();
+    GetSoundManager().Update();
     updateBuffer.clear();
     if (updateBuffer.capacity() < thrownWeapons.size())
         updateBuffer.reserve(thrownWeapons.size());

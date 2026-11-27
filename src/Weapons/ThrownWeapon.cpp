@@ -12,8 +12,7 @@ ThrownWeapon::ThrownWeapon(ThrowableRelicWeapon& a_weapon)
     : weapon(a_weapon),
       weap(a_weapon.weap),
       currentReference(a_weapon.currentReference),
-      weapIED(a_weapon.weapIED),
-      soundData(a_weapon.GetSoundManager().soundDefinition)
+      weapIED(a_weapon.weapIED)
 {
     ThrowableWeaponDummyProjectile = weapon.ThrowableWeaponDummyProjectile;
     ThrowableWeaponDummyAmmo = weapon.ThrowableWeaponDummyAmmo;
@@ -66,6 +65,7 @@ BaseActor* ThrownWeapon::GetCarrier() const noexcept
 {
     return weapon.GetCarrier();
 }
+SoundManager& ThrownWeapon::GetSoundManager() const noexcept { return weapon.GetSoundManager(); }
 RE::Actor* ThrownWeapon::GetThrowerActor() const
 {
     return GetThrower() && GetThrower()->GetParent() ? GetThrower()->GetParent()->GetActor() : nullptr;
@@ -102,13 +102,17 @@ RE::NiTransform ThrownWeapon::GetLocalTransform()
 bool ThrownWeapon::InitiateTransform() noexcept
 {
     if (!_transformInitiated) {
-        if (weaponParentNode && weaponParentNode->parent && throwerParent && throwerParent->GetWeaponBone()) {
+        if (weaponParentNode && weaponParentNode->parent && projectileModel) {
             RE::NiUpdateData updateData;
             updateData.flags.set(RE::NiUpdateData::Flag::kNone);
             updateData.time = 0.f;
+            if (!_hitTransformApplied) {
+                Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
+                projectileModel->Update(updateData);
+            }
             weaponParentNode->Update(updateData);
             startLocalTranslation = weaponParentNode->local.translate;
-            startLocalRotation = weaponParentNode->parent->world.rotate.Transpose() * throwerParent->GetWeaponBone()->world.rotate;
+            startLocalRotation = weaponParentNode->parent->world.rotate.Transpose() * startWorldRotation;
 
             weaponParentNode->local.rotate = startLocalRotation;
             weaponParentNode->Update(updateData);
@@ -203,8 +207,10 @@ void ThrownWeapon::UpdateRotation(const float a_delta, const float a_livingTime,
 {
     if (weaponParentNode && !_hitTransformApplied) {
         auto& localRotation = weaponParentNode->local.rotate;
-        if (!_rotationBlended && a_livingTime < std::max(Config::RotationBlendDuration, a_delta)) {
-            const float t = std::clamp((a_livingTime + a_delta) / Config::RotationBlendDuration, 0.f, 1.f);
+        const float blendDuration = std::max(Config::RotationBlendDuration, 1e-6f);
+        if (!_rotationBlended && a_livingTime < std::max(blendDuration, a_delta)) {
+            const float linearT = std::clamp((a_livingTime + a_delta) / blendDuration, 0.f, 1.f);
+            const float t = linearT * linearT * (3.f - 2.f * linearT);
             localRotation = Algebra::InterpolateRotation(const_cast<const RE::NiMatrix3&>(startLocalRotation), targetLocalRotation, t);
             if (rotationType != RotationType::kNone) {
                 const float angleZ = -Config::ThrowRotationSpeed * a_livingTime;
@@ -336,6 +342,7 @@ bool ThrownWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, 
 
     rotationType = a_rotationType;
     throwingType = a_throwType;
+    startWorldRotation = weaponBone->world.rotate;
 
     auto weaponDamage = (float)weap->attackDamage;
     if (throwerActor->IsPlayerRef()) {
@@ -398,7 +405,7 @@ bool ThrownWeapon::Throw(Thrower* a_thrower, const RotationType a_rotationType, 
 
     if (!weapon.PreThrow(*this, lData)) return false;
 
-    soundData.PlayThrowingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
+    GetSoundManager().PlayThrowingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
 
     RE::ProjectileHandle pHandle;
     if (auto pHandlePtr = RE::Projectile::Launch(&pHandle, lData); pHandlePtr && pHandlePtr->get().get()) {
@@ -519,7 +526,7 @@ void ThrownWeapon::UpdateProjectile(RE::Projectile* a_this, float a_delta)
     if (projectileModel.get() != projectileNode) {
         projectileModel.reset(projectileNode->AsFadeNode());
         if (GetThrowState() == ThrowState::kThrown) {
-            soundData.PlayThrowingLoopSounds(reinterpret_cast<RE::NiAVObject**>(&projectileModel));
+            GetSoundManager().PlayThrowingLoopSounds(reinterpret_cast<RE::NiAVObject**>(&projectileModel));
         }
         launchTime = AsyncUtil::GameTime::GetEngineTime();
         livingTime = 0.f;
@@ -554,9 +561,8 @@ void ThrownWeapon::UpdateProjectile(RE::Projectile* a_this, float a_delta)
 
     if (!InitiateTransform()) {}
 
-    static constexpr float drag = 0.0003f;
     const float speed = velocity.Length();
-    vel -= direction * a_delta * (drag * speed * speed);
+    vel -= direction * a_delta * (aeroDragCoeff * speed * speed);
 
     if (!gravityFrozen.load(std::memory_order_relaxed)) {
         auto current = currentGravity.load(std::memory_order_relaxed);
@@ -594,7 +600,7 @@ void ThrownWeapon::ResetProjectile()
 }
 void ThrownWeapon::Update(float a_delta)
 {
-    soundData.Update();
+    GetSoundManager().Update();
     if (isDestroyed.load(std::memory_order_acquire)) {
         if (!destructionHandled) {
             projectileModel.reset();
