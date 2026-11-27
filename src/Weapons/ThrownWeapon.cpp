@@ -231,7 +231,6 @@ void ThrownWeapon::UpdateRotation(const float a_delta, const float a_livingTime,
             a_angles.z += PI;
         }
         Algebra::SetRotationMatrix(projectileModel->local.rotate, -direction.x, direction.y, direction.z);
-        spdlog::info("rotation is {}, {}, {}", angles.x, angles.y, angles.z);
     }
 }
 void ThrownWeapon::UpdateTranslation(const float a_delta, const float a_livingTime) noexcept
